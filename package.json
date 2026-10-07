@@ -1,0 +1,11 @@
+{
+  "name": "finova-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix finova run dev",
+    "build": "npm --prefix finova run build",
+    "start": "npm --prefix finova run start",
+    "lint": "npm --prefix finova run lint"
+  }
+}
