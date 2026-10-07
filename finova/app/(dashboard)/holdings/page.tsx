@@ -5,9 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import {
-  Plus, Upload, Search, Filter, X, Loader2,
-  TrendingUp, TrendingDown, LineChart, Trash2,
-  Download, Eye, Building2, Shield, Info, CheckCircle
+  Plus, Upload, Search, X, Loader2,
+  LineChart, Trash2, Download, Eye, Building2, Info
 } from 'lucide-react';
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
 import { EmptyState } from '@/components/shared/EmptyState';

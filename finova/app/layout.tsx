@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { QueryProvider } from '@/components/providers/QueryProvider';
+import { ToastContainer } from '@/components/shared/Toast';
 import './globals.css';
 
 const inter = Inter({
@@ -38,6 +39,7 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>
             {children}
+            <ToastContainer />
           </QueryProvider>
         </ThemeProvider>
       </body>

@@ -45,6 +45,7 @@ export default function ProfilePage() {
       setLoading(false);
     }
     loadProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSave(e: React.FormEvent) {

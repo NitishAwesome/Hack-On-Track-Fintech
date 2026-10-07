@@ -7,28 +7,28 @@
 
 @layer base {
   :root {
-    /* --- Brand Palette --- */
-    --brand-50: 240 253 250;
-    --brand-100: 204 251 241;
-    --brand-200: 153 246 228;
-    --brand-300: 94 234 212;
-    --brand-400: 45 212 191;
-    --brand-500: 20 184 166;   /* Primary brand teal */
-    --brand-600: 13 148 136;
-    --brand-700: 15 118 110;
-    --brand-800: 17 94 89;
-    --brand-900: 19 78 74;
+    /* --- Brand Palette (Finova Cyan/Blue) --- */
+    --brand-50: 240 249 255;
+    --brand-100: 224 242 254;
+    --brand-200: 186 230 253;
+    --brand-300: 125 211 252;
+    --brand-400: 56 189 248;
+    --brand-500: 14 165 233;   /* Primary cyan/blue accent */
+    --brand-600: 2 132 199;
+    --brand-700: 3 105 161;
+    --brand-800: 7 89 133;
+    --brand-900: 12 74 110;
 
     /* --- Light Mode Tokens --- */
-    --background: 250 250 252;
-    --foreground: 15 18 30;
+    --background: 248 249 252;
+    --foreground: 15 23 42;
     --surface: 255 255 255;
-    --surface-raised: 245 246 250;
+    --surface-raised: 241 245 249;
     --surface-overlay: 255 255 255;
-    --border: 226 228 238;
-    --border-subtle: 241 242 246;
-    --muted: 107 114 136;
-    --muted-foreground: 107 114 136;
+    --border: 226 232 240;
+    --border-subtle: 241 245 249;
+    --muted: 100 116 139;
+    --muted-foreground: 100 116 139;
 
     /* --- Semantic Colours --- */
     --gain: 16 185 129;        /* emerald-500 */
@@ -47,34 +47,34 @@
     --radius-xl: 1.25rem;
 
     /* --- Shadow --- */
-    --shadow-card: 0 1px 4px 0 rgb(15 18 30 / 0.06), 0 4px 16px 0 rgb(15 18 30 / 0.04);
-    --shadow-raised: 0 4px 24px 0 rgb(15 18 30 / 0.08);
-    --shadow-modal: 0 20px 60px 0 rgb(15 18 30 / 0.15);
+    --shadow-card: 0 1px 4px 0 rgb(15 23 42 / 0.05), 0 4px 16px 0 rgb(15 23 42 / 0.03);
+    --shadow-raised: 0 4px 24px 0 rgb(15 23 42 / 0.07);
+    --shadow-modal: 0 20px 60px 0 rgb(15 23 42 / 0.14);
   }
 
   .dark {
-    --background: 10 11 18;
-    --foreground: 238 240 248;
-    --surface: 18 20 32;
-    --surface-raised: 24 27 42;
-    --surface-overlay: 30 33 52;
-    --border: 38 42 62;
-    --border-subtle: 28 31 48;
-    --muted: 140 148 172;
-    --muted-foreground: 140 148 172;
+    --background: 11 15 25;       /* deep navy/charcoal */
+    --foreground: 248 250 252;   /* crisp white text */
+    --surface: 17 24 39;          /* slightly lighter elevated cards */
+    --surface-raised: 23 33 53;   /* elevated sub-card */
+    --surface-overlay: 30 41 67;
+    --border: 30 42 66;           /* subtle blue-gray borders */
+    --border-subtle: 21 29 46;
+    --muted: 148 163 184;        /* muted blue-gray text */
+    --muted-foreground: 148 163 184;
 
-    --gain: 52 211 153;
-    --gain-bg: 6 78 59;
-    --loss: 248 113 113;
-    --loss-bg: 127 29 29;
+    --gain: 34 197 94;           /* emerald-500 */
+    --gain-bg: 20 83 45;         /* dark green tint */
+    --loss: 248 113 113;         /* red-400 */
+    --loss-bg: 127 29 29;        /* dark red tint */
     --warning: 251 191 36;
     --warning-bg: 120 53 15;
     --info: 96 165 250;
     --info-bg: 30 58 138;
 
-    --shadow-card: 0 1px 4px 0 rgb(0 0 0 / 0.3), 0 4px 16px 0 rgb(0 0 0 / 0.2);
-    --shadow-raised: 0 4px 24px 0 rgb(0 0 0 / 0.4);
-    --shadow-modal: 0 20px 60px 0 rgb(0 0 0 / 0.6);
+    --shadow-card: 0 2px 8px 0 rgb(0 0 0 / 0.35), 0 8px 24px 0 rgb(0 0 0 / 0.25);
+    --shadow-raised: 0 4px 24px 0 rgb(0 0 0 / 0.45);
+    --shadow-modal: 0 20px 60px 0 rgb(0 0 0 / 0.65);
   }
 
   * {

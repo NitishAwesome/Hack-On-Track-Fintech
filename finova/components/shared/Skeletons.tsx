@@ -1,9 +1,14 @@
+/**
+ * Finova — Loading Skeleton Components
+ * Use these whenever data is being fetched to prevent layout shift.
+ */
+
 export function SkeletonCard({ lines = 3 }: { lines?: number }) {
   return (
     <div className="card p-5 space-y-3">
       <div className="skeleton h-4 w-1/3" />
       <div className="skeleton h-7 w-1/2" />
-      {Array.from({ length: lines - 2 }).map((_, i) => (
+      {Array.from({ length: Math.max(0, lines - 2) }).map((_, i) => (
         <div key={i} className="skeleton h-3" style={{ width: `${60 + i * 10}%` }} />
       ))}
     </div>
@@ -39,5 +44,30 @@ export function SkeletonChart({ height = 200 }: { height?: number }) {
       <div className="skeleton h-4 w-32 mb-4" />
       <div className="skeleton rounded-lg" style={{ height }} />
     </div>
+  );
+}
+
+/** Generic inline loading skeleton — for arbitrary shapes */
+export function LoadingSkeleton({
+  width,
+  height = 16,
+  rounded = 'md',
+  className,
+}: {
+  width?: string | number;
+  height?: number;
+  rounded?: 'sm' | 'md' | 'lg' | 'full';
+  className?: string;
+}) {
+  const radiusMap = { sm: '4px', md: '6px', lg: '12px', full: '9999px' };
+  return (
+    <div
+      className={`skeleton ${className ?? ''}`}
+      style={{
+        width: width ?? '100%',
+        height,
+        borderRadius: radiusMap[rounded],
+      }}
+    />
   );
 }

@@ -25,7 +25,7 @@ export function AIInsightCard({ insightType = 'portfolio_summary' }: AIInsightCa
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['ai-insight', insightType],
     queryFn: () => fetchInsight(insightType),
-    staleTime: 4 * 60 * 60 * 1000, // 4 hours — matches server cache TTL
+    staleTime: 4 * 60 * 60 * 1000,
   });
 
   const insight = data?.insight;
@@ -37,11 +37,14 @@ export function AIInsightCard({ insightType = 'portfolio_summary' }: AIInsightCa
       transition={{ duration: 0.4, delay: 0.3 }}
       className="card overflow-hidden"
     >
-      {/* Header */}
-      <button
+      {/* Header — using div + role button to avoid nested <button> hydration error */}
+      <div
         id="ai-insight-toggle"
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-5 py-4 transition-colors"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpanded(!expanded); }}
+        className="w-full flex items-center justify-between px-5 py-4 transition-colors cursor-pointer"
         style={{ backgroundColor: 'transparent' }}
       >
         <div className="flex items-center gap-2.5">
@@ -78,7 +81,7 @@ export function AIInsightCard({ insightType = 'portfolio_summary' }: AIInsightCa
             <ChevronDown className="w-4 h-4" style={{ color: 'rgb(var(--muted))' }} />
           )}
         </div>
-      </button>
+      </div>
 
       <AnimatePresence>
         {expanded && (

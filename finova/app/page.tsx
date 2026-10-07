@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import {
-  TrendingUp, Building2, Zap, Shield, ArrowRight,
-  PieChart, Sparkles, CheckCircle2, ChevronRight, Lock
+  Building2, Shield, ArrowRight,
+  PieChart, Sparkles, Lock
 } from 'lucide-react';
 
 export default function LandingPage() {

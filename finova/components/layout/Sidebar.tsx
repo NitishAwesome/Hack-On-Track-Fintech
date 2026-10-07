@@ -1,111 +1,288 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard,
   LineChart,
-  PieChart,
-  Shield,
-  BookOpen,
-  Lightbulb,
+  BarChart3,
+  Newspaper,
+  Compass,
+  Bookmark,
+  ClipboardList,
+  Rocket,
+  Layers,
+  Link2,
   Building2,
+  Zap,
   User,
+  Settings,
   X,
+  TrendingUp,
+  HelpCircle,
+  MoreVertical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const NAV_ITEMS = [
-  { href: '/portfolio', label: 'Portfolio', icon: LayoutDashboard },
-  { href: '/holdings', label: 'Holdings', icon: LineChart },
-  { href: '/performance', label: 'Performance', icon: LineChart },
-  { href: '/allocation', label: 'Allocation', icon: PieChart },
-  { href: '/risk', label: 'Risk', icon: Shield },
-  { href: '/insights', label: 'Insights', icon: Lightbulb },
-  { href: '/learn', label: 'Learn', icon: BookOpen },
-  { href: '/brokers', label: 'Brokers', icon: Building2 },
-  { href: '/profile', label: 'Profile', icon: User },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  comingSoon?: boolean;
+}
+
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: 'Main',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/investments', label: 'My Investments', icon: TrendingUp },
+      { href: '/analysis', label: 'Portfolio Analysis', icon: BarChart3 },
+      { href: '/news', label: 'News & Insights', icon: Newspaper },
+      { href: '/explore', label: 'Explore', icon: Compass, comingSoon: true },
+    ],
+  },
+  {
+    title: 'Personal',
+    items: [
+      { href: '/watchlist', label: 'Watchlist', icon: Bookmark, comingSoon: true },
+      { href: '/orders', label: 'Orders', icon: ClipboardList, comingSoon: true },
+    ],
+  },
+  {
+    title: 'Discover',
+    items: [
+      { href: '/ipo', label: 'IPO', icon: Rocket, comingSoon: true },
+      { href: '/mutual-funds', label: 'Mutual Funds', icon: Layers, comingSoon: true },
+      { href: '/bonds', label: 'Bonds', icon: Link2, comingSoon: true },
+      { href: '/reit', label: 'REITs', icon: Building2, comingSoon: true },
+      { href: '/invit', label: 'InvITs', icon: Zap, comingSoon: true },
+    ],
+  },
+  {
+    title: 'Account',
+    items: [
+      { href: '/profile', label: 'Profile', icon: User },
+      { href: '/settings', label: 'Settings', icon: Settings, comingSoon: true },
+    ],
+  },
 ];
 
 interface SidebarProps {
   onClose?: () => void;
+  userEmail?: string;
+  userName?: string;
 }
 
-export function Sidebar({ onClose }: SidebarProps) {
+export function Sidebar({
+  onClose,
+  userEmail = 'investor@finova.in',
+  userName = 'Retail Investor',
+}: SidebarProps) {
   const pathname = usePathname();
 
+  function isActive(href: string) {
+    if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/portfolio' || pathname === '/';
+    if (href === '/investments') return pathname === '/investments' || pathname === '/holdings';
+    if (href === '/analysis') return ['/analysis', '/performance', '/allocation', '/risk'].some((p) => pathname.startsWith(p));
+    if (href === '/news') return pathname === '/news' || pathname === '/insights';
+    return pathname === href || (href !== '/' && pathname.startsWith(href));
+  }
+
+  const initials = userName
+    ? userName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+    : 'FI';
+
   return (
-    <aside className="h-full flex flex-col" style={{ backgroundColor: 'rgb(var(--surface))' }}>
-      {/* Logo */}
-      <div className="flex items-center justify-between px-5 py-5 border-b" style={{ borderColor: 'rgb(var(--border))' }}>
-        <Link href="/portfolio" className="flex items-center gap-2.5" onClick={onClose}>
+    <aside
+      className="h-full flex flex-col w-[240px] flex-shrink-0 select-none"
+      style={{
+        backgroundColor: 'rgb(var(--surface))',
+        borderColor: 'rgb(var(--border))',
+      }}
+    >
+      {/* Top Logo */}
+      <div
+        className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0"
+        style={{ borderColor: 'rgb(var(--border))' }}
+      >
+        <Link href="/dashboard" className="flex items-center gap-2.5 group" onClick={onClose}>
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm"
+            style={{
+              background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
+            }}
           >
-            F
+            <LineChart className="w-4 h-4" />
           </div>
-          <span className="text-lg font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-            Finova
-          </span>
+          <div>
+            <span
+              className="text-base font-bold tracking-tight block leading-none"
+              style={{ color: 'rgb(var(--foreground))' }}
+            >
+              FINOVA
+            </span>
+            <span
+              className="text-[9px] font-semibold tracking-wider uppercase block mt-1"
+              style={{ color: 'rgb(var(--brand-500))' }}
+            >
+              Unified Wealth
+            </span>
+          </div>
         </Link>
         {onClose && (
-          <button onClick={onClose} className="p-1 rounded-md lg:hidden" style={{ color: 'rgb(var(--muted))' }}>
-            <X className="w-5 h-5" />
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg lg:hidden transition-colors"
+            style={{ color: 'rgb(var(--muted))' }}
+            aria-label="Close sidebar"
+          >
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== '/portfolio' && pathname.startsWith(href));
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onClose}
-              className={cn(
-                'relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group'
-              )}
-              style={{
-                color: active ? 'rgb(var(--brand-500))' : 'rgb(var(--muted))',
-                backgroundColor: active ? 'rgb(var(--brand-500) / 0.1)' : 'transparent',
-              }}
-              onMouseEnter={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = 'rgb(var(--surface-raised))';
-                  (e.currentTarget as HTMLElement).style.color = 'rgb(var(--foreground))';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                  (e.currentTarget as HTMLElement).style.color = 'rgb(var(--muted))';
-                }
-              }}
+      {/* Navigation Groups */}
+      <nav className="flex-1 overflow-y-auto px-3 py-3.5 space-y-4">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.title}>
+            <p
+              className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest"
+              style={{ color: 'rgb(var(--muted))' }}
             >
-              {active && (
-                <motion.div
-                  layoutId="active-nav"
-                  className="absolute inset-0 rounded-lg"
-                  style={{ backgroundColor: 'rgb(var(--brand-500) / 0.1)' }}
-                  transition={{ type: 'spring', duration: 0.3 }}
-                />
-              )}
-              <Icon className="w-4 h-4 flex-shrink-0 relative z-10" />
-              <span className="relative z-10">{label}</span>
-            </Link>
-          );
-        })}
+              {group.title}
+            </p>
+            <div className="space-y-0.5">
+              {group.items.map(({ href, label, icon: Icon, comingSoon }) => {
+                const active = isActive(href);
+                return (
+                  <Link
+                    key={href}
+                    href={comingSoon ? '#' : href}
+                    onClick={comingSoon ? (e) => e.preventDefault() : onClose}
+                    className={cn(
+                      'relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 group',
+                      comingSoon && 'cursor-default opacity-60'
+                    )}
+                    style={{
+                      color: active ? 'rgb(var(--brand-500))' : 'rgb(var(--muted))',
+                      backgroundColor: active ? 'rgb(var(--brand-500) / 0.12)' : 'transparent',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!active && !comingSoon) {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = 'rgb(var(--surface-raised))';
+                        (e.currentTarget as HTMLElement).style.color = 'rgb(var(--foreground))';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!active && !comingSoon) {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                        (e.currentTarget as HTMLElement).style.color = 'rgb(var(--muted))';
+                      }
+                    }}
+                  >
+                    {active && (
+                      <motion.div
+                        layoutId="active-sidebar-pill"
+                        className="absolute inset-0 rounded-lg"
+                        style={{ backgroundColor: 'rgb(var(--brand-500) / 0.12)' }}
+                        transition={{ type: 'spring', duration: 0.3, bounce: 0.15 }}
+                      />
+                    )}
+                    <Icon className="w-4 h-4 flex-shrink-0 relative z-10" />
+                    <span className="relative z-10 flex-1 truncate font-medium">{label}</span>
+                    {comingSoon && (
+                      <span
+                        className="relative z-10 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                        style={{
+                          backgroundColor: 'rgb(var(--surface-raised))',
+                          color: 'rgb(var(--muted))',
+                          border: '1px solid rgb(var(--border))',
+                        }}
+                      >
+                        Soon
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-5 py-4 border-t text-xs" style={{ borderColor: 'rgb(var(--border))', color: 'rgb(var(--muted))' }}>
-        <p>Finova © 2025</p>
-        <p className="mt-0.5">For informational use only.</p>
-        <p>Not financial advice.</p>
+      {/* Bottom Section: Support & User Account */}
+      <div
+        className="px-3 py-3 border-t flex-shrink-0 space-y-2"
+        style={{
+          borderColor: 'rgb(var(--border))',
+          backgroundColor: 'rgb(var(--surface-raised) / 0.5)',
+        }}
+      >
+        {/* Support Link */}
+        <Link
+          href="/learn"
+          onClick={onClose}
+          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:text-foreground"
+          style={{ color: 'rgb(var(--muted))' }}
+        >
+          <HelpCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>Help & Alternative Guides</span>
+        </Link>
+
+        {/* User Card */}
+        <div
+          className="flex items-center justify-between p-2 rounded-xl border transition-colors"
+          style={{
+            backgroundColor: 'rgb(var(--surface))',
+            borderColor: 'rgb(var(--border))',
+          }}
+        >
+          <Link
+            href="/profile"
+            onClick={onClose}
+            className="flex items-center gap-2.5 min-w-0 flex-1"
+          >
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 shadow-sm"
+              style={{
+                background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
+              }}
+            >
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p
+                className="text-xs font-semibold truncate leading-none"
+                style={{ color: 'rgb(var(--foreground))' }}
+              >
+                {userName}
+              </p>
+              <p
+                className="text-[10px] truncate mt-1"
+                style={{ color: 'rgb(var(--muted))' }}
+              >
+                {userEmail}
+              </p>
+            </div>
+          </Link>
+
+          <Link
+            href="/profile"
+            className="p-1 rounded-md transition-colors"
+            style={{ color: 'rgb(var(--muted))' }}
+            title="Account Menu"
+          >
+            <MoreVertical className="w-3.5 h-3.5" />
+          </Link>
+        </div>
       </div>
     </aside>
   );

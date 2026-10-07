@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, Building2, Zap, FileText,
-  ChevronDown, ChevronUp, Sparkles, Loader2,
+  ChevronUp, Sparkles, Loader2,
   CheckCircle, AlertTriangle, Scale
 } from 'lucide-react';
 

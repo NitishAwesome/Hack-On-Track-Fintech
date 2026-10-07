@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ExternalLink, Newspaper, BookmarkPlus } from 'lucide-react';
+import { ExternalLink, Newspaper } from 'lucide-react';
 import { AIInsightCard } from '@/components/insights/AIInsightCard';
 import { SkeletonCard } from '@/components/shared/Skeletons';
 import { formatDate } from '@/lib/utils';

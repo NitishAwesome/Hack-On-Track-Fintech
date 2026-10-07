@@ -6,7 +6,6 @@ import { Shield, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { SkeletonCard } from '@/components/shared/Skeletons';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { AIInsightCard } from '@/components/insights/AIInsightCard';
-import { clamp } from '@/lib/utils';
 import type { RiskMetrics } from '@/types/portfolio';
 
 async function fetchSummary() {

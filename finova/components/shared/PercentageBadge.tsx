@@ -1,6 +1,6 @@
 'use client';
 
-import { cn, formatPercent, gainLoss } from '@/lib/utils';
+import { cn, gainLoss } from '@/lib/utils';
 
 interface PercentageBadgeProps {
   value: number;

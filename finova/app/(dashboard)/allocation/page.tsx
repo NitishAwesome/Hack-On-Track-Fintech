@@ -22,7 +22,6 @@ export default function AllocationPage() {
 
   const assetAllocation: AssetAllocation[] = data?.assetAllocation ?? [];
   const brokerAllocation: BrokerAllocation[] = data?.brokerAllocation ?? [];
-  const totalValue = data?.summary?.total_current_value ?? 0;
 
   if (isLoading) {
     return (
