@@ -1,60 +1,64 @@
+'use client';
+
+import React from 'react';
 import Link from 'next/link';
 import {
-  Building2, Shield, ArrowRight,
-  PieChart, Sparkles, Lock
+  Building2,
+  ArrowRight,
+  PieChart,
+  Sparkles,
+  Lock,
+  Landmark,
 } from 'lucide-react';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'rgb(var(--background))', color: 'rgb(var(--foreground))' }}>
-      {/* Navigation Header */}
-      <header
-        className="sticky top-0 z-40 border-b backdrop-blur-md"
-        style={{
-          borderColor: 'rgb(var(--border))',
-          backgroundColor: 'rgb(var(--background) / 0.85)',
-        }}
-      >
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-sm"
-              style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
-            >
+    <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-brand/20">
+      {/* Top Navigation */}
+      <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-sm bg-gradient-to-br from-brand-600 to-brand-400 group-hover:scale-105 transition-transform">
               F
             </div>
             <div>
-              <span className="text-xl font-bold tracking-tight" style={{ color: 'rgb(var(--foreground))' }}>
-                Finova
+              <span className="text-xl font-bold tracking-tight text-foreground block leading-none">
+                FINOVA
               </span>
-              <span className="hidden sm:inline-block ml-2 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: 'rgb(var(--brand-500) / 0.12)', color: 'rgb(var(--brand-500))' }}>
-                PS2 Edition
+              <span className="text-[10px] font-semibold text-brand tracking-widest uppercase block mt-1">
+                Unified Wealth
               </span>
             </div>
           </Link>
 
-          <nav className="flex items-center gap-3 sm:gap-6 text-sm">
+          <nav className="flex items-center gap-4 sm:gap-6 text-sm">
+            <Link
+              href="/dashboard"
+              className="hidden sm:inline-block font-medium text-muted hover:text-foreground transition-colors"
+            >
+              Dashboard
+            </Link>
             <Link
               href="/learn"
-              className="hidden sm:inline-block font-medium hover:text-blue-500 transition-colors"
-              style={{ color: 'rgb(var(--muted))' }}
+              className="hidden sm:inline-block font-medium text-muted hover:text-foreground transition-colors"
             >
-              Learn Alternatives
+              Alternatives
             </Link>
             <Link
               href="/login"
-              className="font-medium hover:text-blue-500 transition-colors"
-              style={{ color: 'rgb(var(--muted))' }}
+              className="font-medium text-muted hover:text-foreground transition-colors"
             >
               Sign In
             </Link>
+
+            <ThemeToggle />
+
             <Link
-              href="/portfolio"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90 shadow-sm"
-              style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white shadow-sm bg-gradient-to-r from-brand-600 to-brand-500 hover:opacity-95 transition-all"
             >
-              Open Dashboard
+              <span>Get Started</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </nav>
@@ -62,207 +66,175 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden py-16 sm:py-24 px-4">
-        {/* Subtle background glow */}
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] rounded-full blur-[120px] pointer-events-none opacity-20"
-          style={{ background: 'radial-gradient(circle, rgb(var(--brand-500)), #8B5CF6)' }}
-        />
+      <section className="relative overflow-hidden py-16 sm:py-24 px-4 sm:px-6">
+        {/* Subtle Ambient Radial Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] rounded-full blur-[120px] pointer-events-none opacity-20 dark:opacity-30 bg-gradient-to-tr from-brand-500 to-indigo-600" />
 
         <div className="max-w-4xl mx-auto text-center relative z-10 space-y-6">
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold"
-            style={{
-              backgroundColor: 'rgb(var(--brand-500) / 0.1)',
-              border: '1px solid rgb(var(--brand-500) / 0.25)',
-              color: 'rgb(var(--brand-500))',
-            }}
-          >
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-brand/10 border border-brand/20 text-brand">
             <Sparkles className="w-3.5 h-3.5" />
-            Hack On Track — PS2: All Your Investments, in One Place
+            <span>Fintech Hackathon PS2 · All Your Investments, in One Place</span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight">
+          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight text-foreground">
             Your Investments.{' '}
-            <span
-              className="bg-clip-text text-transparent"
-              style={{
-                backgroundImage: 'linear-gradient(135deg, rgb(var(--brand-500)), #8B5CF6)',
-              }}
-            >
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-brand-500 via-sky-400 to-indigo-400">
               Unified. Understood.
             </span>
           </h1>
 
-          <p className="text-base sm:text-lg max-w-2xl mx-auto leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
-            A unified wealth platform designed for Indian retail investors. Bring all your demat accounts,
-            depositories, equities, REITs, InvITs, and Government Bonds into one clean, intelligent view — powered by Google Gemini AI.
+          <p className="text-base sm:text-lg max-w-2xl mx-auto leading-relaxed text-muted">
+            Bring your investments together, understand your portfolio clearly, and discover
+            opportunities beyond stocks — across Zerodha, Groww, CDSL, REITs, InvITs, and Sovereign Bonds.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-3">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <Link
-              href="/portfolio"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-base font-semibold text-white shadow-lg transition-transform hover:-translate-y-0.5"
-              style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
+              href="/dashboard"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm sm:text-base font-semibold text-white shadow-md bg-gradient-to-r from-brand-600 to-brand-500 hover:opacity-95 transition-transform hover:-translate-y-0.5"
             >
-              Explore Unified Dashboard
-              <ArrowRight className="w-5 h-5" />
+              <span>Get Started</span>
+              <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
               href="/learn"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-base font-medium transition-colors"
-              style={{
-                backgroundColor: 'rgb(var(--surface-raised))',
-                border: '1px solid rgb(var(--border))',
-                color: 'rgb(var(--foreground))',
-              }}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm sm:text-base font-semibold border border-border bg-surface hover:bg-surface-raised transition-colors text-foreground"
             >
-              Understand REITs & Bonds
+              <span>Explore Finova</span>
             </Link>
           </div>
 
           {/* Privacy badge */}
-          <div className="flex items-center justify-center gap-2 pt-2 text-xs" style={{ color: 'rgb(var(--muted))' }}>
-            <Lock className="w-3.5 h-3.5" style={{ color: 'rgb(var(--gain))' }} />
-            <span>Privacy First: Zero broker passwords, MPINs, or OTPs ever stored.</span>
+          <div className="flex items-center justify-center gap-2 pt-2 text-xs text-muted">
+            <Lock className="w-3.5 h-3.5 text-gain" />
+            <span>Privacy First: Zero broker passwords or MPINs required. Verified CAS & statement import.</span>
           </div>
         </div>
       </section>
 
-      {/* Live Sample Portfolio Snapshot Card */}
-      <section className="max-w-5xl mx-auto px-4 pb-20 w-full">
-        <div
-          className="rounded-2xl border p-6 sm:p-8 shadow-xl"
-          style={{
-            backgroundColor: 'rgb(var(--surface))',
-            borderColor: 'rgb(var(--border))',
-          }}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b gap-4" style={{ borderColor: 'rgb(var(--border))' }}>
+      {/* Unified Portfolio Visual Preview Card */}
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-20 w-full">
+        <div className="rounded-2xl border border-border bg-surface p-6 sm:p-8 shadow-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-border gap-4">
             <div>
-              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'rgb(var(--brand-500))' }}>
-                Finova Multi-Broker Engine
-              </span>
-              <h2 className="text-xl sm:text-2xl font-bold mt-1" style={{ color: 'rgb(var(--foreground))' }}>
+              <span className="text-xs font-bold uppercase tracking-wider text-brand">
                 Unified Portfolio Preview
+              </span>
+              <h2 className="text-xl sm:text-2xl font-bold mt-1 text-foreground">
+                Multi-Asset Consolidation
               </h2>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-500/10 text-sky-500 border border-sky-500/20">
                 Zerodha (Kite)
               </span>
-              <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+              <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                 Groww Demat
               </span>
-              <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/10 text-purple-500 border border-purple-500/20">
+              <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-500/10 text-purple-500 border border-purple-500/20">
                 CDSL Depository
               </span>
             </div>
           </div>
 
-          {/* Metrics */}
+          {/* Quick Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-6">
-            <div className="p-4 rounded-xl border" style={{ backgroundColor: 'rgb(var(--surface-raised))', borderColor: 'rgb(var(--border))' }}>
-              <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>Total Value</p>
-              <p className="text-xl sm:text-2xl font-bold mt-1" style={{ color: 'rgb(var(--foreground))' }}>₹14,25,800</p>
-              <p className="text-[11px] mt-1" style={{ color: 'rgb(var(--gain))' }}>+₹2,21,400 Overall</p>
+            <div className="p-4 rounded-xl border border-border bg-surface-raised">
+              <p className="text-xs font-medium text-muted">Total Portfolio Value</p>
+              <p className="text-xl sm:text-2xl font-bold mt-1 text-foreground tabular-nums">₹24,86,420</p>
+              <p className="text-xs font-semibold mt-1 text-gain">+₹2,21,400 Overall</p>
             </div>
-            <div className="p-4 rounded-xl border" style={{ backgroundColor: 'rgb(var(--surface-raised))', borderColor: 'rgb(var(--border))' }}>
-              <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>Absolute Return</p>
-              <p className="text-xl sm:text-2xl font-bold mt-1" style={{ color: 'rgb(var(--gain))' }}>+18.38%</p>
-              <p className="text-[11px] mt-1" style={{ color: 'rgb(var(--muted))' }}>Invested: ₹12,04,400</p>
+            <div className="p-4 rounded-xl border border-border bg-surface-raised">
+              <p className="text-xs font-medium text-muted">Absolute Returns</p>
+              <p className="text-xl sm:text-2xl font-bold mt-1 text-gain tabular-nums">+18.38%</p>
+              <p className="text-xs text-muted mt-1">1Y Return: +31.4%</p>
             </div>
-            <div className="p-4 rounded-xl border" style={{ backgroundColor: 'rgb(var(--surface-raised))', borderColor: 'rgb(var(--border))' }}>
-              <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>Risk Health Score</p>
-              <p className="text-xl sm:text-2xl font-bold mt-1" style={{ color: '#F59E0B' }}>48 / 100</p>
-              <p className="text-[11px] mt-1" style={{ color: 'rgb(var(--muted))' }}>Moderate · Diversified</p>
+            <div className="p-4 rounded-xl border border-border bg-surface-raised">
+              <p className="text-xs font-medium text-muted">Asset Classes</p>
+              <p className="text-xl sm:text-2xl font-bold mt-1 text-brand tabular-nums">6 Classes</p>
+              <p className="text-xs text-muted mt-1">Equities, Bonds, REITs, InvITs</p>
             </div>
-            <div className="p-4 rounded-xl border" style={{ backgroundColor: 'rgb(var(--surface-raised))', borderColor: 'rgb(var(--border))' }}>
-              <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>Asset Classes</p>
-              <p className="text-xl sm:text-2xl font-bold mt-1" style={{ color: 'rgb(var(--brand-500))' }}>5 Classes</p>
-              <p className="text-[11px] mt-1" style={{ color: 'rgb(var(--muted))' }}>Stocks, REIT, InvIT, Bonds</p>
+            <div className="p-4 rounded-xl border border-border bg-surface-raised">
+              <p className="text-xs font-medium text-muted">AI Health Score</p>
+              <p className="text-xl sm:text-2xl font-bold mt-1 text-warning tabular-nums">78 / 100</p>
+              <p className="text-xs text-muted mt-1">Well Balanced</p>
             </div>
           </div>
 
           {/* Allocation Bar */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs" style={{ color: 'rgb(var(--muted))' }}>
-              <span>Multi-Asset Allocation Breakdown:</span>
-              <span className="font-medium text-foreground">Equities 48% · REITs 22% · InvITs 14% · Govt Bonds 16%</span>
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between text-xs text-muted">
+              <span className="font-medium">Multi-Asset Allocation:</span>
+              <span className="font-semibold text-foreground">
+                Stocks 46% · Bonds 18% · REITs 12% · InvITs 8% · MFs 10% · Cash 6%
+              </span>
             </div>
-            <div className="w-full h-3 rounded-full flex overflow-hidden">
-              <div style={{ width: '48%', backgroundColor: '#3B82F6' }} title="Equities 48%" />
-              <div style={{ width: '22%', backgroundColor: '#8B5CF6' }} title="REITs 22%" />
-              <div style={{ width: '14%', backgroundColor: '#F59E0B' }} title="InvITs 14%" />
-              <div style={{ width: '16%', backgroundColor: '#10B981' }} title="Govt Bonds 16%" />
+            <div className="w-full h-3 rounded-full flex overflow-hidden p-0.5 border border-border bg-surface-raised">
+              <div style={{ width: '46%' }} className="h-full bg-cyan-500 rounded-l-full" title="Stocks 46%" />
+              <div style={{ width: '18%' }} className="h-full bg-indigo-500" title="Bonds 18%" />
+              <div style={{ width: '12%' }} className="h-full bg-amber-500" title="REITs 12%" />
+              <div style={{ width: '8%' }} className="h-full bg-purple-500" title="InvITs 8%" />
+              <div style={{ width: '10%' }} className="h-full bg-emerald-500" title="Mutual Funds 10%" />
+              <div style={{ width: '6%' }} className="h-full bg-rose-500 rounded-r-full" title="Cash 6%" />
             </div>
           </div>
         </div>
       </section>
 
-      {/* Problem & Solution Pillar Section */}
-      <section className="border-t py-16 px-4" style={{ borderColor: 'rgb(var(--border))', backgroundColor: 'rgb(var(--surface-raised) / 0.5)' }}>
+      {/* 4 Core Pillars of Finova */}
+      <section className="border-t border-border py-16 px-4 sm:px-6 bg-surface-raised/40">
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center max-w-2xl mx-auto space-y-3">
-            <h2 className="text-3xl font-bold tracking-tight" style={{ color: 'rgb(var(--foreground))' }}>
-              Solving the Indian Retail Investor Puzzle
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              Everything in One Place
             </h2>
-            <p className="text-sm" style={{ color: 'rgb(var(--muted))' }}>
-              Most retail investors hold accounts across multiple apps and miss out on high-yield alternatives.
-              Finova bridges the gap in 4 key ways:
+            <p className="text-sm text-muted">
+              Built specifically to bridge the knowledge and aggregation gap for Indian retail investors.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Card 1 */}
-            <div className="card p-6 space-y-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-blue-500/10 text-blue-500">
+            {/* Equities */}
+            <div className="card p-6 space-y-3 hover:-translate-y-1 transition-transform">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-cyan-500/10 text-cyan-500">
                 <PieChart className="w-5 h-5" />
               </div>
-              <h3 className="font-semibold text-base" style={{ color: 'rgb(var(--foreground))' }}>
-                Unified Across Brokers
-              </h3>
-              <p className="text-xs leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
-                Aggregate holdings from Zerodha, Groww, Angel One, CDSL, and NSDL into one consolidated net-worth view.
+              <h3 className="font-semibold text-base text-foreground">Stocks & Equities</h3>
+              <p className="text-xs text-muted leading-relaxed">
+                Aggregated holdings across Zerodha, Groww, and CDSL in a single unified view with sector breakdown.
               </p>
             </div>
 
-            {/* Card 2 */}
-            <div className="card p-6 space-y-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-purple-500/10 text-purple-500">
+            {/* REITs & InvITs */}
+            <div className="card p-6 space-y-3 hover:-translate-y-1 transition-transform">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-500/10 text-amber-500">
                 <Building2 className="w-5 h-5" />
               </div>
-              <h3 className="font-semibold text-base" style={{ color: 'rgb(var(--foreground))' }}>
-                Alternative Assets Decoded
-              </h3>
-              <p className="text-xs leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
-                Demystify commercial REITs (office dividends), InvITs (infrastructure yields), and sovereign bonds with plain-English guides.
+              <h3 className="font-semibold text-base text-foreground">REITs & InvITs</h3>
+              <p className="text-xs text-muted leading-relaxed">
+                Demystified commercial real estate and infrastructure yields with transparent dividend tracking.
               </p>
             </div>
 
-            {/* Card 3 */}
-            <div className="card p-6 space-y-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-500/10 text-amber-500">
+            {/* Bonds */}
+            <div className="card p-6 space-y-3 hover:-translate-y-1 transition-transform">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-500/10 text-indigo-500">
+                <Landmark className="w-5 h-5" />
+              </div>
+              <h3 className="font-semibold text-base text-foreground">Bonds & SGBs</h3>
+              <p className="text-xs text-muted leading-relaxed">
+                Sovereign Gold Bonds and Government Securities tracked alongside equity for predictable fixed yield.
+              </p>
+            </div>
+
+            {/* AI Diagnostics */}
+            <div className="card p-6 space-y-3 hover:-translate-y-1 transition-transform">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand/10 text-brand">
                 <Sparkles className="w-5 h-5" />
               </div>
-              <h3 className="font-semibold text-base" style={{ color: 'rgb(var(--foreground))' }}>
-                Gemini AI Diagnostics
-              </h3>
-              <p className="text-xs leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
-                Personalized portfolio health checks, concentration alerts, and rebalancing suggestions powered by Google Gemini.
-              </p>
-            </div>
-
-            {/* Card 4 */}
-            <div className="card p-6 space-y-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-500/10 text-emerald-500">
-                <Shield className="w-5 h-5" />
-              </div>
-              <h3 className="font-semibold text-base" style={{ color: 'rgb(var(--foreground))' }}>
-                Bank-Grade Privacy
-              </h3>
-              <p className="text-xs leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
-                Zero broker credentials, MPINs, or OTPs stored. Import via standard CSV/CAS statement or manual entry.
+              <h3 className="font-semibold text-base text-foreground">AI Intelligence</h3>
+              <p className="text-xs text-muted leading-relaxed">
+                Personalized portfolio health diagnostics, banking concentration alerts, and rebalancing guidance.
               </p>
             </div>
           </div>
@@ -270,21 +242,26 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="mt-auto border-t py-8 px-4" style={{ borderColor: 'rgb(var(--border))' }}>
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs" style={{ color: 'rgb(var(--muted))' }}>
+      <footer className="mt-auto border-t border-border py-8 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded flex items-center justify-center text-white text-[10px] font-bold bg-blue-600">
+            <div className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold bg-brand-600">
               F
             </div>
-            <span className="font-semibold" style={{ color: 'rgb(var(--foreground))' }}>Finova</span>
-            <span>— Hack On Track (Fintech PS2)</span>
+            <span className="font-semibold text-foreground">FINOVA</span>
+            <span>— “Your Investments. Unified. Understood.”</span>
           </div>
-          <div className="flex items-center gap-4">
-            <Link href="/portfolio" className="hover:underline">Dashboard</Link>
-            <Link href="/holdings" className="hover:underline">Holdings</Link>
-            <Link href="/learn" className="hover:underline">Learn</Link>
-            <Link href="/risk" className="hover:underline">Risk</Link>
-            <Link href="/insights" className="hover:underline">AI Insights</Link>
+
+          <div className="flex items-center gap-5">
+            <Link href="/dashboard" className="hover:text-foreground transition-colors">
+              Dashboard
+            </Link>
+            <Link href="/learn" className="hover:text-foreground transition-colors">
+              Learn Alternatives
+            </Link>
+            <Link href="/login" className="hover:text-foreground transition-colors">
+              Sign In
+            </Link>
           </div>
         </div>
       </footer>

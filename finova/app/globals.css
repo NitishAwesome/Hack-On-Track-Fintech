@@ -1,9 +1,43 @@
 @import "tailwindcss";
 
+/* Class-based Dark Mode support for Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ============================================================
-   Finova Design System — Global CSS
-   Premium fintech aesthetic: clean, restrained, trustworthy
+   Finova Design System Tokens for Tailwind v4 Utilities
    ============================================================ */
+@theme {
+  --color-brand-50: rgb(var(--brand-50));
+  --color-brand-100: rgb(var(--brand-100));
+  --color-brand-200: rgb(var(--brand-200));
+  --color-brand-300: rgb(var(--brand-300));
+  --color-brand-400: rgb(var(--brand-400));
+  --color-brand-500: rgb(var(--brand-500));
+  --color-brand-600: rgb(var(--brand-600));
+  --color-brand-700: rgb(var(--brand-700));
+  --color-brand-800: rgb(var(--brand-800));
+  --color-brand-900: rgb(var(--brand-900));
+  --color-brand: rgb(var(--brand-500));
+
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+  --color-surface: rgb(var(--surface));
+  --color-surface-raised: rgb(var(--surface-raised));
+  --color-surface-overlay: rgb(var(--surface-overlay));
+  --color-border: rgb(var(--border));
+  --color-border-subtle: rgb(var(--border-subtle));
+  --color-muted: rgb(var(--muted));
+  --color-muted-foreground: rgb(var(--muted-foreground));
+
+  --color-gain: rgb(var(--gain));
+  --color-gain-bg: rgb(var(--gain-bg));
+  --color-loss: rgb(var(--loss));
+  --color-loss-bg: rgb(var(--loss-bg));
+  --color-warning: rgb(var(--warning));
+  --color-warning-bg: rgb(var(--warning-bg));
+  --color-info: rgb(var(--info));
+  --color-info-bg: rgb(var(--info-bg));
+}
 
 @layer base {
   :root {
@@ -93,6 +127,13 @@
     color: rgb(var(--foreground));
     font-family: var(--font-inter), system-ui, sans-serif;
     line-height: 1.6;
+    margin: 0;
+    padding: 0;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
   }
 
   /* --- Focus Ring --- */
@@ -208,7 +249,7 @@
 
   /* Page container */
   .page-container {
-    max-width: 1280px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 1.5rem;
   }
