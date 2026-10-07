@@ -26,6 +26,7 @@ export function AppShell({
   className,
 }: AppShellProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div
@@ -37,13 +38,21 @@ export function AppShell({
     >
       {/* Desktop Fixed Sidebar */}
       <aside
-        className="hidden lg:flex lg:flex-col w-[240px] flex-shrink-0 border-r sticky top-0 h-screen z-20"
+        className={cn(
+          'hidden lg:flex lg:flex-col flex-shrink-0 border-r sticky top-0 h-screen z-20 transition-all duration-300',
+          sidebarCollapsed ? 'w-[72px]' : 'w-[240px]'
+        )}
         style={{
           borderColor: 'rgb(var(--border))',
           backgroundColor: 'rgb(var(--surface))',
         }}
       >
-        <Sidebar userEmail={userEmail} userName={userName} />
+        <Sidebar
+          userEmail={userEmail}
+          userName={userName}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
       </aside>
 
       {/* Mobile Drawer Sidebar */}

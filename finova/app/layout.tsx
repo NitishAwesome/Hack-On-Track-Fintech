@@ -13,18 +13,27 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Finova — Your Investments, Unified',
-    template: '%s | Finova',
+    default: 'FINOVA — Your Investments. Unified. Understood.',
+    template: '%s | FINOVA',
   },
   description:
-    'Finova unifies all your investments across brokers and depositories in one place. Track stocks, REITs, InvITs and bonds with AI-powered insights.',
-  keywords: ['investments', 'portfolio', 'stocks', 'REITs', 'InvITs', 'bonds', 'fintech', 'India'],
-  authors: [{ name: 'Finova' }],
+    'FINOVA unifies all your investments across brokers and depositories in one place. Your Investments. Unified. Understood.',
+  keywords: ['FINOVA', 'investments', 'portfolio', 'stocks', 'REITs', 'InvITs', 'bonds', 'fintech', 'India'],
+  authors: [{ name: 'FINOVA' }],
   openGraph: {
     type: 'website',
-    title: 'Finova — Your Investments, Unified',
-    description: 'Unified portfolio tracking with AI-powered insights for Indian retail investors.',
-    siteName: 'Finova',
+    title: 'FINOVA — Your Investments. Unified. Understood.',
+    description: 'Unified portfolio tracking and asset intelligence. Your Investments. Unified. Understood.',
+    siteName: 'FINOVA',
+  },
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
   },
 };
 

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { User, Mail, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { FinovaLogo } from '@/components/shared/FinovaLogo';
 
 type RiskAppetite = 'conservative' | 'moderate' | 'aggressive';
 
@@ -104,18 +105,13 @@ export default function RegisterPage() {
       className="card p-8 space-y-6"
     >
       {/* Logo */}
-      <div className="text-center space-y-1">
-        <div className="inline-flex items-center gap-2">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-            style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
-          >
-            F
-          </div>
-          <span className="text-xl font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-            Finova
-          </span>
+      <div className="text-center space-y-2">
+        <div className="inline-flex justify-center">
+          <FinovaLogo size="lg" variant="horizontal" href="/" />
         </div>
+        <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>
+          Your Investments. Unified. Understood.
+        </p>
       </div>
 
       {/* Step indicator */}

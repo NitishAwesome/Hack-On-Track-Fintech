@@ -11,6 +11,7 @@ import {
   Landmark,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
+import { FinovaLogo } from '@/components/shared/FinovaLogo';
 
 export default function LandingPage() {
   return (
@@ -18,19 +19,7 @@ export default function LandingPage() {
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-sm bg-gradient-to-br from-brand-600 to-brand-400 group-hover:scale-105 transition-transform">
-              F
-            </div>
-            <div>
-              <span className="text-xl font-bold tracking-tight text-foreground block leading-none">
-                FINOVA
-              </span>
-              <span className="text-[10px] font-semibold text-brand tracking-widest uppercase block mt-1">
-                Unified Wealth
-              </span>
-            </div>
-          </Link>
+          <FinovaLogo size="md" variant="full" href="/" />
 
           <nav className="flex items-center gap-4 sm:gap-6 text-sm">
             <Link
@@ -244,12 +233,9 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="mt-auto border-t border-border py-8 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold bg-brand-600">
-              F
-            </div>
-            <span className="font-semibold text-foreground">FINOVA</span>
-            <span>— “Your Investments. Unified. Understood.”</span>
+          <div className="flex items-center gap-3">
+            <FinovaLogo size="xs" variant="horizontal" href="/" />
+            <span className="text-muted text-xs">— “Your Investments. Unified. Understood.”</span>
           </div>
 
           <div className="flex items-center gap-5">

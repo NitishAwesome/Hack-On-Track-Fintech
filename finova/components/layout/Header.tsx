@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Menu,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { MarketStatus } from '@/components/dashboard/MarketStatus';
+import { FinovaLogo } from '@/components/shared/FinovaLogo';
 import { createClient } from '@/lib/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -73,6 +75,15 @@ export function Header({
               <Menu className="w-4 h-4" />
             </button>
           )}
+
+          {/* Mobile Finova brand link */}
+          <Link
+            href="/dashboard"
+            className="lg:hidden flex items-center gap-1.5 flex-shrink-0"
+            title="FINOVA"
+          >
+            <FinovaLogo variant="symbol" size={24} />
+          </Link>
 
           {/* Breadcrumb / Title */}
           <div className="flex items-center gap-2 text-xs font-medium truncate">
