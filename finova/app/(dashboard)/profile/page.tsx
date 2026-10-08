@@ -24,6 +24,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [agreements, setAgreements] = useState<Array<{ agreement_type: string; agreement_version: string; accepted_at: string }>>([]);
 
   useEffect(() => {
     async function loadProfile() {
@@ -42,6 +43,16 @@ export default function ProfilePage() {
         setPhone(data.phone ?? '');
         setRiskAppetite((data.risk_appetite as RiskAppetite) ?? 'moderate');
       }
+
+      const { data: agData } = await supabase
+        .from('user_agreements')
+        .select('agreement_type, agreement_version, accepted_at')
+        .eq('user_id', user.id);
+
+      if (agData) {
+        setAgreements(agData);
+      }
+
       setLoading(false);
     }
     loadProfile();
@@ -253,6 +264,67 @@ export default function ProfilePage() {
               )}
             </button>
           </form>
+        </motion.div>
+
+        {/* Accepted Agreements Audit */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="card p-5 space-y-3"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
+              Agreements & Consents
+            </h2>
+            <span className="text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+              Recorded
+            </span>
+          </div>
+
+          <div className="space-y-2 text-xs">
+            <div className="p-3 rounded-lg border border-border bg-surface-raised flex items-center justify-between">
+              <div>
+                <a href="/terms" target="_blank" className="font-semibold text-foreground hover:text-brand underline">
+                  Terms of Service
+                </a>
+                <p className="text-[10px] text-muted">Version 1.0.0-draft</p>
+              </div>
+              <span className="text-[10px] font-medium text-muted">
+                {agreements.find(a => a.agreement_type === 'terms_of_service')?.accepted_at
+                  ? new Date(agreements.find(a => a.agreement_type === 'terms_of_service')!.accepted_at).toLocaleDateString('en-IN')
+                  : 'Accepted on Signup'}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-lg border border-border bg-surface-raised flex items-center justify-between">
+              <div>
+                <a href="/privacy" target="_blank" className="font-semibold text-foreground hover:text-brand underline">
+                  Privacy Policy
+                </a>
+                <p className="text-[10px] text-muted">Version 1.0.0-draft</p>
+              </div>
+              <span className="text-[10px] font-medium text-muted">
+                {agreements.find(a => a.agreement_type === 'privacy_policy')?.accepted_at
+                  ? new Date(agreements.find(a => a.agreement_type === 'privacy_policy')!.accepted_at).toLocaleDateString('en-IN')
+                  : 'Accepted on Signup'}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-lg border border-border bg-surface-raised flex items-center justify-between">
+              <div>
+                <a href="/risk-disclosure" target="_blank" className="font-semibold text-foreground hover:text-brand underline">
+                  Market Risk Disclosure
+                </a>
+                <p className="text-[10px] text-muted">Version 1.0.0-draft</p>
+              </div>
+              <span className="text-[10px] font-medium text-muted">
+                {agreements.find(a => a.agreement_type === 'risk_disclosure')?.accepted_at
+                  ? new Date(agreements.find(a => a.agreement_type === 'risk_disclosure')!.accepted_at).toLocaleDateString('en-IN')
+                  : 'Accepted on Signup'}
+              </span>
+            </div>
+          </div>
         </motion.div>
 
         {/* Sign out */}

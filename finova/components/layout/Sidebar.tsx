@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -21,12 +21,13 @@ import {
   X,
   TrendingUp,
   HelpCircle,
-  MoreVertical,
   ChevronLeft,
   ChevronRight,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
+import { createClient } from '@/lib/supabase/client';
 
 interface NavItem {
   href: string;
@@ -93,6 +94,13 @@ export function Sidebar({
   onToggleCollapse,
 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+  }
 
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/portfolio' || pathname === '/';
@@ -300,14 +308,15 @@ export function Sidebar({
               </div>
             </Link>
 
-            <Link
-              href="/profile"
-              className="p-1 rounded-md transition-colors"
-              style={{ color: 'rgb(var(--muted))' }}
-              title="Account Menu"
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="p-1.5 rounded-md hover:bg-surface-raised transition-colors text-muted hover:text-loss"
+              title="Sign out"
+              aria-label="Sign out"
             >
-              <MoreVertical className="w-3.5 h-3.5" />
-            </Link>
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 

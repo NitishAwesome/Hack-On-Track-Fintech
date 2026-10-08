@@ -17,7 +17,7 @@ export default async function DashboardLayout({
     !process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('placeholder') &&
     !process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('your_');
 
-  // In production with configured Supabase, enforce authentication
+  // Enforce server-side authentication check for protected dashboard routes
   if (!user && isSupabaseConfigured) {
     redirect('/login');
   }
@@ -26,16 +26,22 @@ export default async function DashboardLayout({
   if (user) {
     const { data } = await supabase
       .from('profiles')
-      .select('full_name, avatar_url')
+      .select('full_name, avatar_url, email')
       .eq('id', user.id)
       .single();
     profile = data;
   }
 
+  const effectiveEmail = user?.email || profile?.email || 'investor@finova.in';
+  const effectiveName =
+    profile?.full_name ||
+    user?.user_metadata?.full_name ||
+    (user?.email ? user.email.split('@')[0] : 'Investor');
+
   return (
     <AppShell
-      userEmail={user?.email || 'investor@finova.in'}
-      userName={profile?.full_name || 'Retail Investor'}
+      userEmail={effectiveEmail}
+      userName={effectiveName}
       userAvatar={profile?.avatar_url}
     >
       {children}
