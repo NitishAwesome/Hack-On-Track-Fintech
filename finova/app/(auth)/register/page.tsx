@@ -282,9 +282,24 @@ export default function RegisterPage() {
 
             {/* General Error Banner */}
             {errors.general && (
-              <div className="p-3 rounded-lg border border-loss/30 bg-loss-bg/20 text-xs text-loss flex items-start gap-2">
-                <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span>{errors.general}</span>
+              <div className="p-3.5 rounded-xl border border-loss/30 bg-loss-bg/20 text-xs text-loss space-y-2.5">
+                <div className="flex items-start gap-2">
+                  <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5 text-loss" />
+                  <span className="leading-relaxed font-medium">{errors.general}</span>
+                </div>
+                {errors.general.toLowerCase().includes('rate limit') && (
+                  <div className="p-3 rounded-lg bg-surface border border-border text-[11px] text-foreground space-y-2 mt-1">
+                    <p className="font-semibold text-amber-400">⚡ Fix this in Supabase (takes 10 seconds):</p>
+                    <ol className="list-decimal list-inside space-y-1 text-muted">
+                      <li>Open <strong className="text-foreground">Supabase Dashboard → Authentication → Providers → Email</strong></li>
+                      <li>Toggle <strong className="text-amber-400">Confirm email</strong> to <strong className="text-amber-400">OFF</strong></li>
+                      <li>Click <strong className="text-foreground">Save</strong> and click &quot;Create Finova Account&quot; again</li>
+                    </ol>
+                    <p className="text-[10px] text-muted border-t border-border/60 pt-1.5">
+                      Supabase free tier limits built-in confirmation emails to 3/hour. Disabling email confirmation allows instant signups without hitting rate limits.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

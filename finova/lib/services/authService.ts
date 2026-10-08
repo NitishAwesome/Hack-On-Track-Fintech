@@ -84,7 +84,20 @@ export class AuthService {
     });
 
     if (error) {
-      return { success: false, error: error.message, user: null, needsEmailConfirmation: false };
+      let friendlyError = error.message;
+      if (
+        error.message.toLowerCase().includes('rate limit') ||
+        error.message.toLowerCase().includes('over_email_send_rate_limit') ||
+        (error as { code?: string }).code === 'over_email_send_rate_limit'
+      ) {
+        friendlyError =
+          'Supabase email rate limit exceeded. Disable "Confirm email" in your Supabase Dashboard (Authentication → Providers → Email) to allow instant signups without email verification.';
+      } else if (error.message.toLowerCase().includes('already registered')) {
+        friendlyError =
+          'An account with this email address already exists. Please sign in instead.';
+      }
+
+      return { success: false, error: friendlyError, user: null, needsEmailConfirmation: false };
     }
 
     const user = data.user;

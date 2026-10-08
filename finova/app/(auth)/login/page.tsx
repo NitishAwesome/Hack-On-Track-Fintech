@@ -117,9 +117,17 @@ export default function LoginPage() {
 
       {/* Error Banner */}
       {error && (
-        <div className="p-3 rounded-lg border border-loss/30 bg-loss-bg/20 text-xs text-loss flex items-start gap-2">
-          <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <span className="leading-relaxed">{error}</span>
+        <div className="p-3.5 rounded-xl border border-loss/30 bg-loss-bg/20 text-xs text-loss space-y-2">
+          <div className="flex items-start gap-2">
+            <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span className="leading-relaxed font-medium">{error}</span>
+          </div>
+          {(error.toLowerCase().includes('not yet verified') ||
+            error.toLowerCase().includes('rate limit')) && (
+            <div className="p-2.5 rounded-lg bg-surface border border-border text-[11px] text-muted space-y-1">
+              <span className="font-semibold text-foreground">💡 Tip:</span> Disable &quot;Confirm email&quot; in Supabase Dashboard (<strong className="text-foreground">Authentication → Providers → Email</strong>) to activate accounts immediately without email verification.
+            </div>
+          )}
         </div>
       )}
 
