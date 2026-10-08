@@ -6,14 +6,12 @@ import {
   MOCK_ALLOCATION_SEGMENTS,
   MOCK_HOLDINGS,
   MOCK_DISCOVER_INSIGHTS,
-  MOCK_MARKET_INDICES,
   MOCK_NEWS_ITEMS,
 } from '@/lib/mock/dashboardData';
 import { PortfolioSummaryCard } from './PortfolioSummaryCard';
 import { AllocationCard } from './AllocationCard';
 import { HoldingsCard } from './HoldingsCard';
 import { DiscoverCard } from './DiscoverCard';
-import { MarketPulse } from './MarketPulse';
 import { NewsCard } from './NewsCard';
 import { RefreshCw, Plus } from 'lucide-react';
 import Link from 'next/link';
@@ -109,20 +107,12 @@ export function FinovaDashboard() {
       </div>
 
       {/* Grid Row 3: Market Pulse (6 cols) + News Card (6 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        <div className="lg:col-span-6 flex flex-col">
-          <MarketPulse
-            indices={MOCK_MARKET_INDICES}
-            className="h-full"
-          />
-        </div>
-
-        <div className="lg:col-span-6 flex flex-col">
-          <NewsCard
-            newsItems={MOCK_NEWS_ITEMS}
-            className="h-full"
-          />
-        </div>
+      {/* Grid Row 3: Market & Portfolio News */}
+      <div className="w-full">
+        <NewsCard
+          newsItems={MOCK_NEWS_ITEMS}
+          className="w-full"
+        />
       </div>
     </div>
   );

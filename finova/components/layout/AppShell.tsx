@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { MarketStrip } from '@/components/shared/MarketStrip';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -96,6 +97,9 @@ export function AppShell({
           userAvatar={userAvatar}
           onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
         />
+
+        {/* Global Compact Market Strip */}
+        <MarketStrip />
 
         <main className={cn('flex-1 w-full', className)}>
           {children}

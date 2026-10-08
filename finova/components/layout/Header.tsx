@@ -12,7 +12,6 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
-import { MarketStatus } from '@/components/dashboard/MarketStatus';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
 import { createClient } from '@/lib/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -148,17 +147,6 @@ export function Header({
                 /
               </span>
             </div>
-          </div>
-
-          {/* Market Status Pill */}
-          <div className="hidden sm:block">
-            <MarketStatus
-              isOpen={true}
-              statusText="Markets Open"
-              indexSummary="Nifty 24,180"
-              change="+0.59%"
-              trend="up"
-            />
           </div>
 
           {/* Mobile Search Button */}

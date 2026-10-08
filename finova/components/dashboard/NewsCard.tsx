@@ -33,7 +33,7 @@ export function NewsCard({ newsItems, className }: NewsCardProps) {
       />
 
       {/* News List */}
-      <div className="space-y-3.5 mt-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-3">
         {newsItems.map((item) => {
           const sentimentBadge =
             item.sentiment === 'positive'

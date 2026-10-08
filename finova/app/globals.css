@@ -247,6 +247,16 @@
   .surface-raised { background-color: rgb(var(--surface-raised)); }
   .border-default { border-color: rgb(var(--border)); }
 
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+
   /* Page container */
   .page-container {
     max-width: 1400px;
@@ -260,3 +270,4 @@
     }
   }
 }
+
