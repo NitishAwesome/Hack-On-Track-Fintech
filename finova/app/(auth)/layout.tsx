@@ -26,7 +26,7 @@ export default function AuthLayout({
           style={{ background: 'radial-gradient(circle, rgb(var(--brand-400)), transparent)' }}
         />
       </div>
-      <div className="relative w-full max-w-md">{children}</div>
+      <div className="relative w-full max-w-5xl my-auto">{children}</div>
     </div>
   );
 }
