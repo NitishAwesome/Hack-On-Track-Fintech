@@ -1,17 +1,45 @@
 // ============================================================
-// Finova — Route Protection Proxy (Next.js 16 convention)
+// FINOVA — Route Protection & Session Proxy (Next.js 16)
 // ============================================================
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
+// Public routes that unauthenticated visitors can always access
+const PUBLIC_PREFIXES = [
+  '/',
+  '/login',
+  '/register',
+  '/agreements',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+  '/terms',
+  '/privacy',
+  '/risk-disclosure',
+  '/auth',
+  '/api/market',
+  '/learn',
+  '/icon.svg',
+  '/favicon.ico',
+];
+
+// Auth-only pages that logged-in users should be redirected away from
+const AUTH_ONLY_PATHS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+];
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-  // If Supabase credentials are not configured yet, bypass auth redirect in local/preview mode
+  // If Supabase credentials are not configured in local environment, allow preview mode
   if (!url || !anonKey || url.includes('placeholder') || url.includes('your_')) {
     return supabaseResponse;
   }
@@ -41,24 +69,39 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
 
-  // Public routes — always accessible
-  const publicPaths = ['/login', '/register', '/auth/callback'];
-  const isPublic = publicPaths.some((p) => pathname.startsWith(p));
+  const isExactRoot = pathname === '/';
+  const isPublic = isExactRoot || PUBLIC_PREFIXES.some((prefix) =>
+    prefix === '/' ? false : pathname.startsWith(prefix)
+  );
+  const isAuthOnly = AUTH_ONLY_PATHS.some((path) => pathname === path || pathname.startsWith(path + '/'));
 
-  // Redirect unauthenticated users to login
+  // 1. Unauthenticated users attempting to access protected routes
   if (!user && !isPublic) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = '/login';
+    // Preserve intended destination safely
+    const fullTarget = pathname + (search || '');
+    if (fullTarget && fullTarget.startsWith('/') && !fullTarget.startsWith('//')) {
+      redirectUrl.searchParams.set('next', fullTarget);
+    }
+    return NextResponse.redirect(redirectUrl);
   }
 
-  // Redirect logged-in users away from auth pages
-  if (user && isPublic && !pathname.startsWith('/auth')) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/portfolio';
-    return NextResponse.redirect(url);
+  // 2. Authenticated users attempting to access login or register
+  if (user && isAuthOnly) {
+    const nextParam = request.nextUrl.searchParams.get('next');
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.searchParams.delete('next');
+
+    // Validate next redirect to prevent open-redirect vulnerabilities
+    if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')) {
+      redirectUrl.pathname = nextParam;
+    } else {
+      redirectUrl.pathname = '/dashboard';
+    }
+    return NextResponse.redirect(redirectUrl);
   }
 
   return supabaseResponse;
