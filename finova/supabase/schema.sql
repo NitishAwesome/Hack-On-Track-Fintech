@@ -6,10 +6,11 @@
 -- ============ PROFILES ============
 CREATE TABLE IF NOT EXISTS public.profiles (
   id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email         TEXT,
   full_name     TEXT,
   phone         TEXT,
   pan_masked    TEXT,
-  risk_appetite TEXT CHECK (risk_appetite IN ('conservative','moderate','aggressive')),
+  risk_appetite TEXT CHECK (risk_appetite IN ('conservative','moderate','aggressive')) DEFAULT 'moderate',
   preferred_currency TEXT DEFAULT 'INR',
   onboarding_done BOOLEAN DEFAULT FALSE,
   avatar_url    TEXT,
@@ -28,13 +29,20 @@ CREATE POLICY "Users manage own profile"
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name, risk_appetite)
+  INSERT INTO public.profiles (id, email, full_name, phone, risk_appetite, onboarding_done)
   VALUES (
     NEW.id,
-    NEW.raw_user_meta_data->>'full_name',
-    COALESCE(NEW.raw_user_meta_data->>'risk_appetite', 'moderate')
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    NEW.raw_user_meta_data->>'phone',
+    COALESCE(NEW.raw_user_meta_data->>'risk_appetite', 'moderate'),
+    TRUE
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    full_name = COALESCE(public.profiles.full_name, EXCLUDED.full_name),
+    phone = COALESCE(public.profiles.phone, EXCLUDED.phone),
+    updated_at = NOW();
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -43,6 +51,33 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+
+-- ============ USER AGREEMENTS (AUDIT TRAIL) ============
+CREATE TABLE IF NOT EXISTS public.user_agreements (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  agreement_type      TEXT NOT NULL CHECK (agreement_type IN ('terms_of_service', 'privacy_policy', 'risk_disclosure')),
+  agreement_version   TEXT NOT NULL,
+  accepted_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  acceptance_source   TEXT NOT NULL DEFAULT 'registration',
+  ip_address          TEXT,
+  user_agent          TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.user_agreements ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view own agreements"
+  ON public.user_agreements FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users record own agreements"
+  ON public.user_agreements FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_agreements_user_type
+  ON public.user_agreements(user_id, agreement_type, agreement_version);
 
 
 -- ============ BROKER ACCOUNTS ============
