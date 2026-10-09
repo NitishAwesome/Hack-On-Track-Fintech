@@ -244,6 +244,11 @@ ALTER TABLE public.broker_accounts ADD CONSTRAINT broker_accounts_connection_sta
 -- Safely expand quantity precision from 4 to 6 decimal places for fractional mutual fund units
 ALTER TABLE public.holdings ALTER COLUMN quantity TYPE NUMERIC(18, 6);
 
+-- Resolve PostgREST PGRST201 relationship ambiguity:
+-- Drop redundant single-column foreign key so PostgREST has exactly one unambiguous relationship
+-- between holdings and broker_accounts (using the composite security FK).
+ALTER TABLE public.holdings DROP CONSTRAINT IF EXISTS holdings_broker_account_id_fkey;
+
 -- Ensure foreign key constraint compatibility
 DO $$
 BEGIN
@@ -281,6 +286,11 @@ ALTER TABLE public.investment_transactions
 
 ALTER TABLE public.investment_transactions
   ALTER COLUMN settlement_date TYPE TIMESTAMPTZ USING settlement_date::TIMESTAMPTZ;
+
+-- Resolve PostgREST PGRST201 relationship ambiguity:
+-- Drop redundant single-column foreign key so PostgREST has exactly one unambiguous relationship
+-- between investment_transactions and broker_accounts.
+ALTER TABLE public.investment_transactions DROP CONSTRAINT IF EXISTS investment_transactions_broker_account_id_fkey;
 
 -- Ensure canonical tradebook deduplication unique index exists
 CREATE UNIQUE INDEX IF NOT EXISTS idx_investment_tx_dedup
