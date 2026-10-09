@@ -2,13 +2,29 @@
 // Finova — Core TypeScript Types
 // ============================================================
 
+export * from './database';
+
 // ----- Database row types (mirrors Supabase schema) -----
 
 export type AssetClass = 'equity' | 'reit' | 'invit' | 'bond' | 'sgb' | 'etf' | 'mf';
 export type Exchange = 'NSE' | 'BSE' | 'NCD' | 'MCX' | 'OTHER';
 export type RiskAppetite = 'conservative' | 'moderate' | 'aggressive';
-export type AccountType = 'demat' | 'trading' | 'mf' | 'other';
-export type TransactionType = 'buy' | 'sell' | 'dividend' | 'bonus' | 'split' | 'rights';
+export type AccountType = 'demat' | 'trading' | 'mf' | 'other' | 'broker' | 'depository' | 'manual';
+export type TransactionType =
+  | 'buy'
+  | 'sell'
+  | 'dividend'
+  | 'bonus'
+  | 'split'
+  | 'rights'
+  | 'BUY'
+  | 'SELL'
+  | 'DIVIDEND'
+  | 'INTEREST'
+  | 'COUPON'
+  | 'BONUS'
+  | 'SPLIT'
+  | 'FEE';
 
 export interface Profile {
   id: string;
@@ -27,17 +43,24 @@ export interface BrokerAccount {
   id: string;
   user_id: string;
   broker_name: string;
+  broker_code?: string;
+  display_name?: string;
   account_label: string | null;
   account_type: AccountType;
-  color_hex: string;
-  is_active: boolean;
+  connection_status?: string;
+  data_source?: string;
+  currency?: string;
+  color_hex?: string;
+  is_active?: boolean;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Holding {
   id: string;
   user_id: string;
   broker_account_id: string | null;
+  instrument_id?: string;
   symbol: string;
   isin: string | null;
   name: string;
@@ -45,7 +68,11 @@ export interface Holding {
   exchange: Exchange | null;
   quantity: number;
   avg_buy_price: number;
+  average_buy_price?: number;
   current_price: number | null;
+  currency?: string;
+  data_source?: string;
+  as_of?: string;
   price_updated_at: string | null;
   created_at: string;
   updated_at: string;
@@ -56,14 +83,23 @@ export interface Holding {
 export interface Transaction {
   id: string;
   user_id: string;
-  holding_id: string | null;
+  holding_id?: string | null;
   broker_account_id: string | null;
+  instrument_id?: string;
   transaction_type: TransactionType;
   symbol: string;
   quantity: number;
   price: number;
+  unit_price?: number;
+  gross_amount?: number;
+  fees?: number;
+  taxes?: number;
+  net_amount?: number;
   charges: number;
   transaction_date: string;
+  settlement_date?: string | null;
+  source?: string;
+  external_reference?: string | null;
   notes: string | null;
   created_at: string;
 }
