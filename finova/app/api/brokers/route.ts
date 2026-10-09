@@ -1,39 +1,52 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
-
-function isSupabaseConfigured(): boolean {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  return Boolean(url && !url.includes('placeholder') && !url.includes('your_'));
-}
+import { isSupabaseConfigured } from '@/lib/supabase/config';
 
 // GET /api/brokers — list broker accounts
 export async function GET() {
-  const supabaseConfigured = isSupabaseConfigured();
-
-  if (supabaseConfigured) {
+  if (isSupabaseConfigured()) {
     try {
       const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data, error } = await supabase
-          .from('broker_accounts')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: true });
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-        if (!error && data) {
-          return NextResponse.json({ brokers: data, isDemo: false });
-        }
+      if (authError || !user) {
+        return NextResponse.json(
+          { error: 'Authentication required. Please sign in to view your broker accounts.' },
+          { status: 401 }
+        );
       }
-    } catch {
-      // Fallback to local storage engine
+
+      const { data, error } = await supabase
+        .from('broker_accounts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('[API /api/brokers GET] Supabase query error:', error.message);
+        return NextResponse.json(
+          { error: 'Database error: failed to fetch broker accounts from cloud database.' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ brokers: data || [], isDemo: false, storageMode: 'cloud' });
+    } catch (err) {
+      console.error('[API /api/brokers GET] Unexpected error:', err instanceof Error ? err.message : err);
+      return NextResponse.json(
+        { error: 'Unable to connect to database service. Please check network and configuration.' },
+        { status: 500 }
+      );
     }
   }
 
-  // Persistent storage engine
+  // Explicit local development mode (Supabase unconfigured)
   const brokers = PortfolioStorage.getBrokerAccounts();
-  return NextResponse.json({ brokers, isDemo: false });
+  return NextResponse.json({ brokers, isDemo: true, storageMode: 'local' });
 }
 
 // POST /api/brokers — add a broker account
@@ -46,36 +59,54 @@ export async function POST(request: Request) {
   const COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4', '#EF4444', '#6366F1'];
   const colorHex = body.color_hex || COLORS[Math.floor(Math.random() * COLORS.length)];
 
-  const supabaseConfigured = isSupabaseConfigured();
-  if (supabaseConfigured) {
+  if (isSupabaseConfigured()) {
     try {
       const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data, error } = await supabase
-          .from('broker_accounts')
-          .insert({
-            user_id: user.id,
-            broker_code: brokerName.toUpperCase().replace(/\s+/g, '_'),
-            display_name: displayName,
-            account_type: accountType,
-            connection_status: 'MANUAL',
-            data_source: 'MANUAL',
-            currency: 'INR',
-          })
-          .select()
-          .single();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-        if (!error && data) {
-          return NextResponse.json({ broker: data }, { status: 201 });
-        }
+      if (authError || !user) {
+        return NextResponse.json(
+          { error: 'Authentication required. Please sign in to add a broker account.' },
+          { status: 401 }
+        );
       }
-    } catch {
-      // Fallback
+
+      const { data, error } = await supabase
+        .from('broker_accounts')
+        .insert({
+          user_id: user.id,
+          broker_code: brokerName.toUpperCase().replace(/\s+/g, '_'),
+          display_name: displayName,
+          account_type: accountType,
+          connection_status: 'MANUAL',
+          data_source: 'MANUAL',
+          currency: 'INR',
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[API /api/brokers POST] Supabase insert error:', error.message);
+        return NextResponse.json(
+          { error: 'Database error: failed to create broker account in cloud database.' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ broker: data, storageMode: 'cloud' }, { status: 201 });
+    } catch (err) {
+      console.error('[API /api/brokers POST] Unexpected error:', err instanceof Error ? err.message : err);
+      return NextResponse.json(
+        { error: 'Unable to connect to database service. Please check network and configuration.' },
+        { status: 500 }
+      );
     }
   }
 
-  // Persistent local storage engine
+  // Explicit local development mode
   const newAccount = PortfolioStorage.addBrokerAccount({
     user_id: 'current_user',
     broker_code: brokerName.toUpperCase().replace(/\s+/g, '_'),
@@ -91,7 +122,7 @@ export async function POST(request: Request) {
     is_active: true,
   });
 
-  return NextResponse.json({ broker: newAccount }, { status: 201 });
+  return NextResponse.json({ broker: newAccount, isDemo: true, storageMode: 'local' }, { status: 201 });
 }
 
 // PUT /api/brokers — rename / update a broker account
@@ -100,41 +131,67 @@ export async function PUT(request: Request) {
   const { id, display_name, account_label, account_type } = body;
 
   if (!id) {
-    return NextResponse.json({ error: 'Account ID is required' }, { status: 400 });
+    return NextResponse.json({ error: 'Account ID is required.' }, { status: 400 });
   }
 
   const newLabel = (display_name || account_label || '').trim();
   if (!newLabel) {
-    return NextResponse.json({ error: 'Display name cannot be empty' }, { status: 400 });
+    return NextResponse.json({ error: 'Display name cannot be empty.' }, { status: 400 });
   }
 
-  const supabaseConfigured = isSupabaseConfigured();
-  if (supabaseConfigured) {
+  if (isSupabaseConfigured()) {
     try {
       const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data, error } = await supabase
-          .from('broker_accounts')
-          .update({
-            display_name: newLabel,
-            account_type: account_type || 'broker',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', id)
-          .eq('user_id', user.id)
-          .select()
-          .single();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-        if (!error && data) {
-          return NextResponse.json({ broker: data });
-        }
+      if (authError || !user) {
+        return NextResponse.json(
+          { error: 'Authentication required. Please sign in to update a broker account.' },
+          { status: 401 }
+        );
       }
-    } catch {
-      // Fallback
+
+      const { data, error } = await supabase
+        .from('broker_accounts')
+        .update({
+          display_name: newLabel,
+          account_type: account_type || 'broker',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[API /api/brokers PUT] Supabase update error:', error.message);
+        return NextResponse.json(
+          { error: 'Database error: failed to update broker account in cloud database.' },
+          { status: 500 }
+        );
+      }
+
+      if (!data) {
+        return NextResponse.json(
+          { error: 'Broker account not found or access denied.' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ broker: data, storageMode: 'cloud' });
+    } catch (err) {
+      console.error('[API /api/brokers PUT] Unexpected error:', err instanceof Error ? err.message : err);
+      return NextResponse.json(
+        { error: 'Unable to connect to database service. Please check network and configuration.' },
+        { status: 500 }
+      );
     }
   }
 
+  // Explicit local development mode
   const updated = PortfolioStorage.updateBrokerAccount(id, {
     display_name: newLabel,
     account_label: newLabel,
@@ -142,10 +199,10 @@ export async function PUT(request: Request) {
   });
 
   if (!updated) {
-    return NextResponse.json({ error: 'Broker account not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Broker account not found.' }, { status: 404 });
   }
 
-  return NextResponse.json({ broker: updated });
+  return NextResponse.json({ broker: updated, isDemo: true, storageMode: 'local' });
 }
 
 // DELETE /api/brokers?id=... — remove a broker account
@@ -154,30 +211,49 @@ export async function DELETE(request: Request) {
   const id = searchParams.get('id');
 
   if (!id) {
-    return NextResponse.json({ error: 'Broker ID required' }, { status: 400 });
+    return NextResponse.json({ error: 'Broker ID is required.' }, { status: 400 });
   }
 
-  const supabaseConfigured = isSupabaseConfigured();
-  if (supabaseConfigured) {
+  if (isSupabaseConfigured()) {
     try {
       const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error } = await supabase
-          .from('broker_accounts')
-          .delete()
-          .eq('id', id)
-          .eq('user_id', user.id);
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-        if (!error) {
-          return NextResponse.json({ success: true });
-        }
+      if (authError || !user) {
+        return NextResponse.json(
+          { error: 'Authentication required. Please sign in to delete a broker account.' },
+          { status: 401 }
+        );
       }
-    } catch {
-      // Fallback
+
+      const { error } = await supabase
+        .from('broker_accounts')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('[API /api/brokers DELETE] Supabase delete error:', error.message);
+        return NextResponse.json(
+          { error: 'Database error: failed to delete broker account from cloud database.' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ success: true, storageMode: 'cloud' });
+    } catch (err) {
+      console.error('[API /api/brokers DELETE] Unexpected error:', err instanceof Error ? err.message : err);
+      return NextResponse.json(
+        { error: 'Unable to connect to database service. Please check network and configuration.' },
+        { status: 500 }
+      );
     }
   }
 
+  // Explicit local development mode
   const deleted = PortfolioStorage.deleteBrokerAccount(id);
-  return NextResponse.json({ success: deleted });
+  return NextResponse.json({ success: deleted, isDemo: true, storageMode: 'local' });
 }

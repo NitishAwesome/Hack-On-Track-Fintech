@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
 import type { AssetClass } from '@/types/portfolio';
 import type { AssetCategory } from '@/types/database';
 
@@ -14,6 +16,14 @@ interface ImportHoldingInput {
   isin?: string | null;
 }
 
+function mapAssetClassToCategory(assetClass: AssetClass): AssetCategory {
+  if (assetClass === 'mf') return 'MUTUAL_FUND';
+  if (assetClass === 'reit') return 'REIT';
+  if (assetClass === 'invit') return 'INVIT';
+  if (assetClass === 'bond' || assetClass === 'sgb') return 'BOND';
+  return 'STOCK';
+}
+
 // POST /api/portfolio/holdings/import — bulk import holdings (from CSV)
 export async function POST(request: Request) {
   try {
@@ -23,14 +33,254 @@ export async function POST(request: Request) {
     const targetBrokerAccountId = body.broker_account_id;
 
     if (!items || items.length === 0) {
-      return NextResponse.json({ error: 'No holdings provided for import' }, { status: 400 });
+      return NextResponse.json({ error: 'No holdings provided for import.' }, { status: 400 });
     }
 
-    let importedCount = 0;
-    let skippedCount = 0;
-    const errors: string[] = [];
+    if (isSupabaseConfigured()) {
+      const supabase = await createClient();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-    // Ensure we have a valid broker account
+      if (authError || !user) {
+        return NextResponse.json(
+          { error: 'Authentication required. Please sign in to import holdings.' },
+          { status: 401 }
+        );
+      }
+
+      // Determine valid broker account for this user
+      let brokerId = targetBrokerAccountId;
+      if (brokerId) {
+        const { data: broker, error: brokerErr } = await supabase
+          .from('broker_accounts')
+          .select('id')
+          .eq('id', brokerId)
+          .eq('user_id', user.id)
+          .single();
+
+        if (brokerErr || !broker) {
+          return NextResponse.json(
+            { error: 'Specified broker account not found or access denied.' },
+            { status: 400 }
+          );
+        }
+      } else {
+        const { data: existingBrokers, error: brokersErr } = await supabase
+          .from('broker_accounts')
+          .select('id')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true })
+          .limit(1);
+
+        if (brokersErr) {
+          console.error('[API /import POST] Broker query error:', brokersErr.message);
+          return NextResponse.json(
+            { error: 'Database error: unable to verify broker accounts.' },
+            { status: 500 }
+          );
+        }
+
+        if (existingBrokers && existingBrokers.length > 0) {
+          brokerId = existingBrokers[0].id;
+        } else {
+          // Auto-provision primary broker account for user
+          const { data: defaultBroker, error: createBrokerErr } = await supabase
+            .from('broker_accounts')
+            .insert({
+              user_id: user.id,
+              broker_code: 'ZERODHA',
+              display_name: 'Primary Demat Account',
+              account_type: 'broker',
+              connection_status: 'MANUAL',
+              data_source: 'CSV',
+              currency: 'INR',
+            })
+            .select()
+            .single();
+
+          if (createBrokerErr || !defaultBroker) {
+            console.error('[API /import POST] Broker creation error:', createBrokerErr?.message);
+            return NextResponse.json(
+              { error: 'Database error: unable to initialize default broker account.' },
+              { status: 500 }
+            );
+          }
+          brokerId = defaultBroker.id;
+        }
+      }
+
+      let importedCount = 0;
+      let skippedCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < items.length; i++) {
+        const row = items[i];
+        const symbol = (row.symbol || '').toUpperCase().trim();
+        if (!symbol) {
+          errors.push(`Row ${i + 1}: Missing symbol`);
+          continue;
+        }
+
+        const qty = Number(row.quantity);
+        if (isNaN(qty) || qty <= 0) {
+          errors.push(`Row ${i + 1} (${symbol}): Quantity must be positive`);
+          continue;
+        }
+
+        const avgPrice = Number(row.avg_buy_price);
+        if (isNaN(avgPrice) || avgPrice < 0) {
+          errors.push(`Row ${i + 1} (${symbol}): Purchase price cannot be negative`);
+          continue;
+        }
+
+        const name = (row.name || symbol).trim();
+        const assetClass: AssetClass = ['equity', 'reit', 'invit', 'bond', 'sgb', 'etf', 'mf'].includes(
+          (row.asset_class || '').toLowerCase()
+        )
+          ? (row.asset_class!.toLowerCase() as AssetClass)
+          : 'equity';
+
+        const assetCategory = mapAssetClassToCategory(assetClass);
+        const exchange = (row.exchange || 'NSE').toUpperCase();
+        const isin = row.isin?.trim() || null;
+        const accountId = row.broker_account_id || brokerId;
+
+        // Resolve or create instrument in public.instruments
+        let instrumentId: string;
+        const { data: existingInst, error: instLookupErr } = await supabase
+          .from('instruments')
+          .select('id')
+          .eq('symbol', symbol)
+          .eq('exchange', exchange)
+          .maybeSingle();
+
+        if (instLookupErr) {
+          errors.push(`Row ${i + 1} (${symbol}): Instrument lookup failed`);
+          continue;
+        }
+
+        if (existingInst) {
+          instrumentId = existingInst.id;
+        } else {
+          const { data: newInst, error: newInstErr } = await supabase
+            .from('instruments')
+            .insert({
+              symbol,
+              instrument_name: name,
+              asset_type: assetCategory,
+              exchange,
+              isin,
+              currency: 'INR',
+              is_active: true,
+              is_custom: true,
+              created_by: user.id,
+            })
+            .select()
+            .single();
+
+          if (newInstErr || !newInst) {
+            errors.push(`Row ${i + 1} (${symbol}): Failed to register instrument in database`);
+            continue;
+          }
+          instrumentId = newInst.id;
+        }
+
+        // Check for existing holding position
+        const { data: existingHolding, error: holdingCheckErr } = await supabase
+          .from('holdings')
+          .select('id, quantity, average_buy_price')
+          .eq('broker_account_id', accountId)
+          .eq('instrument_id', instrumentId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (holdingCheckErr) {
+          errors.push(`Row ${i + 1} (${symbol}): Error checking duplicate position`);
+          continue;
+        }
+
+        if (existingHolding) {
+          if (duplicateMode === 'skip') {
+            skippedCount++;
+            continue;
+          } else if (duplicateMode === 'replace') {
+            const { error: updateErr } = await supabase
+              .from('holdings')
+              .update({
+                quantity: qty,
+                average_buy_price: avgPrice,
+                as_of: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existingHolding.id)
+              .eq('user_id', user.id);
+
+            if (updateErr) {
+              errors.push(`Row ${i + 1} (${symbol}): Failed to replace position`);
+            } else {
+              importedCount++;
+            }
+            continue;
+          } else if (duplicateMode === 'update') {
+            const existingQty = Number(existingHolding.quantity);
+            const existingPrice = Number(existingHolding.average_buy_price);
+            const totalQty = existingQty + qty;
+            const weightedAvgPrice = (existingQty * existingPrice + qty * avgPrice) / totalQty;
+
+            const { error: updateErr } = await supabase
+              .from('holdings')
+              .update({
+                quantity: totalQty,
+                average_buy_price: weightedAvgPrice,
+                as_of: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existingHolding.id)
+              .eq('user_id', user.id);
+
+            if (updateErr) {
+              errors.push(`Row ${i + 1} (${symbol}): Failed to accumulate position`);
+            } else {
+              importedCount++;
+            }
+            continue;
+          }
+        }
+
+        // Insert new position
+        const { error: insertErr } = await supabase.from('holdings').insert({
+          user_id: user.id,
+          broker_account_id: accountId,
+          instrument_id: instrumentId,
+          quantity: qty,
+          average_buy_price: avgPrice,
+          currency: 'INR',
+          data_source: 'CSV',
+          as_of: new Date().toISOString(),
+        });
+
+        if (insertErr) {
+          errors.push(`Row ${i + 1} (${symbol}): Failed to persist holding`);
+        } else {
+          importedCount++;
+        }
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          count: importedCount,
+          skipped: skippedCount,
+          errors: errors.length > 0 ? errors : undefined,
+          storageMode: 'cloud',
+        },
+        { status: 201 }
+      );
+    }
+
+    // Explicit local development mode (Supabase unconfigured)
     let brokerId = targetBrokerAccountId;
     if (!brokerId) {
       const existingBrokers = PortfolioStorage.getBrokerAccounts();
@@ -54,6 +304,10 @@ export async function POST(request: Request) {
         brokerId = defaultBroker.id;
       }
     }
+
+    let importedCount = 0;
+    let skippedCount = 0;
+    const errors: string[] = [];
 
     for (let i = 0; i < items.length; i++) {
       const row = items[i];
@@ -82,26 +336,19 @@ export async function POST(request: Request) {
         ? (row.asset_class!.toLowerCase() as AssetClass)
         : 'equity';
 
-      let assetCategory = 'STOCK';
-      if (assetClass === 'mf') assetCategory = 'MUTUAL_FUND';
-      else if (assetClass === 'reit') assetCategory = 'REIT';
-      else if (assetClass === 'invit') assetCategory = 'INVIT';
-      else if (assetClass === 'bond' || assetClass === 'sgb') assetCategory = 'BOND';
-
+      const assetCategory = mapAssetClassToCategory(assetClass);
       const exchange = (row.exchange || 'NSE').toUpperCase();
       const isin = row.isin?.trim() || null;
       const accountId = row.broker_account_id || brokerId;
 
-      // Resolve instrument
       const instrument = PortfolioStorage.resolveInstrument(
         symbol,
         name,
-        assetCategory as AssetCategory,
+        assetCategory,
         exchange,
         isin
       );
 
-      // Check for existing holding
       const existingHoldings = PortfolioStorage.getHoldings();
       const existing = existingHoldings.find(
         (h) => h.broker_account_id === accountId && h.instrument_id === instrument.id
@@ -119,10 +366,19 @@ export async function POST(request: Request) {
           });
           importedCount++;
           continue;
+        } else if (duplicateMode === 'update') {
+          const totalQty = existing.quantity + qty;
+          const weightedAvgPrice = (existing.quantity * existing.average_buy_price + qty * avgPrice) / totalQty;
+          PortfolioStorage.updateHolding(existing.id, {
+            quantity: totalQty,
+            average_buy_price: weightedAvgPrice,
+            as_of: new Date().toISOString(),
+          });
+          importedCount++;
+          continue;
         }
       }
 
-      // Add or update
       PortfolioStorage.addHolding({
         user_id: 'current_user',
         broker_account_id: accountId,
@@ -136,14 +392,22 @@ export async function POST(request: Request) {
       importedCount++;
     }
 
-    return NextResponse.json({
-      success: true,
-      count: importedCount,
-      skipped: skippedCount,
-      errors: errors.length > 0 ? errors : undefined,
-    }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        count: importedCount,
+        skipped: skippedCount,
+        errors: errors.length > 0 ? errors : undefined,
+        isDemo: true,
+        storageMode: 'local',
+      },
+      { status: 201 }
+    );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Import failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[API /api/portfolio/holdings/import POST] Fatal error:', err instanceof Error ? err.message : err);
+    return NextResponse.json(
+      { error: 'Import failed due to server processing error.' },
+      { status: 500 }
+    );
   }
 }
