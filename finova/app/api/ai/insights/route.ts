@@ -1,13 +1,38 @@
+// ============================================================
+// FINOVA — AI Insights API Endpoint
+// POST /api/ai/insights
+// Strictly adheres to Prompt 8:
+// - Server-side authentication and strict user ownership
+// - Never accepts arbitrary user IDs
+// - Handles rate limits, missing keys, and provider errors
+// - Input validation & constrained prompt payload
+// ============================================================
+
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { generatePortfolioHash } from '@/lib/utils';
 import { enrichHolding, buildPortfolioSummary, buildAssetAllocation } from '@/lib/calculations/portfolio';
 import { buildRiskMetrics } from '@/lib/calculations/risk';
+import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
 import { DEMO_HOLDINGS } from '@/lib/demoData';
-import type { Holding, HoldingWithMetrics } from '@/types/portfolio';
+import {
+  generatePortfolioIntelligence,
+  sanitizeUntrustedInput,
+} from '@/lib/ai/intelligenceEngine';
+import type { Holding, HoldingWithMetrics, AssetClass, Exchange, AccountType } from '@/types/portfolio';
 
 const CACHE_TTL_HOURS = 4;
+
+function mapAssetTypeToClass(assetType?: string): AssetClass {
+  if (assetType === 'STOCK') return 'equity';
+  if (assetType === 'MUTUAL_FUND') return 'mf';
+  if (assetType === 'REIT') return 'reit';
+  if (assetType === 'INVIT') return 'invit';
+  if (assetType === 'BOND') return 'bond';
+  return 'equity';
+}
 
 function generateRuleBasedInsight(
   type: string,
@@ -29,70 +54,279 @@ function generateRuleBasedInsight(
     summary.total_absolute_return_pct !== null
       ? `${summary.total_absolute_return_pct >= 0 ? '+' : ''}${summary.total_absolute_return_pct.toFixed(1)}%`
       : 'unavailable';
-  return `Your portfolio reflects strong capital deployment with an overall return of ${returnPctText} across ${summary.broker_count} broker accounts. With ${summary.holding_count} holdings spanning ${allocationSummary}, your asset mix provides both growth potential and defensive characteristics. Consider rebalancing periodically to keep your risk within target tolerance.`;
+  return `Your portfolio reflects capital deployment with an overall return of ${returnPctText} across ${summary.broker_count} broker accounts. With ${summary.holding_count} holdings spanning ${allocationSummary}, your asset mix provides both growth potential and defensive characteristics. Consider rebalancing periodically to keep your risk within target tolerance.`;
 }
 
 // POST /api/ai/insights — generate AI portfolio insights
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const body = await request.json().catch(() => ({}));
+  const insight_type = typeof body?.insight_type === 'string' ? sanitizeUntrustedInput(body.insight_type, 30) : 'portfolio_summary';
 
-  const { insight_type = 'portfolio_summary' } = await request.json().catch(() => ({}));
+  let holdings: HoldingWithMetrics[] = [];
+  let userId: string | null = null;
 
-  let holdings: HoldingWithMetrics[];
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-  if (!user) {
-    holdings = DEMO_HOLDINGS.map(enrichHolding);
-  } else {
-    const { data: rawHoldings } = await supabase
-      .from('holdings')
-      .select(`*, broker_account:broker_accounts(*)`)
-      .eq('user_id', user.id);
+      if (authError || !user) {
+        return NextResponse.json(
+          { error: 'Authentication required. Please sign in to generate portfolio insights.' },
+          { status: 401 }
+        );
+      }
 
-    if (!rawHoldings || rawHoldings.length === 0) {
-      return NextResponse.json({
-        insight: {
-          insight_type,
-          text: 'Add holdings or import a CSV to generate personalized AI portfolio insights.',
-          generated_at: new Date().toISOString(),
-          cached: false,
-        },
+      userId = user.id;
+
+      const { data: rawHoldings, error } = await supabase
+        .from('holdings')
+        .select(`
+          id,
+          user_id,
+          broker_account_id,
+          instrument_id,
+          quantity,
+          average_buy_price,
+          currency,
+          data_source,
+          as_of,
+          created_at,
+          updated_at,
+          broker_account:broker_accounts(*),
+          instrument:instruments(*)
+        `)
+        .eq('user_id', user.id) // Enforce user isolation
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return NextResponse.json(
+          { error: 'Database error: failed to fetch user holdings.' },
+          { status: 500 }
+        );
+      }
+
+      type RawHoldingItem = {
+        id: string;
+        user_id: string;
+        broker_account_id: string;
+        instrument_id: string;
+        quantity: number | string;
+        average_buy_price: number | string;
+        currency: string;
+        data_source: string;
+        as_of: string;
+        created_at: string;
+        updated_at: string;
+        broker_account?: {
+          id: string;
+          user_id: string;
+          broker_code?: string;
+          display_name?: string;
+          account_type?: string;
+          color_hex?: string;
+          created_at?: string;
+        };
+        instrument?: {
+          id: string;
+          symbol: string;
+          instrument_name: string;
+          asset_type: string;
+          exchange: string;
+          isin: string | null;
+          sector?: string | null;
+          industry?: string | null;
+        };
+      };
+
+      const mapped: Holding[] = ((rawHoldings as unknown as RawHoldingItem[]) || []).map((row) => {
+        const inst = row.instrument;
+        const broker = row.broker_account;
+        const assetClass = mapAssetTypeToClass(inst?.asset_type);
+        const priceRecord = inst?.symbol ? PortfolioStorage.getMarketPrice(inst.symbol) : null;
+        const current_price = priceRecord ? priceRecord.price : null;
+
+        return {
+          id: row.id,
+          user_id: row.user_id,
+          broker_account_id: row.broker_account_id,
+          instrument_id: row.instrument_id,
+          symbol: inst?.symbol || 'UNKNOWN',
+          isin: inst?.isin || null,
+          name: inst?.instrument_name || inst?.symbol || 'Unknown Asset',
+          asset_class: assetClass,
+          exchange: (inst?.exchange as Exchange) || 'NSE',
+          quantity: Number(row.quantity),
+          avg_buy_price: Number(row.average_buy_price),
+          average_buy_price: Number(row.average_buy_price),
+          current_price,
+          currency: row.currency || 'INR',
+          data_source: row.data_source || 'MANUAL',
+          as_of: row.as_of,
+          price_updated_at: priceRecord?.price_timestamp || null,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          sector: inst?.sector || null,
+          industry: inst?.industry || null,
+          broker_account: broker
+            ? {
+                id: broker.id,
+                user_id: broker.user_id,
+                broker_name: broker.display_name || broker.broker_code || 'Broker',
+                display_name: broker.display_name,
+                account_label: broker.display_name || null,
+                account_type: (broker.account_type as AccountType) || 'broker',
+                color_hex: broker.color_hex || '#3B82F6',
+                is_active: true,
+                created_at: broker.created_at || new Date().toISOString(),
+              }
+            : undefined,
+        };
       });
+
+      holdings = mapped.map(enrichHolding);
+    } catch {
+      return NextResponse.json(
+        { error: 'Unable to connect to database service.' },
+        { status: 500 }
+      );
     }
-    holdings = (rawHoldings as Holding[]).map(enrichHolding);
+  } else {
+    // Local storage mode
+    const rawHoldings = PortfolioStorage.getHoldings();
+    const brokers = PortfolioStorage.getBrokerAccounts();
+
+    if (rawHoldings.length === 0) {
+      holdings = DEMO_HOLDINGS.map(enrichHolding);
+    } else {
+      const mapped: Holding[] = rawHoldings.map((h) => {
+        const inst = PortfolioStorage.getInstrumentById(h.instrument_id);
+        const broker = brokers.find((b) => b.id === h.broker_account_id);
+        const priceRecord = inst ? PortfolioStorage.getMarketPrice(inst.symbol) : null;
+        const assetClass = mapAssetTypeToClass(inst?.asset_type);
+        const current_price = priceRecord ? priceRecord.price : null;
+
+        return {
+          id: h.id,
+          user_id: h.user_id,
+          broker_account_id: h.broker_account_id,
+          instrument_id: h.instrument_id,
+          symbol: inst?.symbol || 'UNKNOWN',
+          isin: inst?.isin || null,
+          name: inst?.instrument_name || inst?.symbol || 'Unknown Asset',
+          asset_class: assetClass,
+          exchange: (inst?.exchange as Exchange) || 'NSE',
+          quantity: h.quantity,
+          avg_buy_price: h.average_buy_price,
+          average_buy_price: h.average_buy_price,
+          current_price,
+          currency: h.currency,
+          data_source: h.data_source,
+          as_of: h.as_of,
+          price_updated_at: priceRecord?.price_timestamp || null,
+          created_at: h.created_at,
+          updated_at: h.updated_at,
+          sector: inst?.sector || null,
+          industry: inst?.industry || null,
+          broker_account: broker
+            ? {
+                id: broker.id,
+                user_id: broker.user_id,
+                broker_name: broker.display_name || broker.broker_code,
+                display_name: broker.display_name,
+                account_label: broker.display_name,
+                account_type: broker.account_type,
+                color_hex: broker.color_hex || '#3B82F6',
+                is_active: true,
+                created_at: broker.created_at,
+              }
+            : undefined,
+        };
+      });
+      holdings = mapped.map(enrichHolding);
+    }
   }
+
+  if (holdings.length === 0) {
+    return NextResponse.json({
+      insight: {
+        insight_type,
+        text: 'Add holdings or import a CSV to generate personalized AI portfolio insights.',
+        generated_at: new Date().toISOString(),
+        cached: false,
+        model: 'Finova Intelligence Engine',
+      },
+    });
+  }
+
+  // Comprehensive intelligence handler
+  if (insight_type === 'comprehensive_intelligence') {
+    const summary = buildPortfolioSummary(holdings);
+    const assetAllocation = buildAssetAllocation(holdings);
+    const riskMetrics = buildRiskMetrics(holdings);
+
+    const intelligence = await generatePortfolioIntelligence(
+      summary,
+      riskMetrics,
+      assetAllocation,
+      holdings
+    );
+
+    return NextResponse.json({
+      insight: {
+        insight_type,
+        text: intelligence.report.summary.health_assessment,
+        generated_at: new Date().toISOString(),
+        cached: false,
+        model: intelligence.model,
+      },
+      report: intelligence.report,
+      riskMetrics,
+      summary,
+      assetAllocation,
+    });
+  }
+
+  // Standard insight types: portfolio_summary, diversification_advice, risk_analysis
+  const summary = buildPortfolioSummary(holdings);
+  const assetAllocation = buildAssetAllocation(holdings);
+  const riskMetrics = buildRiskMetrics(holdings);
 
   const portfolioHash = generatePortfolioHash(
     holdings.map((h) => ({ id: h.id, current_price: h.current_price, quantity: h.quantity }))
   );
 
-  // Check cache if user is logged in
-  if (user) {
-    const { data: cached } = await supabase
-      .from('ai_insight_cache')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('insight_type', insight_type)
-      .eq('portfolio_hash', portfolioHash)
-      .gte('expires_at', new Date().toISOString())
-      .single();
+  // Check cache if user is logged in via Supabase
+  if (userId) {
+    try {
+      const supabase = await createClient();
+      const { data: cached } = await supabase
+        .from('ai_insight_cache')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('insight_type', insight_type)
+        .eq('portfolio_hash', portfolioHash)
+        .gte('expires_at', new Date().toISOString())
+        .single();
 
-    if (cached) {
-      return NextResponse.json({
-        insight: {
-          insight_type,
-          text: cached.insight_text,
-          generated_at: cached.created_at,
-          cached: true,
-        },
-      });
+      if (cached) {
+        return NextResponse.json({
+          insight: {
+            insight_type,
+            text: cached.insight_text,
+            generated_at: cached.created_at,
+            cached: true,
+            model: 'Gemini 1.5 Flash (Cached)',
+          },
+        });
+      }
+    } catch {
+      // cache check non-blocking
     }
   }
-
-  // Build metrics for prompt (NO personal identifiers)
-  const summary = buildPortfolioSummary(holdings);
-  const assetAllocation = buildAssetAllocation(holdings);
-  const riskMetrics = buildRiskMetrics(holdings);
 
   const allocationSummary = assetAllocation
     .map((a) => `${a.asset_class}: ${a.percentage.toFixed(1)}%`)
@@ -108,6 +342,7 @@ Overall Return: ${summary.total_absolute_return_pct !== null ? `${summary.total_
 Asset Allocation: ${allocationSummary}
 Number of holdings: ${summary.holding_count}
 Number of brokers/accounts: ${summary.broker_count}
+Quote Coverage: ${riskMetrics.quote_coverage_pct}%
 Risk Score: ${riskMetrics.risk_score}/100 (${riskMetrics.risk_label})
 
 In 3-4 concise, warm sentences, give a professional portfolio health summary. 
@@ -121,6 +356,7 @@ Asset Allocation: ${allocationSummary}
 Holdings count: ${summary.holding_count}
 Broker count: ${summary.broker_count}
 Equity weight: ${(riskMetrics.equity_weight * 100).toFixed(1)}%
+Top 5 concentration: ${(riskMetrics.top_five_holding_weight * 100).toFixed(1)}%
 
 In 3-4 sentences, explain whether this portfolio is well-diversified and why.
 Specifically mention REITs, InvITs, or bonds if they are underrepresented.
@@ -130,17 +366,19 @@ No specific stock names. No buy/sell advice. Clear, educational tone.`,
 Risk Score: ${riskMetrics.risk_score}/100 (${riskMetrics.risk_label})
 Concentration (HHI): ${riskMetrics.hhi.toFixed(3)}
 Top holding weight: ${(riskMetrics.top_holding_weight * 100).toFixed(1)}%
+Top 5 holdings weight: ${(riskMetrics.top_five_holding_weight * 100).toFixed(1)}%
 Equity weight: ${(riskMetrics.equity_weight * 100).toFixed(1)}%
+Quote coverage: ${riskMetrics.quote_coverage_pct}%
 ${riskMetrics.concentration_warnings.length > 0 ? 'Warnings: ' + riskMetrics.concentration_warnings.join('; ') : ''}
 
 In 3-4 sentences, explain this risk profile in plain language.
-Suggest 1 specific action to improve risk profile (e.g. diversify, rebalance).
+Suggest 1 specific action to investigate (e.g. diversify, rebalance, address unquoted assets).
 No specific stock names. Educational tone.`,
   };
 
   const prompt = prompts[insight_type] || prompts.portfolio_summary;
 
-  // If Gemini API Key is available, invoke Gemini 1.5 Flash
+  // Invoke Gemini if key is available
   if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes('your_')) {
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -148,17 +386,22 @@ No specific stock names. Educational tone.`,
       const result = await model.generateContent(prompt);
       const text = result.response.text();
 
-      if (user) {
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + CACHE_TTL_HOURS);
+      if (userId) {
+        try {
+          const supabase = await createClient();
+          const expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + CACHE_TTL_HOURS);
 
-        await supabase.from('ai_insight_cache').upsert({
-          user_id: user.id,
-          insight_type,
-          portfolio_hash: portfolioHash,
-          insight_text: text,
-          expires_at: expiresAt.toISOString(),
-        });
+          await supabase.from('ai_insight_cache').upsert({
+            user_id: userId,
+            insight_type,
+            portfolio_hash: portfolioHash,
+            insight_text: text,
+            expires_at: expiresAt.toISOString(),
+          });
+        } catch {
+          // non-blocking
+        }
       }
 
       return NextResponse.json({
@@ -175,7 +418,7 @@ No specific stock names. Educational tone.`,
     }
   }
 
-  // Fallback to high-quality algorithmic financial educator insight
+  // Fallback to high-quality algorithmic insight
   const fallbackText = generateRuleBasedInsight(insight_type, summary, allocationSummary, riskMetrics);
   return NextResponse.json({
     insight: {
@@ -183,7 +426,7 @@ No specific stock names. Educational tone.`,
       text: fallbackText,
       generated_at: new Date().toISOString(),
       cached: false,
-      model: 'Finova Intelligence Engine',
+      model: 'Finova Deterministic Intelligence Engine',
     },
   });
 }

@@ -3,6 +3,7 @@
 // ============================================================
 
 export * from './database';
+export * from './financial';
 
 // ----- Database row types (mirrors Supabase schema) -----
 
@@ -76,6 +77,8 @@ export interface Holding {
   price_updated_at: string | null;
   created_at: string;
   updated_at: string;
+  sector?: string | null;
+  industry?: string | null;
   // Joined
   broker_account?: BrokerAccount;
 }
@@ -147,6 +150,14 @@ export interface BrokerAllocation {
   percentage: number;
 }
 
+export interface SectorAllocation {
+  sector: string;
+  value: number;
+  percentage: number;
+  holding_count: number;
+  unquoted_count?: number;
+}
+
 export interface RiskMetrics {
   risk_score: number;           // 0–100
   risk_label: 'Conservative' | 'Moderate' | 'Aggressive';
@@ -154,7 +165,24 @@ export interface RiskMetrics {
   equity_weight: number;        // 0–1 fraction in equities
   broker_count: number;
   top_holding_weight: number;   // largest single holding as % of portfolio
+  top_holding_name?: string;
+  top_holding_symbol?: string;
+  top_five_holding_weight: number; // top 5 holdings as % of portfolio
+  top_asset_class: string;
+  top_asset_class_weight: number;
+  sector_allocations: SectorAllocation[];
+  top_sector: string | null;
+  top_sector_weight: number;
+  has_sector_data: boolean;
+  quote_coverage_pct: number;   // (priced / total) * 100
+  priced_count: number;
+  unquoted_count: number;
+  stale_quotes_count: number;
+  is_valuation_complete: boolean;
   concentration_warnings: string[];
+  diversification_observations: string[];
+  positive_observations: string[];
+  data_quality_warnings: string[];
 }
 
 export interface PerformanceDataPoint {
@@ -170,13 +198,53 @@ export type InsightType =
   | 'diversification_advice'
   | 'risk_analysis'
   | 'investment_explainer'
-  | 'news_relevance';
+  | 'news_relevance'
+  | 'comprehensive_intelligence';
 
 export interface AIInsight {
   insight_type: InsightType;
   text: string;
   generated_at: string;
   cached: boolean;
+  model?: string;
+}
+
+export interface AIIntelligenceReport {
+  summary: {
+    headline: string;
+    health_assessment: string;     // What is happening in the portfolio
+    significance: string;          // Why a particular observation matters
+    key_drivers: string[];         // Which holdings or allocations contribute
+    investigation_steps: string[]; // What the user could investigate next
+  };
+  diversification_analysis: {
+    status: 'well_diversified' | 'moderately_concentrated' | 'highly_concentrated';
+    observations: string[];
+    actionable_considerations: string[];
+  };
+  risk_observations: {
+    concerns: string[];
+    positives: string[];
+  };
+  data_limitations: string[];      // Explicitly stating incomplete or unquoted information
+  educational_disclaimer: string;
+}
+
+export interface AIIntelligenceResponse {
+  report: AIIntelligenceReport;
+  riskMetrics: RiskMetrics;
+  summary: PortfolioSummary;
+  assetAllocation: AssetAllocation[];
+  sectorAllocation: SectorAllocation[];
+  meta: {
+    generated_at: string;
+    cached: boolean;
+    provider: 'gemini' | 'algorithmic';
+    model: string;
+    holdings_analyzed: number;
+    is_valuation_complete: boolean;
+    quote_coverage_pct: number;
+  };
 }
 
 // ----- News Types -----

@@ -472,7 +472,7 @@ export default function HoldingsPage() {
 
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as any)}
+          onChange={(e) => setSortBy(e.target.value as 'value' | 'invested' | 'return' | 'name')}
           className="px-3 py-2 rounded-lg text-sm bg-slate-900 border border-slate-800 text-slate-300 focus:outline-none focus:border-blue-500"
         >
           <option value="value">Sort by Value</option>
@@ -1095,7 +1095,7 @@ export default function HoldingsPage() {
                   <label className="font-semibold text-slate-300">Duplicate Handling Strategy</label>
                   <select
                     value={duplicateMode}
-                    onChange={(e) => setDuplicateMode(e.target.value as any)}
+                    onChange={(e) => setDuplicateMode(e.target.value as 'replace' | 'update' | 'skip')}
                     className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
                   >
                     <option value="replace">Replace Existing Position (Recommended)</option>

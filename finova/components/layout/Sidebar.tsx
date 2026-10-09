@@ -24,6 +24,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Sparkles,
+  Receipt,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
@@ -47,8 +49,10 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/investments', label: 'My Investments', icon: TrendingUp },
+      { href: '/transactions', label: 'Transactions', icon: Receipt },
       { href: '/analysis', label: 'Portfolio Analysis', icon: BarChart3 },
-      { href: '/news', label: 'News & Insights', icon: Newspaper },
+      { href: '/insights', label: 'AI Intelligence', icon: Sparkles },
+      { href: '/news', label: 'News & Market', icon: Newspaper },
       { href: '/explore', label: 'Explore', icon: Compass, comingSoon: true },
     ],
   },
@@ -106,7 +110,8 @@ export function Sidebar({
     if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/portfolio' || pathname === '/';
     if (href === '/investments') return pathname === '/investments' || pathname === '/holdings';
     if (href === '/analysis') return ['/analysis', '/performance', '/allocation', '/risk'].some((p) => pathname.startsWith(p));
-    if (href === '/news') return pathname === '/news' || pathname === '/insights';
+    if (href === '/insights') return pathname === '/insights';
+    if (href === '/news') return pathname === '/news';
     return pathname === href || (href !== '/' && pathname.startsWith(href));
   }
 

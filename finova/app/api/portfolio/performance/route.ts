@@ -1,0 +1,223 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
+import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
+import { enrichHolding, buildPortfolioSummary } from '@/lib/calculations/portfolio';
+import { buildPerformanceSummary } from '@/lib/calculations/performance';
+import type { Holding, AssetClass, Exchange, AccountType } from '@/types/portfolio';
+import type { InvestmentTransactionRow } from '@/types/database';
+
+function mapAssetTypeToClass(assetType?: string): AssetClass {
+  if (assetType === 'STOCK') return 'equity';
+  if (assetType === 'MUTUAL_FUND') return 'mf';
+  if (assetType === 'REIT') return 'reit';
+  if (assetType === 'INVIT') return 'invit';
+  if (assetType === 'BOND') return 'bond';
+  return 'equity';
+}
+
+export async function GET() {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        return NextResponse.json(
+          { error: 'Authentication required. Please sign in to view portfolio performance.' },
+          { status: 401 }
+        );
+      }
+
+      // Fetch holdings
+      const { data: rawHoldings, error: holdingsErr } = await supabase
+        .from('holdings')
+        .select(`
+          *,
+          broker_account:broker_accounts(*),
+          instrument:instruments(*)
+        `)
+        .eq('user_id', user.id);
+
+      if (holdingsErr) {
+        return NextResponse.json({ error: holdingsErr.message }, { status: 500 });
+      }
+
+      // Fetch transactions
+      const { data: rawTransactions, error: txErr } = await supabase
+        .from('investment_transactions')
+        .select(`
+          *,
+          broker_account:broker_accounts(*),
+          instrument:instruments(*)
+        `)
+        .eq('user_id', user.id)
+        .order('transaction_date', { ascending: true });
+
+      if (txErr) {
+        return NextResponse.json({ error: txErr.message }, { status: 500 });
+      }
+
+      type RawHoldingItem = {
+        id: string;
+        user_id: string;
+        broker_account_id: string;
+        instrument_id: string;
+        quantity: number | string;
+        average_buy_price: number | string;
+        currency: string;
+        data_source: string;
+        as_of: string;
+        created_at: string;
+        updated_at: string;
+        broker_account?: {
+          id: string;
+          user_id: string;
+          broker_code?: string;
+          display_name?: string;
+          account_type?: string;
+          color_hex?: string;
+          created_at?: string;
+        };
+        instrument?: {
+          id: string;
+          symbol: string;
+          instrument_name: string;
+          asset_type: string;
+          exchange: string;
+          isin: string | null;
+          sector?: string | null;
+          industry?: string | null;
+        };
+      };
+
+      const holdings: Holding[] = ((rawHoldings as unknown as RawHoldingItem[]) || []).map((row) => {
+        const inst = row.instrument;
+        const broker = row.broker_account;
+        const assetClass = mapAssetTypeToClass(inst?.asset_type);
+        const priceRecord = inst?.symbol ? PortfolioStorage.getMarketPrice(inst.symbol) : null;
+        const current_price = priceRecord ? priceRecord.price : null;
+
+        return {
+          id: row.id,
+          user_id: row.user_id,
+          broker_account_id: row.broker_account_id,
+          instrument_id: row.instrument_id,
+          symbol: inst?.symbol || 'UNKNOWN',
+          isin: inst?.isin || null,
+          name: inst?.instrument_name || inst?.symbol || 'Unknown Asset',
+          asset_class: assetClass,
+          exchange: (inst?.exchange as Exchange) || 'NSE',
+          quantity: Number(row.quantity),
+          avg_buy_price: Number(row.average_buy_price),
+          average_buy_price: Number(row.average_buy_price),
+          current_price,
+          currency: row.currency || 'INR',
+          data_source: row.data_source || 'MANUAL',
+          as_of: row.as_of,
+          price_updated_at: priceRecord?.price_timestamp || null,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          sector: inst?.sector || null,
+          industry: inst?.industry || null,
+          broker_account: broker
+            ? {
+                id: broker.id,
+                user_id: broker.user_id,
+                broker_name: broker.display_name || broker.broker_code || 'Broker',
+                display_name: broker.display_name,
+                account_label: broker.display_name || null,
+                account_type: (broker.account_type as AccountType) || 'broker',
+                color_hex: broker.color_hex || '#3B82F6',
+                is_active: true,
+                created_at: broker.created_at || new Date().toISOString(),
+              }
+            : undefined,
+        };
+      });
+
+      const enrichedHoldings = holdings.map(enrichHolding);
+      const portSummary = buildPortfolioSummary(enrichedHoldings);
+      const performanceMetrics = buildPerformanceSummary(
+        enrichedHoldings,
+        (rawTransactions || []) as InvestmentTransactionRow[],
+        portSummary
+      );
+
+      return NextResponse.json({
+        performance: performanceMetrics,
+        summary: portSummary,
+        storageMode: 'cloud',
+      });
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Failed to calculate performance' },
+        { status: 500 }
+      );
+    }
+  }
+
+  // Local development mode
+  const rawHoldings = PortfolioStorage.getHoldings('current_user');
+  const brokers = PortfolioStorage.getBrokerAccounts();
+
+  const holdings: Holding[] = rawHoldings.map((h) => {
+    const inst = PortfolioStorage.getInstrumentById(h.instrument_id);
+    const broker = brokers.find((b) => b.id === h.broker_account_id);
+    const priceRecord = inst ? PortfolioStorage.getMarketPrice(inst.symbol) : null;
+    const assetClass = mapAssetTypeToClass(inst?.asset_type);
+    const current_price = priceRecord ? priceRecord.price : null;
+
+    return {
+      id: h.id,
+      user_id: h.user_id,
+      broker_account_id: h.broker_account_id,
+      instrument_id: h.instrument_id,
+      symbol: inst?.symbol || 'UNKNOWN',
+      isin: inst?.isin || null,
+      name: inst?.instrument_name || inst?.symbol || 'Unknown Asset',
+      asset_class: assetClass,
+      exchange: (inst?.exchange as Exchange) || 'NSE',
+      quantity: h.quantity,
+      avg_buy_price: h.average_buy_price,
+      average_buy_price: h.average_buy_price,
+      current_price,
+      currency: h.currency,
+      data_source: h.data_source,
+      as_of: h.as_of,
+      price_updated_at: priceRecord?.price_timestamp || null,
+      created_at: h.created_at,
+      updated_at: h.updated_at,
+      sector: inst?.sector || null,
+      industry: inst?.industry || null,
+      broker_account: broker
+        ? {
+            id: broker.id,
+            user_id: broker.user_id,
+            broker_name: broker.display_name || broker.broker_code,
+            display_name: broker.display_name,
+            account_label: broker.display_name,
+            account_type: broker.account_type,
+            color_hex: broker.color_hex || '#3B82F6',
+            is_active: true,
+            created_at: broker.created_at,
+          }
+        : undefined,
+    };
+  });
+
+  const enrichedHoldings = holdings.map(enrichHolding);
+  const portSummary = buildPortfolioSummary(enrichedHoldings);
+  const { transactions: rawTxs } = PortfolioStorage.getTransactions('current_user');
+  const performanceMetrics = buildPerformanceSummary(enrichedHoldings, rawTxs, portSummary);
+
+  return NextResponse.json({
+    performance: performanceMetrics,
+    summary: portSummary,
+    isDemo: true,
+    storageMode: 'local',
+  });
+}

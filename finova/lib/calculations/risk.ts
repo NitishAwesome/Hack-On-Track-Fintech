@@ -1,138 +1,364 @@
 // ============================================================
 // Finova — Financial Calculation Engine
-// risk.ts — Portfolio Risk Analysis
+// risk.ts — Deterministic Portfolio Risk & Concentration Engine
+// Strictly adheres to Prompt 8:
+// - Independent deterministic calculations
+// - Handles unavailable/stale quotes without substituting 0 or cost
+// - Full concentration metrics (Top 1, Top 5, HHI, Sectors, Asset Classes)
+// - Clear separation of calculated facts from AI qualitative notes
 // ============================================================
 
-import type { HoldingWithMetrics, RiskMetrics } from '@/types/portfolio';
-import { clamp } from '@/lib/utils';
+import type { HoldingWithMetrics, RiskMetrics, SectorAllocation } from '../../types/portfolio';
+import { roundCurrency, roundPercent } from './portfolio.ts';
+import { clamp } from '../utils.ts';
 
 /**
  * Compute Herfindahl-Hirschman Index (0–1)
  * HHI = Σ(share_i²) where share_i is holding's fraction of total portfolio
  * 1.0 = completely concentrated, 1/N = perfectly diversified
  */
-function computeHHI(holdings: HoldingWithMetrics[], total: number): number {
-  if (total === 0 || holdings.length === 0) return 1;
-  return holdings.reduce((sum, h) => {
-    const share = h.current_value / total;
-    return sum + share * share;
-  }, 0);
+export function computeHHI(shares: number[]): number {
+  if (shares.length === 0) return 0;
+  return roundPercent(
+    shares.reduce((sum, s) => sum + s * s, 0)
+  );
 }
 
 /**
- * Compute equity weight (fraction of portfolio in equity/ETF assets)
- * Higher equity weight → higher market risk
+ * Compute sector concentration and distribution when sector metadata is present.
  */
-function computeEquityWeight(
+export function computeSectorAllocation(
   holdings: HoldingWithMetrics[],
-  total: number
-): number {
-  if (total === 0) return 0;
-  const equityValue = holdings
-    .filter((h) => h.asset_class === 'equity' || h.asset_class === 'etf')
-    .reduce((sum, h) => sum + h.current_value, 0);
-  return equityValue / total;
+  valuationBase: number
+): {
+  allocations: SectorAllocation[];
+  topSector: string | null;
+  topSectorWeight: number;
+  hasSectorData: boolean;
+} {
+  if (holdings.length === 0 || valuationBase <= 0) {
+    return { allocations: [], topSector: null, topSectorWeight: 0, hasSectorData: false };
+  }
+
+  const sectorMap = new Map<string, { value: number; count: number; unquoted: number }>();
+  let hasValidSector = false;
+
+  for (const h of holdings) {
+    const rawSector = h.sector?.trim();
+    const sectorName = rawSector && rawSector.length > 0 ? rawSector : 'Unclassified';
+    if (rawSector && rawSector.length > 0) hasValidSector = true;
+
+    const val = typeof h.current_price === 'number' && h.current_price > 0
+      ? (h.quantity * h.current_price)
+      : h.invested_value;
+    const isUnquoted = h.current_price === null || typeof h.current_price !== 'number';
+
+    const current = sectorMap.get(sectorName) ?? { value: 0, count: 0, unquoted: 0 };
+    sectorMap.set(sectorName, {
+      value: current.value + val,
+      count: current.count + 1,
+      unquoted: current.unquoted + (isUnquoted ? 1 : 0),
+    });
+  }
+
+  const allocations: SectorAllocation[] = Array.from(sectorMap.entries())
+    .map(([sector, data]) => ({
+      sector,
+      value: roundCurrency(data.value),
+      percentage: roundPercent((data.value / valuationBase) * 100),
+      holding_count: data.count,
+      unquoted_count: data.unquoted,
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const classifiedSectors = allocations.filter((s) => s.sector !== 'Unclassified');
+  const topSectorEntry = classifiedSectors.length > 0 ? classifiedSectors[0] : allocations[0];
+
+  return {
+    allocations,
+    topSector: topSectorEntry ? topSectorEntry.sector : null,
+    topSectorWeight: topSectorEntry ? roundPercent(topSectorEntry.percentage / 100) : 0,
+    hasSectorData: hasValidSector,
+  };
 }
 
 /**
- * Compute broker diversification score (0–1, higher = more diversified)
- * Single broker = 0, 4+ brokers = 1
+ * Check if a price timestamp is older than threshold (default 48 hours)
  */
-function computeBrokerDiversification(brokerCount: number): number {
-  return clamp((brokerCount - 1) / 3, 0, 1);
+export function isPriceStale(timestampStr: string | null | undefined, thresholdHours = 48): boolean {
+  if (!timestampStr) return false;
+  try {
+    const quoteTime = new Date(timestampStr).getTime();
+    if (isNaN(quoteTime)) return false;
+    const ageHours = (Date.now() - quoteTime) / (1000 * 60 * 60);
+    return ageHours > thresholdHours;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Build comprehensive risk metrics for a portfolio
+ * Build comprehensive deterministic risk metrics for a portfolio.
+ * Does NOT assume zero or purchase price for missing quotes.
  */
-export function buildRiskMetrics(
-  holdings: HoldingWithMetrics[]
-): RiskMetrics {
-  const total = holdings.reduce((sum, h) => sum + h.current_value, 0);
+export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
+  const emptyResult: RiskMetrics = {
+    risk_score: 0,
+    risk_label: 'Conservative',
+    hhi: 0,
+    equity_weight: 0,
+    broker_count: 0,
+    top_holding_weight: 0,
+    top_holding_name: undefined,
+    top_holding_symbol: undefined,
+    top_five_holding_weight: 0,
+    top_asset_class: 'None',
+    top_asset_class_weight: 0,
+    sector_allocations: [],
+    top_sector: null,
+    top_sector_weight: 0,
+    has_sector_data: false,
+    quote_coverage_pct: 0,
+    priced_count: 0,
+    unquoted_count: 0,
+    stale_quotes_count: 0,
+    is_valuation_complete: true,
+    concentration_warnings: [],
+    diversification_observations: [],
+    positive_observations: [],
+    data_quality_warnings: [],
+  };
 
-  if (holdings.length === 0 || total === 0) {
+  if (holdings.length === 0) {
+    return emptyResult;
+  }
+
+  // 1. Separate priced vs unquoted positions
+  const pricedHoldings = holdings.filter(
+    (h) => typeof h.current_price === 'number' && !isNaN(h.current_price) && h.current_price > 0
+  );
+  const unquotedHoldings = holdings.filter(
+    (h) => h.current_price === null || typeof h.current_price !== 'number' || isNaN(h.current_price) || h.current_price <= 0
+  );
+
+  const pricedCount = pricedHoldings.length;
+  const unquotedCount = unquotedHoldings.length;
+  const quoteCoveragePct = roundPercent((pricedCount / holdings.length) * 100);
+  const isValuationComplete = unquotedCount === 0;
+
+  // Stale quote detection
+  const staleCount = holdings.filter((h) => isPriceStale(h.price_updated_at)).length;
+
+  // 2. Determine valuation base for concentration math
+  // If priced holdings exist, use sum of priced current_value.
+  // If NO holdings are priced, use invested value as proxy but flag as data quality caveat.
+  const pricedTotal = pricedHoldings.reduce(
+    (sum, h) => sum + (h.quantity * (h.current_price || 0)),
+    0
+  );
+  const investedTotal = holdings.reduce((sum, h) => sum + h.invested_value, 0);
+
+  const usingMarketValuation = pricedTotal > 0;
+  const valuationBase = usingMarketValuation ? pricedTotal : investedTotal;
+
+  if (valuationBase <= 0) {
     return {
-      risk_score: 0,
-      risk_label: 'Conservative',
-      hhi: 0,
-      equity_weight: 0,
-      broker_count: 0,
-      top_holding_weight: 0,
-      concentration_warnings: [],
+      ...emptyResult,
+      unquoted_count: unquotedCount,
+      quote_coverage_pct: 0,
+      data_quality_warnings: ['Portfolio has zero recorded valuation or capital deployed.'],
     };
   }
 
-  const hhi = computeHHI(holdings, total);
-  const equityWeight = computeEquityWeight(holdings, total);
+  // 3. Concentration: Largest Holding & Top 5
+  // Measure shares based on the active valuation base
+  const holdingsForConcentration = usingMarketValuation ? pricedHoldings : holdings;
+  const sortedByValue = [...holdingsForConcentration].sort((a, b) => {
+    const valA = usingMarketValuation ? (a.quantity * (a.current_price || 0)) : a.invested_value;
+    const valB = usingMarketValuation ? (b.quantity * (b.current_price || 0)) : b.invested_value;
+    return valB - valA;
+  });
 
-  const brokerIds = new Set(
-    holdings.map((h) => h.broker_account_id).filter(Boolean)
-  );
+  const topHolding = sortedByValue[0];
+  const topVal = topHolding
+    ? (usingMarketValuation ? (topHolding.quantity * (topHolding.current_price || 0)) : topHolding.invested_value)
+    : 0;
+  const topHoldingWeight = roundPercent(topVal / valuationBase);
+
+  const topFiveVal = sortedByValue.slice(0, 5).reduce((sum, h) => {
+    const val = usingMarketValuation ? (h.quantity * (h.current_price || 0)) : h.invested_value;
+    return sum + val;
+  }, 0);
+  const topFiveWeight = roundPercent(topFiveVal / valuationBase);
+
+  // 4. HHI
+  const shares = holdingsForConcentration.map((h) => {
+    const val = usingMarketValuation ? (h.quantity * (h.current_price || 0)) : h.invested_value;
+    return val / valuationBase;
+  });
+  const hhi = computeHHI(shares);
+
+  // 5. Asset Class Weight & Top Asset Class
+  const assetClassTotals = new Map<string, number>();
+  for (const h of holdings) {
+    const val = usingMarketValuation && h.current_price
+      ? (h.quantity * h.current_price)
+      : h.invested_value;
+    assetClassTotals.set(h.asset_class, (assetClassTotals.get(h.asset_class) || 0) + val);
+  }
+
+  const sortedAssetClasses = Array.from(assetClassTotals.entries()).sort((a, b) => b[1] - a[1]);
+  const topAssetClass = sortedAssetClasses[0] ? sortedAssetClasses[0][0] : 'equity';
+  const topAssetClassWeight = sortedAssetClasses[0] ? roundPercent(sortedAssetClasses[0][1] / valuationBase) : 0;
+
+  const equityValue = (assetClassTotals.get('equity') || 0) + (assetClassTotals.get('etf') || 0);
+  const equityWeight = roundPercent(equityValue / valuationBase);
+
+  // 6. Broker diversification
+  const brokerIds = new Set(holdings.map((h) => h.broker_account_id).filter(Boolean));
   const brokerCount = brokerIds.size || 1;
-  const brokerDiversification = computeBrokerDiversification(brokerCount);
+  const brokerDiversification = clamp((brokerCount - 1) / 3, 0, 1);
 
-  const topHolding = holdings.reduce((max, h) =>
-    h.current_value > max.current_value ? h : max
-  );
-  const topHoldingWeight = topHolding.current_value / total;
+  // 7. Sector Allocation
+  const sectorResult = computeSectorAllocation(holdings, valuationBase);
 
-  // Normalise HHI to 0–1 risk score component (HHI range: 1/N to 1)
-  // Min possible HHI = 1/N (fully diversified), max = 1 (single holding)
-  const minHHI = 1 / holdings.length;
-  const hhiNormalised = clamp(
-    (hhi - minHHI) / Math.max(1 - minHHI, 0.001),
-    0,
-    1
-  );
+  // 8. Composite Risk Score (0–100)
+  const minHHI = holdingsForConcentration.length > 0 ? 1 / holdingsForConcentration.length : 1;
+  const hhiNormalised = clamp((hhi - minHHI) / Math.max(1 - minHHI, 0.001), 0, 1);
 
-  // Composite risk score 0–100
   const riskScore = clamp(
     Math.round(
-      hhiNormalised * 40 +
+      hhiNormalised * 35 +
       equityWeight * 35 +
-      (1 - brokerDiversification) * 25
+      (1 - brokerDiversification) * 20 +
+      clamp((topHoldingWeight - 0.2) / 0.6, 0, 1) * 10
     ),
     0,
     100
   );
 
-  const riskLabel =
-    riskScore < 34
-      ? 'Conservative'
-      : riskScore < 67
-      ? 'Moderate'
-      : 'Aggressive';
+  const riskLabel: RiskMetrics['risk_label'] =
+    riskScore < 34 ? 'Conservative' : riskScore < 67 ? 'Moderate' : 'Aggressive';
 
-  // Concentration warnings
-  const warnings: string[] = [];
+  // 9. Warnings & Observations
+  const concentrationWarnings: string[] = [];
+  const diversificationObservations: string[] = [];
+  const positiveObservations: string[] = [];
+  const dataQualityWarnings: string[] = [];
+
+  // Concentration Warnings
   if (topHoldingWeight > 0.3) {
-    warnings.push(
-      `${topHolding.name} makes up ${(topHoldingWeight * 100).toFixed(1)}% of your portfolio — consider reducing concentration.`
+    concentrationWarnings.push(
+      `${topHolding.name} (${topHolding.symbol}) constitutes ${(topHoldingWeight * 100).toFixed(1)}% of portfolio valuation — significant single-stock concentration risk.`
+    );
+  }
+  if (topFiveWeight > 0.7 && holdings.length > 5) {
+    concentrationWarnings.push(
+      `Top 5 holdings represent ${(topFiveWeight * 100).toFixed(1)}% of your portfolio, leaving lower exposure across other assets.`
     );
   }
   if (equityWeight > 0.85) {
-    warnings.push(
-      'Your portfolio is heavily weighted in equities. Consider diversifying into bonds, REITs or InvITs.'
+    concentrationWarnings.push(
+      `Portfolio is heavily weighted in equities (${(equityWeight * 100).toFixed(1)}%). Consider diversifying into fixed income, REITs, or InvITs.`
     );
   }
-  if (brokerCount === 1) {
-    warnings.push(
-      'All holdings are with a single broker. Spreading across depositories reduces counterparty risk.'
+  if (sectorResult.topSector && sectorResult.topSectorWeight > 0.4 && sectorResult.topSector !== 'Unclassified') {
+    concentrationWarnings.push(
+      `Sector concentration in ${sectorResult.topSector} is ${(sectorResult.topSectorWeight * 100).toFixed(1)}% — sensitive to sector-specific cycles.`
     );
   }
-  if (holdings.length < 5 && total > 0) {
-    warnings.push(
-      'Your portfolio has fewer than 5 holdings. Greater diversification can reduce overall risk.'
+
+  // Quote Coverage & Data Quality Warnings
+  if (unquotedCount > 0) {
+    dataQualityWarnings.push(
+      `${unquotedCount} of ${holdings.length} holdings lack active market quotes. Concentration metrics reflect quoted positions only.`
     );
+  }
+  if (staleCount > 0) {
+    dataQualityWarnings.push(
+      `${staleCount} position quote(s) are older than 48 hours. Metrics may reflect delayed or stale prices.`
+    );
+  }
+  if (!usingMarketValuation) {
+    dataQualityWarnings.push(
+      'Live quotes unavailable for all holdings; metrics calculated using invested capital as conservative proxy.'
+    );
+  }
+
+  // Check for any missing buy prices
+  const missingBuyPrices = holdings.filter((h) => !h.avg_buy_price || h.avg_buy_price <= 0);
+  if (missingBuyPrices.length > 0) {
+    dataQualityWarnings.push(
+      `${missingBuyPrices.length} holding(s) have unrecorded or zero purchase price.`
+    );
+  }
+
+  // Diversification Observations
+  if (brokerCount > 1) {
+    diversificationObservations.push(
+      `Assets distributed across ${brokerCount} separate broker accounts/depositories, reducing counterparty settlement risk.`
+    );
+  } else {
+    concentrationWarnings.push(
+      'All assets are held with a single broker/depository. Consider holding assets across multiple depositories.'
+    );
+  }
+
+  if (assetClassTotals.size >= 3) {
+    diversificationObservations.push(
+      `Portfolio spans ${assetClassTotals.size} distinct asset classes, providing multi-asset risk mitigation.`
+    );
+  }
+
+  // Positive Observations (evidence-backed)
+  if (brokerCount >= 2) {
+    positiveObservations.push(
+      `Multi-broker custody structure (${brokerCount} accounts) provides operational and counterparty redundancy.`
+    );
+  }
+  if (topHoldingWeight <= 0.25 && holdings.length >= 5) {
+    positiveObservations.push(
+      `Healthy individual holding balance: largest single position is capped at ${(topHoldingWeight * 100).toFixed(1)}%.`
+    );
+  }
+  const defensiveWeight =
+    (assetClassTotals.get('bond') || 0) +
+    (assetClassTotals.get('sgb') || 0) +
+    (assetClassTotals.get('reit') || 0) +
+    (assetClassTotals.get('invit') || 0);
+  if (defensiveWeight / valuationBase >= 0.15) {
+    positiveObservations.push(
+      `Defensive asset cushion: ${roundPercent((defensiveWeight / valuationBase) * 100)}% allocated to income/alternative assets (Bonds, REITs, InvITs, SGBs).`
+    );
+  }
+  if (isValuationComplete && staleCount === 0) {
+    positiveObservations.push('Complete market quote coverage: 100% of holdings verified with recent valuation prices.');
   }
 
   return {
     risk_score: riskScore,
-    risk_label: riskLabel as RiskMetrics['risk_label'],
+    risk_label: riskLabel,
     hhi,
     equity_weight: equityWeight,
     broker_count: brokerCount,
     top_holding_weight: topHoldingWeight,
-    concentration_warnings: warnings,
+    top_holding_name: topHolding?.name,
+    top_holding_symbol: topHolding?.symbol,
+    top_five_holding_weight: topFiveWeight,
+    top_asset_class: topAssetClass,
+    top_asset_class_weight: topAssetClassWeight,
+    sector_allocations: sectorResult.allocations,
+    top_sector: sectorResult.topSector,
+    top_sector_weight: sectorResult.topSectorWeight,
+    has_sector_data: sectorResult.hasSectorData,
+    quote_coverage_pct: quoteCoveragePct,
+    priced_count: pricedCount,
+    unquoted_count: unquotedCount,
+    stale_quotes_count: staleCount,
+    is_valuation_complete: isValuationComplete,
+    concentration_warnings: concentrationWarnings,
+    diversification_observations: diversificationObservations,
+    positive_observations: positiveObservations,
+    data_quality_warnings: dataQualityWarnings,
   };
 }

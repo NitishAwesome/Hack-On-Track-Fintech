@@ -10,6 +10,7 @@ import { AssetAllocationSection } from './AssetAllocationSection';
 import { HoldingsPreviewSection } from './HoldingsPreviewSection';
 import { BrokerAccountsSection } from './BrokerAccountsSection';
 import { RecentActivitySection } from './RecentActivitySection';
+import { AIInsightCard } from '@/components/insights/AIInsightCard';
 
 import type { PortfolioSummary, AssetAllocation, HoldingWithMetrics } from '@/types/portfolio';
 import type { BrokerAccountRow, PortfolioSnapshotRow, InvestmentTransactionRow } from '@/types/database';
@@ -141,11 +142,19 @@ export function FinovaDashboard() {
 
   // Initial load
   useEffect(() => {
-    fetchSummary();
-    fetchHoldings();
-    fetchBrokers();
-    fetchSnapshots();
-    fetchTransactions();
+    let active = true;
+    void (async () => {
+      if (active) {
+        fetchSummary();
+        fetchHoldings();
+        fetchBrokers();
+        fetchSnapshots();
+        fetchTransactions();
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, [fetchSummary, fetchHoldings, fetchBrokers, fetchSnapshots, fetchTransactions]);
 
   // Sync button handler
@@ -223,6 +232,11 @@ export function FinovaDashboard() {
         summary={summary}
         isLoading={summaryLoading}
       />
+
+      {/* Row 1.5: AI Portfolio Intelligence Highlight */}
+      <div className="w-full">
+        <AIInsightCard insightType="portfolio_summary" />
+      </div>
 
       {/* Row 2: Portfolio Performance (8 cols) + Asset Allocation (4 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">

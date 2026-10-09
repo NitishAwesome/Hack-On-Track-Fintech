@@ -92,7 +92,7 @@ export function RecentActivitySection({
           </div>
           {transactions.length > 0 && (
             <Link
-              href="/holdings"
+              href="/transactions"
               className="text-xs font-semibold hover:underline"
               style={{ color: 'rgb(var(--brand-500))' }}
             >
@@ -105,7 +105,12 @@ export function RecentActivitySection({
         {transactions.length > 0 ? (
           <div className="divide-y divide-border/40 my-1">
             {transactions.slice(0, 5).map((tx) => {
-              const isBuy = tx.transaction_type === 'BUY';
+              const typeUpper = (tx.transaction_type || '').toUpperCase();
+              const isBuy = typeUpper === 'BUY';
+              const isSell = typeUpper === 'SELL';
+              const isIncome = typeUpper === 'DIVIDEND' || typeUpper === 'INTEREST' || typeUpper === 'COUPON';
+              const isCorpAction = typeUpper === 'BONUS' || typeUpper === 'SPLIT';
+
               return (
                 <div
                   key={tx.id}
@@ -114,14 +119,28 @@ export function RecentActivitySection({
                   <div className="flex items-center gap-2.5">
                     <div
                       className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-[10px] ${
-                        isBuy ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
+                        isBuy
+                          ? 'bg-emerald-500/10 text-emerald-500'
+                          : isSell
+                          ? 'bg-rose-500/10 text-rose-500'
+                          : isIncome
+                          ? 'bg-teal-500/10 text-teal-400'
+                          : isCorpAction
+                          ? 'bg-purple-500/10 text-purple-400'
+                          : 'bg-slate-500/10 text-slate-400'
                       }`}
                     >
-                      {isBuy ? <ArrowDownRight className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
+                      {isBuy ? (
+                        <ArrowDownRight className="w-3.5 h-3.5" />
+                      ) : isSell ? (
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      ) : (
+                        <Layers className="w-3.5 h-3.5" />
+                      )}
                     </div>
                     <div>
                       <div className="font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-                        {tx.transaction_type} {tx.quantity} units
+                        {typeUpper} {tx.quantity > 0 ? `${tx.quantity} units` : ''}
                       </div>
                       <div className="text-[11px] text-muted">
                         {new Date(tx.transaction_date).toLocaleDateString('en-IN', {
@@ -138,7 +157,7 @@ export function RecentActivitySection({
                       {formatCurrency(tx.net_amount)}
                     </div>
                     <div className="text-[10px] text-muted">
-                      @ {formatCurrency(tx.unit_price)}
+                      {tx.unit_price > 0 ? `@ ${formatCurrency(tx.unit_price)}` : typeUpper}
                     </div>
                   </div>
                 </div>
@@ -173,12 +192,12 @@ export function RecentActivitySection({
               transactions are executed or imported.
             </p>
             <Link
-              href="/holdings"
+              href="/transactions"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border hover:bg-surface-raised transition-colors"
               style={{ borderColor: 'rgb(var(--border))', color: 'rgb(var(--foreground))' }}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>View Current Holdings</span>
+              <span>Open Transaction Ledger</span>
             </Link>
           </div>
         )}

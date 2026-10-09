@@ -20,7 +20,11 @@ export class TransactionService {
     options?: {
       brokerAccountId?: string;
       instrumentId?: string;
+      transactionType?: string;
+      startDate?: string;
+      endDate?: string;
       limit?: number;
+      offset?: number;
     },
     client?: SupabaseClient
   ): Promise<{
@@ -43,7 +47,18 @@ export class TransactionService {
     if (options?.instrumentId) {
       query = query.eq('instrument_id', options.instrumentId);
     }
-    if (options?.limit) {
+    if (options?.transactionType && options.transactionType !== 'ALL') {
+      query = query.eq('transaction_type', options.transactionType.toUpperCase());
+    }
+    if (options?.startDate) {
+      query = query.gte('transaction_date', options.startDate);
+    }
+    if (options?.endDate) {
+      query = query.lte('transaction_date', options.endDate);
+    }
+    if (options?.offset) {
+      query = query.range(options.offset, options.offset + (options.limit || 20) - 1);
+    } else if (options?.limit) {
       query = query.limit(options.limit);
     }
 
@@ -113,6 +128,32 @@ export class TransactionService {
       count: data?.length || 0,
       error: null,
     };
+  }
+
+  /**
+   * Update an investment transaction.
+   */
+  public static async updateTransaction(
+    id: string,
+    updates: Partial<TransactionInsert>,
+    client?: SupabaseClient
+  ): Promise<{
+    data: InvestmentTransactionRow | null;
+    error: string | null;
+  }> {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('investment_transactions')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    return { data: data as InvestmentTransactionRow, error: null };
   }
 
   /**

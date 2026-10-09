@@ -92,6 +92,8 @@ export async function GET() {
           asset_type: string;
           exchange: string;
           isin: string | null;
+          sector?: string | null;
+          industry?: string | null;
         };
       };
 
@@ -122,6 +124,8 @@ export async function GET() {
           price_updated_at: priceRecord?.price_timestamp || null,
           created_at: row.created_at,
           updated_at: row.updated_at,
+          sector: inst?.sector || null,
+          industry: inst?.industry || null,
           broker_account: broker
             ? {
                 id: broker.id,
@@ -187,6 +191,8 @@ export async function GET() {
       price_updated_at: priceRecord?.price_timestamp || null,
       created_at: h.created_at,
       updated_at: h.updated_at,
+      sector: inst?.sector || null,
+      industry: inst?.industry || null,
       broker_account: broker
         ? {
             id: broker.id,

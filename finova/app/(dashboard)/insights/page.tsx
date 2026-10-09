@@ -1,9 +1,15 @@
 'use client';
 
+// ============================================================
+// FINOVA — AI Portfolio Intelligence & News Page
+// /insights route
+// ============================================================
+
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { ExternalLink, Newspaper } from 'lucide-react';
-import { AIInsightCard } from '@/components/insights/AIInsightCard';
+import { PortfolioIntelligenceHub } from '@/components/insights/PortfolioIntelligenceHub';
 import { SkeletonCard } from '@/components/shared/Skeletons';
 import { formatDate } from '@/lib/utils';
 import type { NewsArticle, HoldingWithMetrics } from '@/types/portfolio';
@@ -35,50 +41,51 @@ export default function InsightsPage() {
   const noApiKey = newsData?.message?.includes('NEWSDATA_API_KEY');
 
   return (
-    <div className="page-container space-y-6">
+    <div className="page-container space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-          Insights
+        <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'rgb(var(--foreground))' }}>
+          Portfolio Intelligence & Insights
         </h1>
-        <p className="text-sm mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
-          AI analysis and market news relevant to your portfolio
+        <p className="text-sm mt-1" style={{ color: 'rgb(var(--muted))' }}>
+          Deterministic risk calculations, sector concentrations, and AI-powered portfolio synthesis
         </p>
       </div>
 
-      {/* AI Insights */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-          AI Portfolio Analysis
-        </h2>
-        <AIInsightCard insightType="portfolio_summary" />
-        <AIInsightCard insightType="diversification_advice" />
-      </div>
+      {/* Primary Section: Complete AI Portfolio Intelligence & Risk Diagnostics Hub */}
+      <PortfolioIntelligenceHub />
 
-      {/* News */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-          Market News
+      {/* Secondary Section: Personalized Market News */}
+      <div className="space-y-4 pt-4 border-t" style={{ borderColor: 'rgb(var(--border))' }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Newspaper className="w-4 h-4 text-brand" />
+            <h2 className="text-sm font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
+              Holdings-Relevant Market News
+            </h2>
+          </div>
           {holdings.length > 0 && (
-            <span className="ml-2 text-xs font-normal" style={{ color: 'rgb(var(--muted))' }}>
-              related to your holdings
+            <span className="text-xs" style={{ color: 'rgb(var(--muted))' }}>
+              Filtered for top portfolio symbols
             </span>
           )}
-        </h2>
+        </div>
 
         {noApiKey && (
           <div
-            className="card p-4 text-sm"
+            className="card p-4 text-xs"
             style={{ backgroundColor: 'rgb(var(--warning-bg))', borderColor: 'rgb(var(--warning))' }}
           >
             <p style={{ color: 'rgb(var(--warning))' }}>
-              Add <code className="font-mono text-xs">NEWSDATA_API_KEY</code> to your .env.local to enable live news.
+              Add <code className="font-mono text-xs font-bold">NEWSDATA_API_KEY</code> to your .env.local to enable real-time financial news integration.
             </p>
           </div>
         )}
 
         {newsLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={4} />)}
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonCard key={i} lines={4} />
+            ))}
           </div>
         ) : articles.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -126,8 +133,8 @@ export default function InsightsPage() {
         ) : !noApiKey ? (
           <div className="card p-8 flex flex-col items-center gap-2 text-center">
             <Newspaper className="w-8 h-8" style={{ color: 'rgb(var(--muted))' }} />
-            <p className="text-sm" style={{ color: 'rgb(var(--muted))' }}>
-              No news available at this time.
+            <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>
+              No recent news articles matched your active holdings.
             </p>
           </div>
         ) : null}

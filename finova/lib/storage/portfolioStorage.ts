@@ -768,6 +768,325 @@ export class PortfolioStorage {
     return state.holdings.length < beforeCount;
   }
 
+  // ─── Transactions Ledger ────────────────────────────────────
+
+  public static getTransactions(
+    userId: string = 'current_user',
+    options?: {
+      brokerAccountId?: string;
+      instrumentId?: string;
+      transactionType?: string;
+      startDate?: string;
+      endDate?: string;
+      searchQuery?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ): { transactions: InvestmentTransactionRow[]; totalCount: number } {
+    const state = this.getState();
+    let list = state.transactions.filter((t) => t.user_id === userId);
+
+    if (options?.brokerAccountId) {
+      list = list.filter((t) => t.broker_account_id === options.brokerAccountId);
+    }
+    if (options?.instrumentId) {
+      list = list.filter((t) => t.instrument_id === options.instrumentId);
+    }
+    if (options?.transactionType && options.transactionType !== 'ALL') {
+      const typeUpper = options.transactionType.toUpperCase();
+      list = list.filter((t) => t.transaction_type.toUpperCase() === typeUpper);
+    }
+    if (options?.startDate) {
+      const startMs = new Date(options.startDate).getTime();
+      list = list.filter((t) => new Date(t.transaction_date).getTime() >= startMs);
+    }
+    if (options?.endDate) {
+      const endMs = new Date(options.endDate).getTime();
+      list = list.filter((t) => new Date(t.transaction_date).getTime() <= endMs);
+    }
+    if (options?.searchQuery && options.searchQuery.trim()) {
+      const q = options.searchQuery.toLowerCase().trim();
+      list = list.filter((t) => {
+        const inst = this.getInstrumentById(t.instrument_id);
+        const matchesSymbol = inst?.symbol.toLowerCase().includes(q);
+        const matchesName = inst?.instrument_name.toLowerCase().includes(q);
+        const matchesNotes = t.notes?.toLowerCase().includes(q);
+        const matchesRef = t.external_reference?.toLowerCase().includes(q);
+        return matchesSymbol || matchesName || matchesNotes || matchesRef;
+      });
+    }
+
+    // Sort descending by transaction_date by default
+    list.sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime());
+
+    const totalCount = list.length;
+    const offset = options?.offset || 0;
+    const limit = options?.limit || list.length;
+    const paginated = list.slice(offset, offset + limit);
+
+    return { transactions: paginated, totalCount };
+  }
+
+  public static getTransactionById(id: string): InvestmentTransactionRow | null {
+    const state = this.getState();
+    return state.transactions.find((t) => t.id === id) || null;
+  }
+
+  public static addTransaction(
+    tx: Omit<InvestmentTransactionRow, 'id' | 'created_at'>,
+    options?: { reconcileHolding?: boolean }
+  ): InvestmentTransactionRow {
+    const state = this.getState();
+
+    // Deduplication check by broker_account_id + external_reference
+    if (tx.external_reference && tx.external_reference.trim()) {
+      const exists = state.transactions.some(
+        (t) =>
+          t.broker_account_id === tx.broker_account_id &&
+          t.external_reference?.trim() === tx.external_reference?.trim()
+      );
+      if (exists) {
+        throw new Error(`Transaction with reference "${tx.external_reference}" already exists for this broker account.`);
+      }
+    }
+
+    // Quantity / Price validation
+    const typeUpper = tx.transaction_type.toUpperCase();
+    if (['BUY', 'SELL'].includes(typeUpper)) {
+      if (tx.quantity <= 0) {
+        throw new Error('Quantity must be greater than zero for Buy and Sell orders.');
+      }
+      if (tx.unit_price <= 0) {
+        throw new Error('Unit price must be greater than zero.');
+      }
+    } else if (['BONUS', 'SPLIT'].includes(typeUpper)) {
+      if (tx.quantity <= 0) {
+        throw new Error('Quantity must be greater than zero for Corporate Actions.');
+      }
+    }
+
+    const id = `tx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+    const newTx: InvestmentTransactionRow = {
+      ...tx,
+      id,
+      created_at: now,
+    };
+
+    state.transactions.push(newTx);
+
+    // Optional holding reconciliation
+    if (options?.reconcileHolding !== false) {
+      this.reconcileHoldingForTransaction(newTx);
+    }
+
+    this.saveState(state);
+    return newTx;
+  }
+
+  public static updateTransaction(
+    id: string,
+    updates: Partial<InvestmentTransactionRow>,
+    reconcile?: boolean
+  ): InvestmentTransactionRow | null {
+    const state = this.getState();
+    const idx = state.transactions.findIndex((t) => t.id === id);
+    if (idx === -1) return null;
+
+    const existing = state.transactions[idx];
+    const updated: InvestmentTransactionRow = {
+      ...existing,
+      ...updates,
+    };
+
+    state.transactions[idx] = updated;
+
+    if (reconcile) {
+      this.recalculateHoldingFromTransactions(updated.broker_account_id, updated.instrument_id);
+    }
+
+    this.saveState(state);
+    return updated;
+  }
+
+  public static deleteTransaction(id: string, reconcile?: boolean): boolean {
+    const state = this.getState();
+    const target = state.transactions.find((t) => t.id === id);
+    if (!target) return false;
+
+    state.transactions = state.transactions.filter((t) => t.id !== id);
+
+    if (reconcile) {
+      this.recalculateHoldingFromTransactions(target.broker_account_id, target.instrument_id);
+    }
+
+    this.saveState(state);
+    return true;
+  }
+
+  public static bulkAddTransactions(
+    inputs: Array<Omit<InvestmentTransactionRow, 'id' | 'created_at'>>,
+    options?: { reconcileHoldings?: boolean }
+  ): {
+    imported: InvestmentTransactionRow[];
+    duplicates: Array<Omit<InvestmentTransactionRow, 'id' | 'created_at'>>;
+    count: number;
+  } {
+    const imported: InvestmentTransactionRow[] = [];
+    const duplicates: Array<Omit<InvestmentTransactionRow, 'id' | 'created_at'>> = [];
+
+    for (const input of inputs) {
+      try {
+        const res = this.addTransaction(input, { reconcileHolding: false });
+        imported.push(res);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('already exists')) {
+          duplicates.push(input);
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    if (options?.reconcileHoldings) {
+      const pairs = new Set<string>();
+      imported.forEach((t) => pairs.add(`${t.broker_account_id}:::${t.instrument_id}`));
+      pairs.forEach((pair) => {
+        const [bId, iId] = pair.split(':::');
+        this.recalculateHoldingFromTransactions(bId, iId);
+      });
+    }
+
+    return { imported, duplicates, count: imported.length };
+  }
+
+  private static reconcileHoldingForTransaction(tx: InvestmentTransactionRow): void {
+    const state = this.getState();
+    const typeUpper = tx.transaction_type.toUpperCase();
+    const existingIdx = state.holdings.findIndex(
+      (h) => h.broker_account_id === tx.broker_account_id && h.instrument_id === tx.instrument_id
+    );
+
+    const now = new Date().toISOString();
+
+    if (typeUpper === 'BUY') {
+      if (existingIdx !== -1) {
+        const existing = state.holdings[existingIdx];
+        const newTotalQty = existing.quantity + tx.quantity;
+        const newAvgPrice =
+          (existing.quantity * existing.average_buy_price + tx.quantity * tx.unit_price) /
+          newTotalQty;
+        state.holdings[existingIdx] = {
+          ...existing,
+          quantity: Math.round(newTotalQty * 1000000) / 1000000,
+          average_buy_price: Math.round(newAvgPrice * 10000) / 10000,
+          updated_at: now,
+        };
+      } else {
+        const newHolding: HoldingRow = {
+          id: `hld-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          user_id: tx.user_id,
+          broker_account_id: tx.broker_account_id,
+          instrument_id: tx.instrument_id,
+          quantity: tx.quantity,
+          average_buy_price: tx.unit_price,
+          currency: tx.currency || 'INR',
+          data_source: tx.source || 'MANUAL',
+          as_of: tx.transaction_date,
+          created_at: now,
+          updated_at: now,
+        };
+        state.holdings.push(newHolding);
+      }
+    } else if (typeUpper === 'SELL') {
+      if (existingIdx !== -1) {
+        const existing = state.holdings[existingIdx];
+        const remainingQty = Math.max(0, existing.quantity - tx.quantity);
+        if (remainingQty <= 0) {
+          state.holdings.splice(existingIdx, 1);
+        } else {
+          state.holdings[existingIdx] = {
+            ...existing,
+            quantity: Math.round(remainingQty * 1000000) / 1000000,
+            updated_at: now,
+          };
+        }
+      }
+    } else if (typeUpper === 'BONUS' || typeUpper === 'SPLIT') {
+      if (existingIdx !== -1) {
+        const existing = state.holdings[existingIdx];
+        const newTotalQty = existing.quantity + tx.quantity;
+        const newAvgPrice = (existing.quantity * existing.average_buy_price) / newTotalQty;
+        state.holdings[existingIdx] = {
+          ...existing,
+          quantity: Math.round(newTotalQty * 1000000) / 1000000,
+          average_buy_price: Math.round(newAvgPrice * 10000) / 10000,
+          updated_at: now,
+        };
+      }
+    }
+  }
+
+  public static recalculateHoldingFromTransactions(brokerAccountId: string, instrumentId: string): void {
+    const state = this.getState();
+    const txs = state.transactions
+      .filter((t) => t.broker_account_id === brokerAccountId && t.instrument_id === instrumentId)
+      .sort((a, b) => new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime());
+
+    let qty = 0;
+    let totalCost = 0;
+    let avgPrice = 0;
+
+    for (const t of txs) {
+      const type = t.transaction_type.toUpperCase();
+      if (type === 'BUY') {
+        const newQty = qty + t.quantity;
+        totalCost += t.quantity * t.unit_price;
+        avgPrice = newQty > 0 ? totalCost / newQty : 0;
+        qty = newQty;
+      } else if (type === 'SELL') {
+        qty = Math.max(0, qty - t.quantity);
+        totalCost = qty * avgPrice;
+      } else if (type === 'BONUS' || type === 'SPLIT') {
+        qty += t.quantity;
+        avgPrice = qty > 0 ? totalCost / qty : 0;
+      }
+    }
+
+    const existingIdx = state.holdings.findIndex(
+      (h) => h.broker_account_id === brokerAccountId && h.instrument_id === instrumentId
+    );
+
+    const now = new Date().toISOString();
+    if (qty > 0) {
+      if (existingIdx !== -1) {
+        state.holdings[existingIdx] = {
+          ...state.holdings[existingIdx],
+          quantity: Math.round(qty * 1000000) / 1000000,
+          average_buy_price: Math.round(avgPrice * 10000) / 10000,
+          updated_at: now,
+        };
+      } else {
+        state.holdings.push({
+          id: `hld-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          user_id: 'current_user',
+          broker_account_id: brokerAccountId,
+          instrument_id: instrumentId,
+          quantity: Math.round(qty * 1000000) / 1000000,
+          average_buy_price: Math.round(avgPrice * 10000) / 10000,
+          currency: 'INR',
+          data_source: 'MANUAL',
+          as_of: now,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    } else if (existingIdx !== -1) {
+      state.holdings.splice(existingIdx, 1);
+    }
+  }
+
   // ─── Market Prices ──────────────────────────────────────────
 
   public static getMarketPrice(symbol: string): InstrumentPriceRow | null {

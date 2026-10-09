@@ -1,8 +1,23 @@
 'use client';
 
+// ============================================================
+// FINOVA — Portfolio Risk Analysis Page
+// Deterministic risk calculations + Risk Meter + Intelligence
+// ============================================================
+
+import React from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Shield, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import {
+  Shield,
+  AlertTriangle,
+  CheckCircle,
+  Info,
+  Sparkles,
+  ArrowRight,
+  CheckCircle2,
+} from 'lucide-react';
 import { SkeletonCard } from '@/components/shared/Skeletons';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { AIInsightCard } from '@/components/insights/AIInsightCard';
@@ -10,16 +25,18 @@ import type { RiskMetrics } from '@/types/portfolio';
 
 async function fetchSummary() {
   const res = await fetch('/api/portfolio/summary');
-  if (!res.ok) throw new Error('Failed to load');
+  if (!res.ok) throw new Error('Failed to load portfolio summary');
   return res.json();
 }
 
 function RiskMeter({ score }: { score: number }) {
   const angle = -135 + (score / 100) * 270;
   const color =
-    score < 34 ? 'rgb(var(--gain))' :
-    score < 67 ? 'rgb(var(--warning))' :
-    'rgb(var(--loss))';
+    score < 34
+      ? 'rgb(var(--gain))'
+      : score < 67
+      ? 'rgb(var(--warning))'
+      : 'rgb(var(--loss))';
 
   return (
     <div className="flex flex-col items-center">
@@ -89,22 +106,52 @@ export default function RiskPage() {
     );
   }
 
-  const { risk_score, risk_label, hhi, equity_weight, broker_count, top_holding_weight, concentration_warnings } = riskMetrics;
+  const {
+    risk_score,
+    risk_label,
+    hhi,
+    equity_weight,
+    top_holding_weight,
+    top_five_holding_weight,
+    top_sector,
+    top_sector_weight,
+    quote_coverage_pct,
+    is_valuation_complete,
+    concentration_warnings,
+    positive_observations,
+    data_quality_warnings,
+  } = riskMetrics;
 
   const labelColor =
-    risk_label === 'Conservative' ? 'rgb(var(--gain))' :
-    risk_label === 'Moderate' ? 'rgb(var(--warning))' :
-    'rgb(var(--loss))';
+    risk_label === 'Conservative'
+      ? 'rgb(var(--gain))'
+      : risk_label === 'Moderate'
+      ? 'rgb(var(--warning))'
+      : 'rgb(var(--loss))';
 
   return (
     <div className="page-container space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-          Risk Analysis
-        </h1>
-        <p className="text-sm mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
-          Understand your portfolio&apos;s risk profile
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'rgb(var(--foreground))' }}>
+            Risk Analysis & Concentration
+          </h1>
+          <p className="text-sm mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
+            Deterministic metrics, Herfindahl-Hirschman index & exposure diagnostics
+          </p>
+        </div>
+
+        <Link
+          href="/insights"
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-95 self-start sm:self-auto"
+          style={{
+            background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
+          }}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Open AI Intelligence Hub</span>
+          <ArrowRight className="w-3 h-3 ml-0.5" />
+        </Link>
       </div>
 
       {/* Risk Meter + Label */}
@@ -115,18 +162,15 @@ export default function RiskPage() {
       >
         <RiskMeter score={risk_score} />
         <div className="mt-3 text-center">
-          <p
-            className="text-xl font-bold"
-            style={{ color: labelColor }}
-          >
+          <p className="text-xl font-bold" style={{ color: labelColor }}>
             {risk_label}
           </p>
           <p className="text-sm mt-1" style={{ color: 'rgb(var(--muted))' }}>
-            Portfolio Risk Profile
+            Portfolio Risk Classification
           </p>
         </div>
 
-        <div className="flex gap-4 mt-4 text-xs">
+        <div className="flex flex-wrap justify-center gap-4 mt-4 text-xs">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'rgb(var(--gain))' }} />
             <span style={{ color: 'rgb(var(--muted))' }}>Conservative (0–33)</span>
@@ -143,84 +187,134 @@ export default function RiskPage() {
       </motion.div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           {
             label: 'Concentration (HHI)',
             value: hhi.toFixed(3),
-            description: 'Lower is better. 1.0 = single holding.',
-            warn: hhi > 0.35,
-          },
-          {
-            label: 'Equity Weight',
-            value: `${(equity_weight * 100).toFixed(1)}%`,
-            description: 'Proportion in equity/ETF assets.',
-            warn: equity_weight > 0.85,
-          },
-          {
-            label: 'Brokers / Accounts',
-            value: broker_count,
-            description: 'More brokers = lower counterparty risk.',
-            warn: broker_count === 1,
+            description: '1.0 = single holding.',
+            warn: hhi > 0.25,
           },
           {
             label: 'Top Holding',
             value: `${(top_holding_weight * 100).toFixed(1)}%`,
-            description: 'Largest single holding as % of portfolio.',
+            description: 'Largest single asset.',
             warn: top_holding_weight > 0.3,
+          },
+          {
+            label: 'Top 5 Concentration',
+            value: `${(top_five_holding_weight * 100).toFixed(1)}%`,
+            description: 'Top 5 combined weight.',
+            warn: top_five_holding_weight > 0.7,
+          },
+          {
+            label: 'Equity Weight',
+            value: `${(equity_weight * 100).toFixed(1)}%`,
+            description: 'Equities & ETFs.',
+            warn: equity_weight > 0.85,
+          },
+          {
+            label: 'Top Sector',
+            value: top_sector ? `${(top_sector_weight * 100).toFixed(0)}%` : 'N/A',
+            description: top_sector || 'Unclassified',
+            warn: top_sector_weight > 0.4,
+          },
+          {
+            label: 'Quote Coverage',
+            value: `${quote_coverage_pct}%`,
+            description: is_valuation_complete ? '100% quoted' : 'Missing quotes',
+            warn: !is_valuation_complete,
           },
         ].map((metric, i) => (
           <motion.div
             key={metric.label}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.05 }}
-            className="card p-4"
+            transition={{ delay: 0.05 + i * 0.03 }}
+            className="card p-3.5 flex flex-col justify-between"
           >
-            <div className="flex items-start justify-between mb-1.5">
-              <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>{metric.label}</p>
-              {metric.warn
-                ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'rgb(var(--warning))' }} />
-                : <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'rgb(var(--gain))' }} />
-              }
+            <div>
+              <div className="flex items-start justify-between mb-1">
+                <p className="text-[11px] truncate" style={{ color: 'rgb(var(--muted))' }}>
+                  {metric.label}
+                </p>
+                {metric.warn ? (
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'rgb(var(--warning))' }} />
+                ) : (
+                  <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'rgb(var(--gain))' }} />
+                )}
+              </div>
+              <p className="text-xl font-bold" style={{ color: 'rgb(var(--foreground))' }}>
+                {metric.value}
+              </p>
             </div>
-            <p className="text-2xl font-bold" style={{ color: 'rgb(var(--foreground))' }}>
-              {metric.value}
-            </p>
-            <p className="text-xs mt-1" style={{ color: 'rgb(var(--muted))' }}>
+            <p className="text-[10px] mt-1 truncate" style={{ color: 'rgb(var(--muted))' }}>
               {metric.description}
             </p>
           </motion.div>
         ))}
       </div>
 
-      {/* Warnings */}
-      {concentration_warnings.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="card p-5 space-y-3"
-        >
-          <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'rgb(var(--foreground))' }}>
-            <AlertTriangle className="w-4 h-4" style={{ color: 'rgb(var(--warning))' }} />
-            Concentration Warnings
+      {/* Observations: Positives vs Warnings */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Warnings */}
+        <div className="card p-5 space-y-3">
+          <h2 className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'rgb(var(--warning))' }}>
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Concentration & Data Warnings</span>
           </h2>
-          {concentration_warnings.map((w, i) => (
-            <div
-              key={i}
-              className="flex gap-3 p-3 rounded-lg text-sm"
-              style={{
-                backgroundColor: 'rgb(var(--warning-bg))',
-                color: 'rgb(var(--warning))',
-              }}
-            >
-              <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <p>{w}</p>
+          {concentration_warnings.length > 0 || data_quality_warnings.length > 0 ? (
+            <div className="space-y-2">
+              {[...concentration_warnings, ...data_quality_warnings].map((w, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 p-2.5 rounded-lg text-xs"
+                  style={{
+                    backgroundColor: 'rgb(var(--warning-bg))',
+                    color: 'rgb(var(--warning))',
+                  }}
+                >
+                  <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <p>{w}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </motion.div>
-      )}
+          ) : (
+            <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>
+              No critical concentration warnings detected.
+            </p>
+          )}
+        </div>
+
+        {/* Evidence-Backed Strengths */}
+        <div className="card p-5 space-y-3">
+          <h2 className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'rgb(var(--gain))' }}>
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Portfolio Strengths & Mitigations</span>
+          </h2>
+          {positive_observations.length > 0 ? (
+            <div className="space-y-2">
+              {positive_observations.map((pos, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 p-2.5 rounded-lg text-xs"
+                  style={{
+                    backgroundColor: 'rgb(var(--gain) / 0.08)',
+                    color: 'rgb(var(--foreground))',
+                  }}
+                >
+                  <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-gain mt-0.5" />
+                  <p>{pos}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>
+              Standard baseline allocation.
+            </p>
+          )}
+        </div>
+      </div>
 
       <AIInsightCard insightType="risk_analysis" />
     </div>
