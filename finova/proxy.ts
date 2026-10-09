@@ -19,6 +19,7 @@ const PUBLIC_PREFIXES = [
   '/risk-disclosure',
   '/auth',
   '/api/market',
+  '/api/instruments',
   '/learn',
   '/icon.svg',
   '/favicon.ico',

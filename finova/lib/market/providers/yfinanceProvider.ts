@@ -8,9 +8,9 @@ import type { PriceStatus } from '@/types/database';
 import {
   resolveYahooFinanceSymbol,
   extractBaseSymbol,
-} from '@/lib/market/symbolMapper';
-import { validateMarketQuote } from '@/lib/market/quoteValidator';
-import { calculateIndexMetrics } from '@/lib/market/indexCalculator';
+} from '../symbolMapper.ts';
+import { validateMarketQuote } from '../quoteValidator.ts';
+import { calculateIndexMetrics } from '../indexCalculator.ts';
 
 export interface MarketQuote {
   symbol: string;
@@ -24,6 +24,7 @@ export interface MarketQuote {
   received_at: string;
   day_change: number | null;
   day_change_pct: number | null;
+  previousClose?: number | null;
   high_52w: number | null;
   low_52w: number | null;
   volume: number | null;
@@ -176,7 +177,7 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
         yahooTicker
-      )}?interval=1d`;
+      )}?interval=1d&range=5d`;
 
       const res = await fetch(url, {
         headers: {
@@ -193,12 +194,23 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
       }
 
       const json = await res.json();
-      const meta = json?.chart?.result?.[0]?.meta;
+      const chartResult = json?.chart?.result?.[0];
+      const meta = chartResult?.meta;
       if (!meta) return null;
 
+      // 1. Derive mathematically accurate metrics (price, previous close, daily change, change %)
+      const metrics = calculateIndexMetrics(cleanSym, chartResult, {
+        exchangeTimezone: 'Asia/Kolkata',
+      });
+
+      if (!metrics.isValid || metrics.currentPrice <= 0) {
+        return null;
+      }
+
+      // 2. Validate quote compliance
       const validation = validateMarketQuote({
         symbol: cleanSym,
-        price: meta.regularMarketPrice,
+        price: metrics.currentPrice,
         currency: meta.currency,
         timestamp: meta.regularMarketTime ? meta.regularMarketTime * 1000 : null,
         source: this.sourceLabel,
@@ -208,11 +220,6 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
         return null;
       }
 
-      const price = validation.normalizedPrice;
-      const prevClose = Number(meta.chartPreviousClose || meta.previousClose || price);
-      const rawChange = price - prevClose;
-      const rawChangePercent = prevClose > 0 ? (rawChange / prevClose) * 100 : 0;
-
       const high52w = typeof meta.fiftyTwoWeekHigh === 'number' ? Number(meta.fiftyTwoWeekHigh.toFixed(2)) : null;
       const low52w = typeof meta.fiftyTwoWeekLow === 'number' ? Number(meta.fiftyTwoWeekLow.toFixed(2)) : null;
       const volume = typeof meta.regularMarketVolume === 'number' ? Number(meta.regularMarketVolume) : null;
@@ -221,14 +228,15 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
         symbol: extractBaseSymbol(cleanSym),
         providerTicker: yahooTicker,
         exchange: exchange.toUpperCase(),
-        price,
+        price: metrics.currentPrice,
         currency: meta.currency || 'INR',
         source: this.sourceLabel,
         status: validation.status,
-        price_timestamp: validation.normalizedTimestamp || new Date().toISOString(),
+        price_timestamp: validation.normalizedTimestamp || metrics.tradeTimestamp,
         received_at: new Date().toISOString(),
-        day_change: Number(rawChange.toFixed(2)),
-        day_change_pct: Number(rawChangePercent.toFixed(2)),
+        previousClose: metrics.previousClose,
+        day_change: metrics.change,
+        day_change_pct: metrics.changePercent,
         high_52w: high52w,
         low_52w: low52w,
         volume: volume,

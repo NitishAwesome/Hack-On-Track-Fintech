@@ -5,7 +5,7 @@ import type { MarketIndexItem } from '@/types/dashboard';
 import type { MarketIndex } from '@/types/market';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { TrendingUp, TrendingDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface MarketPulseProps {
   indices: MarketIndexItem[];
@@ -102,10 +102,7 @@ export function MarketPulse({ indices, className }: MarketPulseProps) {
                       className="text-lg font-bold tracking-tight tabular-nums"
                       style={{ color: 'rgb(var(--foreground))' }}
                     >
-                      ₹{index.value.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {formatCurrency(index.value)}
                     </div>
 
                     <div className="flex items-center gap-1.5 mt-1 text-xs font-semibold tabular-nums">
@@ -171,10 +168,7 @@ export function MarketPulse({ indices, className }: MarketPulseProps) {
                       className="text-lg font-bold tracking-tight tabular-nums"
                       style={{ color: 'rgb(var(--foreground))' }}
                     >
-                      ₹{index.currentValue.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {formatCurrency(index.currentValue)}
                     </div>
 
                     <div className="flex items-center gap-1.5 mt-1 text-xs font-semibold tabular-nums">

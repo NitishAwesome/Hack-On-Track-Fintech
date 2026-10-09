@@ -142,7 +142,11 @@ export interface HoldingRow {
   as_of: string;
   created_at: string;
   updated_at: string;
+  opening_quantity?: number | null;
+  opening_buy_price?: number | null;
+  is_ledger_managed?: boolean;
 }
+
 
 /** Row in public.investment_transactions */
 export interface InvestmentTransactionRow {

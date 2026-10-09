@@ -79,7 +79,7 @@ export function StatCard({
 
           {change != null && type === 'currency' && (
             <span className="text-xs" style={{ color: 'rgb(var(--muted))' }}>
-              ({formatCurrency(change, true)})
+              ({formatCurrency(change, compact)})
             </span>
           )}
         </div>

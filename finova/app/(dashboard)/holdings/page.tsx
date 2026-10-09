@@ -12,9 +12,9 @@ import {
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SkeletonTable } from '@/components/shared/Skeletons';
-import { formatCurrency, ASSET_CLASS_LABELS } from '@/lib/utils';
+import { formatCurrency, formatCurrencySafe, formatStockPrice } from '@/lib/utils';
 import type { HoldingWithMetrics, AssetClass, BrokerAccount } from '@/types/portfolio';
-import { GLOBAL_SEED_INSTRUMENTS } from '@/lib/storage/portfolioStorage';
+import { StockSearchDropdown } from '@/components/market/StockSearchDropdown';
 
 const TAB_CATEGORIES: { id: string; label: string; assetClass?: AssetClass }[] = [
   { id: 'all', label: 'All Investments' },
@@ -142,7 +142,6 @@ export default function HoldingsPage() {
   const [selectedBrokerFilter, setSelectedBrokerFilter] = useState<string>('');
   const [sortBy, setSortBy] = useState<'value' | 'invested' | 'return' | 'name'>('value');
   const [form, setForm] = useState<AddHoldingForm>(EMPTY_FORM);
-  const [catalogQuery, setCatalogQuery] = useState('');
 
   // CSV Import State
   const [csvRows, setCsvRows] = useState<CsvValidationRow[]>([]);
@@ -166,7 +165,6 @@ export default function HoldingsPage() {
       queryClient.invalidateQueries({ queryKey: ['portfolio-summary'] });
       setShowAddModal(false);
       setForm(EMPTY_FORM);
-      setCatalogQuery('');
     },
   });
 
@@ -399,16 +397,16 @@ export default function HoldingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4 space-y-1">
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Invested</p>
-          <p className="text-xl font-bold text-slate-100" title={formatCurrency(summaryMetrics.totalInvested, false)}>
-            {formatCurrency(summaryMetrics.totalInvested, true)}
+          <p className="text-xl font-bold text-slate-100" title={formatCurrency(summaryMetrics.totalInvested)}>
+            {formatCurrency(summaryMetrics.totalInvested)}
           </p>
           <p className="text-xs text-slate-500">Across {summaryMetrics.totalCount} total positions</p>
         </div>
 
         <div className="card p-4 space-y-1">
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Current Valuation</p>
-          <p className="text-xl font-bold text-slate-100" title={formatCurrency(summaryMetrics.totalCurrentVal, false)}>
-            {formatCurrency(summaryMetrics.totalCurrentVal, true)}
+          <p className="text-xl font-bold text-slate-100" title={formatCurrency(summaryMetrics.totalCurrentVal)}>
+            {formatCurrency(summaryMetrics.totalCurrentVal)}
           </p>
           <p className="text-[11px] text-slate-400 flex items-center gap-1">
             <Info className="w-3.5 h-3.5 text-blue-400" />
@@ -422,9 +420,9 @@ export default function HoldingsPage() {
             <div className="flex items-baseline gap-2">
               <span
                 className={`text-xl font-bold ${summaryMetrics.totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
-                title={formatCurrency(summaryMetrics.totalPnL, false)}
+                title={formatCurrency(summaryMetrics.totalPnL)}
               >
-                {summaryMetrics.totalPnL >= 0 ? '+' : ''}{formatCurrency(summaryMetrics.totalPnL, true)}
+                {summaryMetrics.totalPnL >= 0 ? '+' : ''}{formatCurrency(summaryMetrics.totalPnL)}
               </span>
               {summaryMetrics.totalReturnPct !== null && (
                 <PercentageBadge value={summaryMetrics.totalReturnPct} size="sm" />
@@ -594,13 +592,13 @@ export default function HoldingsPage() {
                       </td>
 
                       <td className="px-4 py-3.5 text-right font-mono text-slate-300">
-                        {formatCurrency(h.avg_buy_price)}
+                        {formatStockPrice(h.avg_buy_price)}
                       </td>
 
                       <td className="px-4 py-3.5 text-right font-mono">
                         {hasPrice ? (
                           <div className="flex flex-col items-end gap-1">
-                            <span className="text-slate-100 font-semibold">{formatCurrency(h.current_price!)}</span>
+                            <span className="text-slate-100 font-semibold">{formatStockPrice(h.current_price!)}</span>
                             <div className="flex items-center gap-1.5 flex-wrap justify-end">
                               <span
                                 className={`text-[10px] px-1.5 py-0.5 rounded font-sans font-semibold tracking-wide ${
@@ -639,17 +637,17 @@ export default function HoldingsPage() {
 
                       <td
                         className="px-4 py-3.5 text-right font-mono text-slate-300 font-medium"
-                        title={formatCurrency(h.invested_value, false)}
+                        title={formatCurrency(h.invested_value)}
                       >
-                        {formatCurrency(h.invested_value, true)}
+                        {formatCurrency(h.invested_value)}
                       </td>
 
                       <td
                         className="px-4 py-3.5 text-right font-mono font-semibold text-slate-100"
-                        title={hasPrice ? formatCurrency(h.current_value || h.invested_value, false) : 'Valuation unavailable'}
+                        title={hasPrice ? formatCurrency(h.current_value || h.invested_value) : 'Valuation unavailable'}
                       >
                         {hasPrice ? (
-                          formatCurrency(h.current_value || h.invested_value, true)
+                          formatCurrency(h.current_value || h.invested_value)
                         ) : (
                           <span className="text-slate-500">—</span>
                         )}
@@ -660,9 +658,9 @@ export default function HoldingsPage() {
                           <div className="flex flex-col items-end">
                             <span
                               className={`text-xs font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}
-                              title={formatCurrency(h.absolute_return, false)}
+                              title={formatCurrency(h.absolute_return)}
                             >
-                              {isPositive ? '+' : ''}{formatCurrency(h.absolute_return, true)}
+                              {isPositive ? '+' : ''}{formatCurrency(h.absolute_return)}
                             </span>
                             {returnPct !== null && (
                               <PercentageBadge value={returnPct} size="sm" />
@@ -792,69 +790,20 @@ export default function HoldingsPage() {
                   </div>
                 </div>
 
-                {/* Quick Catalog Autocomplete */}
-                <div className="space-y-1">
-                  <label className="font-semibold text-slate-300">
-                    Pick from Verified Catalog or Enter Custom
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Search verified catalog (e.g. ICICIBANK, RELIANCE, EMBASSY, PGINVIT)..."
-                    value={catalogQuery}
-                    onChange={(e) => {
-                      const q = e.target.value;
-                      setCatalogQuery(q);
-                      const matched = GLOBAL_SEED_INSTRUMENTS.find(
-                        (i) => i.symbol.toLowerCase() === q.toLowerCase()
-                      );
-                      if (matched) {
-                        setForm((prev) => ({
-                          ...prev,
-                          symbol: matched.symbol,
-                          name: matched.instrument_name,
-                          isin: matched.isin || '',
-                          exchange: matched.exchange || 'NSE',
-                        }));
-                      }
-                    }}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
-                  />
-                  {catalogQuery.trim() && (
-                    <div className="max-h-28 overflow-y-auto rounded border border-slate-700 bg-slate-850 divide-y divide-slate-800">
-                      {GLOBAL_SEED_INSTRUMENTS.filter(
-                        (i) =>
-                          i.symbol.toLowerCase().includes(catalogQuery.toLowerCase()) ||
-                          i.instrument_name.toLowerCase().includes(catalogQuery.toLowerCase())
-                      ).map((inst) => (
-                        <div
-                          key={inst.id}
-                          onClick={() => {
-                            let mappedClass: AssetClass = 'equity';
-                            if (inst.asset_type === 'STOCK') mappedClass = 'equity';
-                            else if (inst.asset_type === 'MUTUAL_FUND') mappedClass = 'mf';
-                            else if (inst.asset_type === 'REIT') mappedClass = 'reit';
-                            else if (inst.asset_type === 'INVIT') mappedClass = 'invit';
-                            else if (inst.asset_type === 'BOND') mappedClass = 'bond';
-
-                            setForm((p) => ({
-                              ...p,
-                              symbol: inst.symbol,
-                              name: inst.instrument_name,
-                              asset_class: mappedClass,
-                              exchange: inst.exchange || 'NSE',
-                              isin: inst.isin || '',
-                            }));
-                            setCatalogQuery(inst.symbol);
-                          }}
-                          className="px-3 py-1.5 hover:bg-slate-750 cursor-pointer flex justify-between items-center"
-                        >
-                          <span className="font-semibold text-slate-200">{inst.symbol}</span>
-                          <span className="text-[11px] text-slate-400 truncate max-w-[200px]">{inst.instrument_name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                {/* Dynamic Stock Search & Live Quote Preview */}
+                <StockSearchDropdown
+                  selectedSymbol={form.symbol}
+                  onSelect={(selected) => {
+                    setForm((p) => ({
+                      ...p,
+                      symbol: selected.symbol,
+                      name: selected.name,
+                      isin: selected.isin,
+                      exchange: selected.exchange,
+                      asset_class: selected.assetClass,
+                    }));
+                  }}
+                />
 
                 {/* Symbol & Name */}
                 <div className="grid grid-cols-2 gap-3">
@@ -917,7 +866,7 @@ export default function HoldingsPage() {
                   <div className="p-2.5 rounded-lg bg-blue-950/30 border border-blue-900/40 text-blue-300 flex justify-between items-center font-mono">
                     <span>Invested Amount:</span>
                     <strong className="text-sm text-blue-200">
-                      {formatCurrency(Number(form.quantity) * Number(form.avg_buy_price), true)}
+                      {formatCurrency(Number(form.quantity) * Number(form.avg_buy_price))}
                     </strong>
                   </div>
                 )}
@@ -1225,7 +1174,7 @@ export default function HoldingsPage() {
                           </span>
                           <strong className="text-slate-200">{r.symbol}</strong>
                           <span className="text-slate-500">Qty: {r.quantity}</span>
-                          <span className="text-slate-500">Price: ₹{r.avg_buy_price}</span>
+                          <span className="text-slate-500">Price: {formatCurrencySafe(Number(r.avg_buy_price))}</span>
                         </div>
                         {r.isValid ? (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">

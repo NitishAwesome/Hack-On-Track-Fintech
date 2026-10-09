@@ -38,6 +38,7 @@ import { formatCurrency, formatPercent, formatDate, cn, ASSET_CLASS_LABELS } fro
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SkeletonTable } from '@/components/shared/Skeletons';
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
+import { StockSearchDropdown } from '@/components/market/StockSearchDropdown';
 import { GLOBAL_SEED_INSTRUMENTS } from '@/lib/storage/portfolioStorage';
 import type { BrokerAccountRow, InvestmentInstrumentRow, TransactionType } from '@/types/database';
 import type {
@@ -1036,6 +1037,7 @@ function RecordTransactionModal({
         external_reference: externalReference.trim() || null,
         reconcile_holding: reconcileHolding,
       });
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to record transaction');
     }
@@ -1108,8 +1110,27 @@ function RecordTransactionModal({
             </div>
           </div>
 
-          {/* Row 2: Symbol & Name */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Row 2: Dynamic Stock & Instrument Search */}
+          <div className="space-y-1">
+            <StockSearchDropdown
+              selectedSymbol={symbol}
+              onSelect={(selected) => {
+                setSymbol(selected.symbol);
+                setName(selected.name);
+                setAssetClass(selected.assetClass);
+                if (
+                  selected.livePrice &&
+                  typeof selected.livePrice === 'number' &&
+                  (!unitPrice || Number(unitPrice) === 0)
+                ) {
+                  setUnitPrice(selected.livePrice.toString());
+                }
+              }}
+            />
+          </div>
+
+          {/* Row 3: Selected Symbol Details, Company Name & Asset Class */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-muted mb-1">Symbol / Ticker *</label>
               <input
@@ -1117,9 +1138,20 @@ function RecordTransactionModal({
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value.toUpperCase())}
                 placeholder="e.g. RELIANCE, TCS"
-                className="w-full px-2.5 py-1.5 text-xs rounded-lg border bg-surface-raised focus:outline-none"
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg border bg-surface-raised focus:outline-none font-mono"
                 style={{ borderColor: 'rgb(var(--border))', color: 'rgb(var(--foreground))' }}
                 required
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-muted mb-1">Company Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Coal India Ltd"
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg border bg-surface-raised focus:outline-none"
+                style={{ borderColor: 'rgb(var(--border))', color: 'rgb(var(--foreground))' }}
               />
             </div>
             <div>

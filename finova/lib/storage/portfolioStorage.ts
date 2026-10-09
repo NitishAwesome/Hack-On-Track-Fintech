@@ -13,8 +13,9 @@ import type {
   AssetCategory,
   ExchangeCode,
 } from '@/types/database';
+import { getExpandedCatalogRows } from '../market/stockCatalog.ts';
 
-export const GLOBAL_SEED_INSTRUMENTS: InvestmentInstrumentRow[] = [
+const BASE_SEED_INSTRUMENTS: InvestmentInstrumentRow[] = [
   {
     id: 'inst-rel-1',
     symbol: 'RELIANCE',
@@ -295,6 +296,19 @@ export const GLOBAL_SEED_INSTRUMENTS: InvestmentInstrumentRow[] = [
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   },
+];
+
+const baseSeedSymbols = new Set(
+  BASE_SEED_INSTRUMENTS.map((i) => `${i.symbol.toUpperCase()}|${i.exchange.toUpperCase()}`)
+);
+
+const expandedStockRows = getExpandedCatalogRows().filter(
+  (r) => !baseSeedSymbols.has(`${r.symbol.toUpperCase()}|${r.exchange.toUpperCase()}`)
+);
+
+export const GLOBAL_SEED_INSTRUMENTS: InvestmentInstrumentRow[] = [
+  ...BASE_SEED_INSTRUMENTS,
+  ...expandedStockRows,
 ];
 
 export const GLOBAL_SEED_PRICES: Record<string, InstrumentPriceRow> = {
@@ -603,17 +617,59 @@ export class PortfolioStorage {
 
   // ─── Instruments ────────────────────────────────────────────
 
-  public static getInstruments(query?: string, assetType?: AssetCategory): InvestmentInstrumentRow[] {
+  public static getInstruments(
+    queryOrOptions?: string | { query?: string; assetType?: AssetCategory },
+    assetType?: AssetCategory
+  ): InvestmentInstrumentRow[] {
     const state = this.getState();
     const all = [...GLOBAL_SEED_INSTRUMENTS, ...state.custom_instruments];
+    
+    let rawQuery = '';
+    let targetAssetType = assetType;
+    if (typeof queryOrOptions === 'string') {
+      rawQuery = queryOrOptions;
+    } else if (queryOrOptions && typeof queryOrOptions === 'object') {
+      rawQuery = queryOrOptions.query || '';
+      if (!targetAssetType && queryOrOptions.assetType) {
+        targetAssetType = queryOrOptions.assetType;
+      }
+    }
+
     return all.filter((inst) => {
-      if (assetType && inst.asset_type !== assetType) return false;
-      if (query && query.trim()) {
-        const q = query.toLowerCase().trim();
-        const matchesSymbol = inst.symbol.toLowerCase().includes(q);
-        const matchesName = inst.instrument_name.toLowerCase().includes(q);
-        const matchesIsin = inst.isin?.toLowerCase().includes(q);
-        return matchesSymbol || matchesName || Boolean(matchesIsin);
+      if (targetAssetType && inst.asset_type !== targetAssetType) return false;
+      if (rawQuery && rawQuery.trim()) {
+        const q = rawQuery.toLowerCase().trim();
+        const sym = inst.symbol.toLowerCase();
+        const name = inst.instrument_name.toLowerCase();
+        const isin = (inst.isin || '').toLowerCase();
+        const sector = (inst.sector || '').toLowerCase();
+        const industry = (inst.industry || '').toLowerCase();
+
+        // 1. Direct substring matches
+        if (sym.includes(q) || name.includes(q) || isin.includes(q) || sector.includes(q) || industry.includes(q)) {
+          return true;
+        }
+
+        // 2. Normalized matching (ignoring spaces, hyphens, and punctuation)
+        // e.g. "COAL INDIA" matches "COALINDIA", "BAJAJ AUTO" matches "BAJAJ-AUTO"
+        const cleanQ = q.replace(/[\s\-_.]+/g, '');
+        const cleanSym = sym.replace(/[\s\-_.]+/g, '');
+        const cleanName = name.replace(/[\s\-_.]+/g, '');
+        if (cleanQ.length >= 2 && (cleanSym.includes(cleanQ) || cleanName.includes(cleanQ))) {
+          return true;
+        }
+
+        // 3. Multi-word token matching (all words match symbol or name)
+        // e.g. "INDIA COAL" or "HERO MOTOR" matches "Hero MotoCorp Ltd" / "Coal India Ltd"
+        const tokens = q.split(/\s+/).filter(Boolean);
+        if (tokens.length > 1) {
+          const allTokensMatch = tokens.every(
+            (token) => sym.includes(token) || name.includes(token) || isin.includes(token)
+          );
+          if (allTokensMatch) return true;
+        }
+
+        return false;
       }
       return true;
     });
@@ -718,6 +774,12 @@ export class PortfolioStorage {
         ...existing,
         quantity: Math.round(newTotalQty * 1000000) / 1000000,
         average_buy_price: Math.round(newAvgPrice * 10000) / 10000,
+        opening_quantity: existing.is_ledger_managed
+          ? existing.opening_quantity
+          : Math.round(newTotalQty * 1000000) / 1000000,
+        opening_buy_price: existing.is_ledger_managed
+          ? existing.opening_buy_price
+          : Math.round(newAvgPrice * 10000) / 10000,
         updated_at: now,
       };
       this.saveState(state);
@@ -728,6 +790,9 @@ export class PortfolioStorage {
     const newHolding: HoldingRow = {
       ...holding,
       id,
+      opening_quantity: holding.quantity,
+      opening_buy_price: holding.average_buy_price,
+      is_ledger_managed: false,
       created_at: now,
       updated_at: now,
     };
@@ -735,6 +800,7 @@ export class PortfolioStorage {
     this.saveState(state);
     return newHolding;
   }
+
 
   public static updateHolding(
     id: string,
@@ -834,7 +900,7 @@ export class PortfolioStorage {
 
   public static addTransaction(
     tx: Omit<InvestmentTransactionRow, 'id' | 'created_at'>,
-    options?: { reconcileHolding?: boolean }
+    options?: { reconcileHolding?: boolean; allowOversell?: boolean }
   ): InvestmentTransactionRow {
     const state = this.getState();
 
@@ -858,6 +924,15 @@ export class PortfolioStorage {
       }
       if (tx.unit_price <= 0) {
         throw new Error('Unit price must be greater than zero.');
+      }
+      if (typeUpper === 'SELL' && !options?.allowOversell) {
+        const existingHolding = state.holdings.find(
+          (h) => h.broker_account_id === tx.broker_account_id && h.instrument_id === tx.instrument_id
+        );
+        const currentQty = existingHolding ? existingHolding.quantity : 0;
+        if (tx.quantity > currentQty) {
+          throw new Error(`Insufficient quantity to sell: requested ${tx.quantity} units, but position only holds ${currentQty} units.`);
+        }
       }
     } else if (['BONUS', 'SPLIT'].includes(typeUpper)) {
       if (tx.quantity <= 0) {
@@ -899,10 +974,22 @@ export class PortfolioStorage {
       ...updates,
     };
 
-    state.transactions[idx] = updated;
-
+    // If reconcile is enabled, test replay before committing to prevent corrupted negative positions
     if (reconcile) {
-      this.recalculateHoldingFromTransactions(updated.broker_account_id, updated.instrument_id);
+      const backupTransactions = [...state.transactions];
+      const backupHoldings = JSON.parse(JSON.stringify(state.holdings));
+
+      state.transactions[idx] = updated;
+      try {
+        this.recalculateHoldingFromTransactions(updated.broker_account_id, updated.instrument_id);
+      } catch (err) {
+        // Rollback state immediately
+        state.transactions = backupTransactions;
+        state.holdings = backupHoldings;
+        throw err;
+      }
+    } else {
+      state.transactions[idx] = updated;
     }
 
     this.saveState(state);
@@ -914,10 +1001,21 @@ export class PortfolioStorage {
     const target = state.transactions.find((t) => t.id === id);
     if (!target) return false;
 
-    state.transactions = state.transactions.filter((t) => t.id !== id);
-
     if (reconcile) {
-      this.recalculateHoldingFromTransactions(target.broker_account_id, target.instrument_id);
+      const backupTransactions = [...state.transactions];
+      const backupHoldings = JSON.parse(JSON.stringify(state.holdings));
+
+      state.transactions = state.transactions.filter((t) => t.id !== id);
+      try {
+        this.recalculateHoldingFromTransactions(target.broker_account_id, target.instrument_id);
+      } catch (err) {
+        // Rollback state immediately
+        state.transactions = backupTransactions;
+        state.holdings = backupHoldings;
+        throw err;
+      }
+    } else {
+      state.transactions = state.transactions.filter((t) => t.id !== id);
     }
 
     this.saveState(state);
@@ -981,6 +1079,13 @@ export class PortfolioStorage {
           ...existing,
           quantity: Math.round(newTotalQty * 1000000) / 1000000,
           average_buy_price: Math.round(newAvgPrice * 10000) / 10000,
+          opening_quantity: existing.is_ledger_managed
+            ? existing.opening_quantity
+            : existing.quantity,
+          opening_buy_price: existing.is_ledger_managed
+            ? existing.opening_buy_price
+            : existing.average_buy_price,
+          is_ledger_managed: true,
           updated_at: now,
         };
       } else {
@@ -994,6 +1099,9 @@ export class PortfolioStorage {
           currency: tx.currency || 'INR',
           data_source: tx.source || 'MANUAL',
           as_of: tx.transaction_date,
+          opening_quantity: 0,
+          opening_buy_price: 0,
+          is_ledger_managed: true,
           created_at: now,
           updated_at: now,
         };
@@ -1009,6 +1117,7 @@ export class PortfolioStorage {
           state.holdings[existingIdx] = {
             ...existing,
             quantity: Math.round(remainingQty * 1000000) / 1000000,
+            is_ledger_managed: true,
             updated_at: now,
           };
         }
@@ -1022,6 +1131,7 @@ export class PortfolioStorage {
           ...existing,
           quantity: Math.round(newTotalQty * 1000000) / 1000000,
           average_buy_price: Math.round(newAvgPrice * 10000) / 10000,
+          is_ledger_managed: true,
           updated_at: now,
         };
       }
@@ -1034,9 +1144,30 @@ export class PortfolioStorage {
       .filter((t) => t.broker_account_id === brokerAccountId && t.instrument_id === instrumentId)
       .sort((a, b) => new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime());
 
-    let qty = 0;
-    let totalCost = 0;
-    let avgPrice = 0;
+    const existingIdx = state.holdings.findIndex(
+      (h) => h.broker_account_id === brokerAccountId && h.instrument_id === instrumentId
+    );
+    const existing = existingIdx !== -1 ? state.holdings[existingIdx] : null;
+
+    // If NO transactions exist for this holding:
+    if (txs.length === 0) {
+      // If it is a manual opening position, preserve it untouched!
+      if (existing && !existing.is_ledger_managed) {
+        return; // OPENING_BALANCE_PRESERVED
+      }
+      // If it was created purely by transactions that were all deleted, remove it
+      if (existingIdx !== -1) {
+        state.holdings.splice(existingIdx, 1);
+      }
+      return;
+    }
+
+    const baseQty = (existing && existing.opening_quantity != null) ? existing.opening_quantity : 0;
+    const basePrice = (existing && existing.opening_buy_price != null) ? existing.opening_buy_price : 0;
+
+    let qty = baseQty;
+    let totalCost = baseQty * basePrice;
+    let avgPrice = basePrice;
 
     for (const t of txs) {
       const type = t.transaction_type.toUpperCase();
@@ -1046,6 +1177,9 @@ export class PortfolioStorage {
         avgPrice = newQty > 0 ? totalCost / newQty : 0;
         qty = newQty;
       } else if (type === 'SELL') {
+        if (t.quantity > qty) {
+          throw new Error(`Unsafe transaction state: Sell of ${t.quantity} units exceeds available position of ${qty} units on ${t.transaction_date}.`);
+        }
         qty = Math.max(0, qty - t.quantity);
         totalCost = qty * avgPrice;
       } else if (type === 'BONUS' || type === 'SPLIT') {
@@ -1054,10 +1188,6 @@ export class PortfolioStorage {
       }
     }
 
-    const existingIdx = state.holdings.findIndex(
-      (h) => h.broker_account_id === brokerAccountId && h.instrument_id === instrumentId
-    );
-
     const now = new Date().toISOString();
     if (qty > 0) {
       if (existingIdx !== -1) {
@@ -1065,6 +1195,7 @@ export class PortfolioStorage {
           ...state.holdings[existingIdx],
           quantity: Math.round(qty * 1000000) / 1000000,
           average_buy_price: Math.round(avgPrice * 10000) / 10000,
+          is_ledger_managed: true,
           updated_at: now,
         };
       } else {
@@ -1078,6 +1209,9 @@ export class PortfolioStorage {
           currency: 'INR',
           data_source: 'MANUAL',
           as_of: now,
+          opening_quantity: baseQty,
+          opening_buy_price: basePrice,
+          is_ledger_managed: true,
           created_at: now,
           updated_at: now,
         });
@@ -1086,6 +1220,7 @@ export class PortfolioStorage {
       state.holdings.splice(existingIdx, 1);
     }
   }
+
 
   // ─── Market Prices ──────────────────────────────────────────
 

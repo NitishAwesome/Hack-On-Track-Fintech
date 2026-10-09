@@ -13,32 +13,53 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Shared Indian Rupee currency formatter using full number representation.
+ * Standard Indian grouping (lakhs, crores), ₹ symbol prefix, 2 decimal places.
+ * Requirement: Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+ */
+export const inrCurrencyFormatter = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/**
  * Format a number as Indian Rupees (₹)
+ * Defaults to full currency representation (never abbreviated with K, M, B, etc.).
  */
 export function formatCurrency(
   value: number,
   compact = false,
   decimals = 2
 ): string {
+  const normalizedValue = Object.is(value, -0) || value === 0 ? 0 : value;
+
   if (compact) {
-    if (Math.abs(value) >= 1_00_00_000) {
-      return `₹${(value / 1_00_00_000).toFixed(2)}Cr`;
+    if (Math.abs(normalizedValue) >= 1_00_00_000) {
+      return `₹${(normalizedValue / 1_00_00_000).toFixed(2)}Cr`;
     }
-    if (Math.abs(value) >= 1_00_000) {
-      return `₹${(value / 1_00_000).toFixed(2)}L`;
+    if (Math.abs(normalizedValue) >= 1_00_000) {
+      return `₹${(normalizedValue / 1_00_000).toFixed(2)}L`;
     }
-    if (Math.abs(value) >= 1_000) {
-      return `₹${(value / 1_000).toFixed(1)}K`;
+    if (Math.abs(normalizedValue) >= 1_000) {
+      return `₹${(normalizedValue / 1_000).toFixed(1)}K`;
     }
+  }
+  if (decimals === 2) {
+    return inrCurrencyFormatter.format(normalizedValue);
   }
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(value);
+  }).format(normalizedValue);
 }
 
+/**
+ * Safe wrapper for currency formatting with fallback
+ */
 export function formatCurrencySafe(
   value: number | null | undefined,
   fallback = 'Price unavailable',
@@ -49,6 +70,22 @@ export function formatCurrencySafe(
     return fallback;
   }
   return formatCurrency(value, compact, decimals);
+}
+
+/**
+ * Dedicated stock price and quote currency formatter.
+ * Formats full numeric stock price, quotes, previous close, and purchase prices
+ * using standard Indian Rupee notation (e.g. ₹4,900.00). Never abbreviates as K, M, or B.
+ */
+export function formatStockPrice(
+  value: number | null | undefined,
+  fallback = 'Price unavailable'
+): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return fallback;
+  }
+  const normalizedValue = Object.is(value, -0) || value === 0 ? 0 : value;
+  return inrCurrencyFormatter.format(normalizedValue);
 }
 
 /**

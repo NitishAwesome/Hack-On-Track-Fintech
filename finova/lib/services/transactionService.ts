@@ -157,7 +157,109 @@ export class TransactionService {
   }
 
   /**
-   * Delete an investment transaction.
+   * Record a transaction atomically with holding update via PostgreSQL RPC.
+   * Guarantees dual-success or complete rollback; prevents overselling and race conditions.
+   */
+  public static async recordTransactionAtomic(
+    input: {
+      broker_account_id: string;
+      instrument_id: string;
+      transaction_type: string;
+      quantity: number;
+      unit_price: number;
+      gross_amount: number;
+      fees?: number;
+      taxes?: number;
+      net_amount?: number;
+      transaction_date?: string;
+      settlement_date?: string | null;
+      source?: string;
+      external_reference?: string | null;
+      notes?: string | null;
+      reconcile_holding?: boolean;
+      allow_oversell?: boolean;
+    },
+    client?: SupabaseClient
+  ): Promise<{
+    data: { transaction: InvestmentTransactionRow; holding?: unknown; status: string } | null;
+    error: string | null;
+  }> {
+    const supabase = client || createClient();
+    const { data, error } = await supabase.rpc('record_transaction_atomic', {
+      p_broker_account_id: input.broker_account_id,
+      p_instrument_id: input.instrument_id,
+      p_transaction_type: input.transaction_type,
+      p_quantity: input.quantity,
+      p_unit_price: input.unit_price,
+      p_gross_amount: input.gross_amount,
+      p_fees: input.fees || 0,
+      p_taxes: input.taxes || 0,
+      p_stt_taxes: input.taxes || 0,
+      p_net_amount: input.net_amount || null,
+      p_transaction_date: input.transaction_date || new Date().toISOString(),
+      p_settlement_date: input.settlement_date || null,
+      p_source: input.source || 'MANUAL',
+      p_external_reference: input.external_reference || null,
+      p_notes: input.notes || null,
+      p_reconcile_holding: input.reconcile_holding !== false,
+      p_allow_oversell: Boolean(input.allow_oversell),
+    });
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    return { data, error: null };
+  }
+
+  /**
+   * Update a transaction and re-reconcile its position atomically.
+   */
+  public static async updateTransactionAtomic(
+    id: string,
+    updates: {
+      quantity?: number;
+      unit_price?: number;
+      gross_amount?: number;
+      fees?: number;
+      taxes?: number;
+      net_amount?: number;
+      transaction_date?: string;
+      settlement_date?: string | null;
+      external_reference?: string | null;
+      notes?: string | null;
+      reconcile_holding?: boolean;
+    },
+    client?: SupabaseClient
+  ): Promise<{
+    data: { transaction: InvestmentTransactionRow; reconciliation?: unknown; status: string } | null;
+    error: string | null;
+  }> {
+    const supabase = client || createClient();
+    const { data, error } = await supabase.rpc('update_transaction_atomic', {
+      p_transaction_id: id,
+      p_quantity: updates.quantity,
+      p_unit_price: updates.unit_price,
+      p_gross_amount: updates.gross_amount,
+      p_fees: updates.fees,
+      p_taxes: updates.taxes,
+      p_net_amount: updates.net_amount,
+      p_transaction_date: updates.transaction_date,
+      p_settlement_date: updates.settlement_date,
+      p_external_reference: updates.external_reference,
+      p_notes: updates.notes,
+      p_reconcile_holding: updates.reconcile_holding !== false,
+    });
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    return { data, error: null };
+  }
+
+  /**
+   * Delete an investment transaction (simple delete).
    */
   public static async deleteTransaction(
     id: string,
@@ -178,4 +280,54 @@ export class TransactionService {
 
     return { success: true, error: null };
   }
+
+  /**
+   * Delete a transaction and re-reconcile its position atomically.
+   * Rejects deletion if subsequent sales depend on these shares.
+   */
+  public static async deleteTransactionAtomic(
+    id: string,
+    reconcileHolding: boolean = true,
+    client?: SupabaseClient
+  ): Promise<{
+    data: { deleted_id: string; reconciliation?: unknown; status: string } | null;
+    error: string | null;
+  }> {
+    const supabase = client || createClient();
+    const { data, error } = await supabase.rpc('delete_transaction_atomic', {
+      p_transaction_id: id,
+      p_reconcile_holding: reconcileHolding,
+    });
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    return { data, error: null };
+  }
+
+  /**
+   * Reconcile a single holding position from transaction history atomically.
+   */
+  public static async reconcilePositionAtomic(
+    brokerAccountId: string,
+    instrumentId: string,
+    client?: SupabaseClient
+  ): Promise<{
+    data: { status: string; quantity?: number; average_buy_price?: number; holding?: unknown } | null;
+    error: string | null;
+  }> {
+    const supabase = client || createClient();
+    const { data, error } = await supabase.rpc('reconcile_position_atomic', {
+      p_broker_account_id: brokerAccountId,
+      p_instrument_id: instrumentId,
+    });
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    return { data, error: null };
+  }
 }
+

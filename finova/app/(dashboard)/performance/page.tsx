@@ -61,7 +61,7 @@ function CustomTooltip({
       </p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: 'rgb(var(--muted))' }}>
-          {p.name}: {formatCurrency(p.value, true)}
+          {p.name}: {formatCurrency(p.value)}
         </p>
       ))}
     </div>
@@ -395,7 +395,7 @@ export default function PerformancePage() {
                       <div className="text-right">
                         <PercentageBadge value={h.absolute_return_pct!} size="sm" />
                         <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--gain))' }}>
-                          +{formatCurrency(h.absolute_return || 0, true)}
+                          +{formatCurrency(h.absolute_return || 0)}
                         </p>
                       </div>
                     </div>
@@ -436,7 +436,7 @@ export default function PerformancePage() {
                       <div className="text-right">
                         <PercentageBadge value={h.absolute_return_pct!} size="sm" />
                         <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--loss))' }}>
-                          {formatCurrency(h.absolute_return || 0, true)}
+                          {formatCurrency(h.absolute_return || 0)}
                         </p>
                       </div>
                     </div>

@@ -285,6 +285,21 @@ export async function POST(request: Request) {
         );
       }
 
+      // Verify broker account belongs to authenticated user
+      const { data: broker, error: brokerErr } = await supabase
+        .from('broker_accounts')
+        .select('id')
+        .eq('id', brokerAccountId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (brokerErr || !broker) {
+        return NextResponse.json(
+          { error: 'Specified broker account not found or access denied.' },
+          { status: 403 }
+        );
+      }
+
       // Check external_reference deduplication
       if (externalRef) {
         const { data: existingDup } = await supabase
@@ -357,7 +372,78 @@ export async function POST(request: Request) {
         }
       }
 
-      // Insert transaction
+      // Attempt PostgreSQL atomic RPC function first
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('record_transaction_atomic', {
+          p_broker_account_id: brokerAccountId,
+          p_instrument_id: instrumentId,
+          p_transaction_type: txType,
+          p_quantity: quantity,
+          p_unit_price: unitPrice,
+          p_gross_amount: grossAmount,
+          p_fees: fees,
+          p_taxes: taxes,
+          p_stt_taxes: taxes,
+          p_net_amount: netAmount,
+          p_transaction_date: new Date(txDate).toISOString(),
+          p_settlement_date: settlementDate,
+          p_source: 'MANUAL',
+          p_external_reference: externalRef,
+          p_notes: notes,
+          p_reconcile_holding: body.reconcile_holding !== false,
+          p_allow_oversell: Boolean(body.allow_oversell),
+        });
+
+        if (!rpcErr && rpcRes) {
+          const txObj = rpcRes.transaction as InvestmentTransactionRow;
+          // Fetch joined details for response
+          const { data: fullTx } = await supabase
+            .from('investment_transactions')
+            .select(`
+              *,
+              broker_account:broker_accounts(*),
+              instrument:instruments(*)
+            `)
+            .eq('id', txObj.id)
+            .single();
+
+          return NextResponse.json({
+            transaction: fullTx || txObj,
+            holding: rpcRes.holding,
+            message: 'Transaction successfully recorded and portfolio updated atomically.',
+            storageMode: 'cloud',
+          });
+        }
+
+        if (rpcErr) {
+          const errMsg = rpcErr.message || '';
+          if (errMsg.includes('Insufficient quantity to sell') || rpcErr.code === '22003') {
+            return NextResponse.json({ error: errMsg }, { status: 400 });
+          }
+          if (errMsg.includes('already exists') || rpcErr.code === '23505') {
+            return NextResponse.json({ error: errMsg }, { status: 409 });
+          }
+          // Check if RPC function is missing or schema cache is pending reload
+          const isMissingRpc =
+            errMsg.includes('schema cache') ||
+            errMsg.includes('Could not find the function') ||
+            errMsg.includes('does not exist') ||
+            rpcErr.code === 'PGRST202';
+
+          if (!isMissingRpc) {
+            console.error('[API transactions POST] RPC Error:', errMsg);
+            return NextResponse.json({ error: `Atomic transaction failed: ${errMsg}` }, { status: 500 });
+          }
+          console.warn(
+            '[API transactions POST] RPC function pending migration or schema cache reload, falling back to resilient server transaction:',
+            errMsg
+          );
+        }
+      } catch (rpcCatch) {
+        console.warn('[API transactions POST] RPC execution exception, falling back to resilient server transaction:', rpcCatch);
+      }
+
+      // Resilient server-side execution with rollback compensation
       const txPayload: TransactionInsert = {
         user_id: user.id,
         broker_account_id: brokerAccountId,
@@ -393,67 +479,92 @@ export async function POST(request: Request) {
 
       // Reconcile holding position using WAC
       if (body.reconcile_holding !== false && ['BUY', 'SELL', 'BONUS', 'SPLIT'].includes(txType)) {
-        const { data: holding } = await supabase
-          .from('holdings')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('broker_account_id', brokerAccountId)
-          .eq('instrument_id', instrumentId)
-          .maybeSingle();
+        try {
+          const { data: holding, error: holdFetchErr } = await supabase
+            .from('holdings')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('broker_account_id', brokerAccountId)
+            .eq('instrument_id', instrumentId)
+            .maybeSingle();
 
-        const now = new Date().toISOString();
-        if (txType === 'BUY') {
-          if (holding) {
+          if (holdFetchErr) {
+            throw new Error(`Failed to query holding: ${holdFetchErr.message}`);
+          }
+
+          const now = new Date().toISOString();
+          if (txType === 'BUY') {
+            if (holding) {
+              const prevQty = Number(holding.quantity);
+              const prevAvg = Number(holding.average_buy_price);
+              const newTotalQty = prevQty + quantity;
+              const newAvgPrice = (prevQty * prevAvg + quantity * unitPrice) / newTotalQty;
+              const { error: updErr } = await supabase
+                .from('holdings')
+                .update({
+                  quantity: roundQuantity(newTotalQty),
+                  average_buy_price: roundCurrency(newAvgPrice),
+                  is_ledger_managed: true,
+                  updated_at: now,
+                })
+                .eq('id', holding.id);
+              if (updErr) throw updErr;
+            } else {
+              const { error: insErr } = await supabase.from('holdings').insert({
+                user_id: user.id,
+                broker_account_id: brokerAccountId,
+                instrument_id: instrumentId,
+                quantity,
+                average_buy_price: unitPrice,
+                currency: 'INR',
+                data_source: 'MANUAL',
+                as_of: txDate,
+                opening_quantity: 0,
+                opening_buy_price: 0,
+                is_ledger_managed: true,
+              });
+              if (insErr) throw insErr;
+            }
+          } else if (txType === 'SELL' && holding) {
+            const remQty = Math.max(0, Number(holding.quantity) - quantity);
+            if (remQty <= 0) {
+              const { error: delErr } = await supabase.from('holdings').delete().eq('id', holding.id);
+              if (delErr) throw delErr;
+            } else {
+              const { error: updErr } = await supabase
+                .from('holdings')
+                .update({
+                  quantity: roundQuantity(remQty),
+                  is_ledger_managed: true,
+                  updated_at: now,
+                })
+                .eq('id', holding.id);
+              if (updErr) throw updErr;
+            }
+          } else if ((txType === 'BONUS' || txType === 'SPLIT') && holding) {
             const prevQty = Number(holding.quantity);
             const prevAvg = Number(holding.average_buy_price);
             const newTotalQty = prevQty + quantity;
-            const newAvgPrice = (prevQty * prevAvg + quantity * unitPrice) / newTotalQty;
-            await supabase
+            const newAvgPrice = (prevQty * prevAvg) / newTotalQty;
+            const { error: updErr } = await supabase
               .from('holdings')
               .update({
                 quantity: roundQuantity(newTotalQty),
                 average_buy_price: roundCurrency(newAvgPrice),
+                is_ledger_managed: true,
                 updated_at: now,
               })
               .eq('id', holding.id);
-          } else {
-            await supabase.from('holdings').insert({
-              user_id: user.id,
-              broker_account_id: brokerAccountId,
-              instrument_id: instrumentId,
-              quantity,
-              average_buy_price: unitPrice,
-              currency: 'INR',
-              data_source: 'MANUAL',
-              as_of: txDate,
-            });
+            if (updErr) throw updErr;
           }
-        } else if (txType === 'SELL' && holding) {
-          const remQty = Math.max(0, Number(holding.quantity) - quantity);
-          if (remQty <= 0) {
-            await supabase.from('holdings').delete().eq('id', holding.id);
-          } else {
-            await supabase
-              .from('holdings')
-              .update({
-                quantity: roundQuantity(remQty),
-                updated_at: now,
-              })
-              .eq('id', holding.id);
-          }
-        } else if ((txType === 'BONUS' || txType === 'SPLIT') && holding) {
-          const prevQty = Number(holding.quantity);
-          const prevAvg = Number(holding.average_buy_price);
-          const newTotalQty = prevQty + quantity;
-          const newAvgPrice = (prevQty * prevAvg) / newTotalQty;
-          await supabase
-            .from('holdings')
-            .update({
-              quantity: roundQuantity(newTotalQty),
-              average_buy_price: roundCurrency(newAvgPrice),
-              updated_at: now,
-            })
-            .eq('id', holding.id);
+        } catch (holdErr) {
+          // Rollback compensation: Remove inserted transaction to prevent orphan ledger records!
+          console.error('[API transactions POST] Holding update failed, rolling back transaction:', holdErr);
+          await supabase.from('investment_transactions').delete().eq('id', newTx.id);
+          return NextResponse.json(
+            { error: `Holding update failed; transaction was rolled back to maintain ledger consistency: ${holdErr instanceof Error ? holdErr.message : String(holdErr)}` },
+            { status: 500 }
+          );
         }
       }
 
@@ -563,6 +674,93 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
       }
 
+      // Try PostgreSQL atomic RPC update first
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('update_transaction_atomic', {
+          p_transaction_id: id,
+          p_quantity: updates.quantity,
+          p_unit_price: updates.unit_price,
+          p_gross_amount: updates.gross_amount,
+          p_fees: updates.fees,
+          p_taxes: updates.taxes,
+          p_net_amount: updates.net_amount,
+          p_transaction_date: updates.transaction_date,
+          p_settlement_date: updates.settlement_date,
+          p_external_reference: updates.external_reference,
+          p_notes: updates.notes,
+          p_reconcile_holding: true,
+        });
+
+        if (!rpcErr && rpcRes) {
+          const { data: fullTx } = await supabase
+            .from('investment_transactions')
+            .select(`
+              *,
+              broker_account:broker_accounts(*),
+              instrument:instruments(*)
+            `)
+            .eq('id', id)
+            .single();
+
+          return NextResponse.json({
+            transaction: fullTx || rpcRes.transaction,
+            reconciliation: rpcRes.reconciliation,
+            message: 'Transaction updated and position reconciled successfully.',
+            storageMode: 'cloud',
+          });
+        }
+
+        if (rpcErr) {
+          const msg = rpcErr.message || '';
+          if (msg.includes('Unsafe transaction') || rpcErr.code === '22003') {
+            return NextResponse.json({ error: msg }, { status: 400 });
+          }
+          if (!msg.includes('function') || !msg.includes('does not exist')) {
+            return NextResponse.json({ error: msg }, { status: 500 });
+          }
+        }
+      } catch (rpcCatch) {
+        console.warn('[API transactions PUT] RPC exception, falling back:', rpcCatch);
+      }
+
+      // Fallback: update transaction and reconcile position
+      const { data: oldTx, error: oldTxErr } = await supabase
+        .from('investment_transactions')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (oldTxErr || !oldTx) {
+        return NextResponse.json({ error: 'Transaction not found or access denied.' }, { status: 404 });
+      }
+
+      // Verify safe edit by replaying transactions chronologically
+      const { data: allTxs } = await supabase
+        .from('investment_transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('broker_account_id', oldTx.broker_account_id)
+        .eq('instrument_id', oldTx.instrument_id)
+        .order('transaction_date', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      const txList = (allTxs || []).map((t) => (t.id === id ? { ...t, ...updates } : t));
+      let testQty = 0;
+      for (const t of txList) {
+        const type = t.transaction_type.toUpperCase();
+        if (['BUY', 'BONUS', 'SPLIT'].includes(type)) testQty += Number(t.quantity);
+        if (type === 'SELL') {
+          if (Number(t.quantity) > testQty) {
+            return NextResponse.json(
+              { error: `Unsafe transaction edit: would result in negative position of ${testQty - Number(t.quantity)} units on ${t.transaction_date}.` },
+              { status: 400 }
+            );
+          }
+          testQty -= Number(t.quantity);
+        }
+      }
+
       const { data: updated, error } = await supabase
         .from('investment_transactions')
         .update(updates)
@@ -579,27 +777,79 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
+      // Reconcile holding position in cloud mode
+      const { data: holding } = await supabase
+        .from('holdings')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('broker_account_id', oldTx.broker_account_id)
+        .eq('instrument_id', oldTx.instrument_id)
+        .maybeSingle();
+
+      const baseQty = (holding && holding.opening_quantity != null) ? Number(holding.opening_quantity) : 0;
+      const basePrice = (holding && holding.opening_buy_price != null) ? Number(holding.opening_buy_price) : 0;
+      let replayQty = baseQty;
+      let replayCost = baseQty * basePrice;
+      let replayAvg = basePrice;
+
+      for (const t of txList) {
+        const type = t.transaction_type.toUpperCase();
+        if (type === 'BUY') {
+          const newQ = replayQty + Number(t.quantity);
+          replayCost += Number(t.quantity) * Number(t.unit_price);
+          replayAvg = newQ > 0 ? replayCost / newQ : 0;
+          replayQty = newQ;
+        } else if (type === 'SELL') {
+          replayQty = Math.max(0, replayQty - Number(t.quantity));
+          replayCost = replayQty * replayAvg;
+        } else if (['BONUS', 'SPLIT'].includes(type)) {
+          replayQty += Number(t.quantity);
+          replayAvg = replayQty > 0 ? replayCost / replayQty : 0;
+        }
+      }
+
+      const now = new Date().toISOString();
+      if (replayQty > 0) {
+        if (holding) {
+          await supabase.from('holdings').update({
+            quantity: roundQuantity(replayQty),
+            average_buy_price: roundCurrency(replayAvg),
+            is_ledger_managed: true,
+            updated_at: now,
+          }).eq('id', holding.id);
+        }
+      } else if (holding) {
+        await supabase.from('holdings').delete().eq('id', holding.id);
+      }
+
       return NextResponse.json({
         transaction: updated,
-        message: 'Transaction updated successfully.',
+        message: 'Transaction updated successfully and position reconciled.',
         storageMode: 'cloud',
       });
     }
 
     // Local mode
-    const updated = PortfolioStorage.updateTransaction(id, updates, true);
-    if (!updated) {
-      return NextResponse.json({ error: 'Transaction not found.' }, { status: 404 });
+    try {
+      const updated = PortfolioStorage.updateTransaction(id, updates, true);
+      if (!updated) {
+        return NextResponse.json({ error: 'Transaction not found.' }, { status: 404 });
+      }
+
+      const inst = PortfolioStorage.getInstrumentById(updated.instrument_id);
+      const broker = PortfolioStorage.getBrokerAccounts().find((b) => b.id === updated.broker_account_id);
+
+      return NextResponse.json({
+        transaction: { ...updated, instrument: inst, broker_account: broker },
+        message: 'Transaction updated successfully.',
+        storageMode: 'local',
+      });
+    } catch (err: unknown) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Unsafe transaction edit.' },
+        { status: 400 }
+      );
     }
-
-    const inst = PortfolioStorage.getInstrumentById(updated.instrument_id);
-    const broker = PortfolioStorage.getBrokerAccounts().find((b) => b.id === updated.broker_account_id);
-
-    return NextResponse.json({
-      transaction: { ...updated, instrument: inst, broker_account: broker },
-      message: 'Transaction updated successfully.',
-      storageMode: 'local',
-    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to update transaction.' },
@@ -629,6 +879,77 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
       }
 
+      // Try PostgreSQL atomic RPC deletion first
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('delete_transaction_atomic', {
+          p_transaction_id: id,
+          p_reconcile_holding: true,
+        });
+
+        if (!rpcErr && rpcRes) {
+          return NextResponse.json({
+            success: true,
+            reconciliation: rpcRes.reconciliation,
+            message: 'Transaction deleted successfully and position reconciled.',
+            storageMode: 'cloud',
+          });
+        }
+
+        if (rpcErr) {
+          const msg = rpcErr.message || '';
+          if (msg.includes('Unsafe transaction state') || rpcErr.code === '22003') {
+            return NextResponse.json(
+              { error: 'Cannot delete transaction: subsequent sales depend on these shares.' },
+              { status: 400 }
+            );
+          }
+          if (!msg.includes('function') || !msg.includes('does not exist')) {
+            return NextResponse.json({ error: msg }, { status: 500 });
+          }
+        }
+      } catch (rpcCatch) {
+        console.warn('[API transactions DELETE] RPC exception, falling back:', rpcCatch);
+      }
+
+      // Fallback: check dependency before delete
+      const { data: targetTx, error: fetchErr } = await supabase
+        .from('investment_transactions')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchErr || !targetTx) {
+        return NextResponse.json({ error: 'Transaction not found or access denied.' }, { status: 404 });
+      }
+
+      // Fetch remaining transactions to ensure no oversell occurs
+      const { data: remainingTxs } = await supabase
+        .from('investment_transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('broker_account_id', targetTx.broker_account_id)
+        .eq('instrument_id', targetTx.instrument_id)
+        .neq('id', id)
+        .order('transaction_date', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      const txList = remainingTxs || [];
+      let testQty = 0;
+      for (const t of txList) {
+        const type = t.transaction_type.toUpperCase();
+        if (['BUY', 'BONUS', 'SPLIT'].includes(type)) testQty += Number(t.quantity);
+        if (type === 'SELL') {
+          if (Number(t.quantity) > testQty) {
+            return NextResponse.json(
+              { error: `Cannot delete transaction: subsequent sales depend on these shares (would result in negative position of ${testQty - Number(t.quantity)} units).` },
+              { status: 400 }
+            );
+          }
+          testQty -= Number(t.quantity);
+        }
+      }
+
       const { error } = await supabase
         .from('investment_transactions')
         .delete()
@@ -639,24 +960,76 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
+      // Reconcile holding
+      const { data: holding } = await supabase
+        .from('holdings')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('broker_account_id', targetTx.broker_account_id)
+        .eq('instrument_id', targetTx.instrument_id)
+        .maybeSingle();
+
+      const baseQty = (holding && holding.opening_quantity != null) ? Number(holding.opening_quantity) : 0;
+      const basePrice = (holding && holding.opening_buy_price != null) ? Number(holding.opening_buy_price) : 0;
+      let replayQty = baseQty;
+      let replayCost = baseQty * basePrice;
+      let replayAvg = basePrice;
+
+      for (const t of txList) {
+        const type = t.transaction_type.toUpperCase();
+        if (type === 'BUY') {
+          const newQ = replayQty + Number(t.quantity);
+          replayCost += Number(t.quantity) * Number(t.unit_price);
+          replayAvg = newQ > 0 ? replayCost / newQ : 0;
+          replayQty = newQ;
+        } else if (type === 'SELL') {
+          replayQty = Math.max(0, replayQty - Number(t.quantity));
+          replayCost = replayQty * replayAvg;
+        } else if (['BONUS', 'SPLIT'].includes(type)) {
+          replayQty += Number(t.quantity);
+          replayAvg = replayQty > 0 ? replayCost / replayQty : 0;
+        }
+      }
+
+      const now = new Date().toISOString();
+      if (replayQty > 0) {
+        if (holding) {
+          await supabase.from('holdings').update({
+            quantity: roundQuantity(replayQty),
+            average_buy_price: roundCurrency(replayAvg),
+            is_ledger_managed: true,
+            updated_at: now,
+          }).eq('id', holding.id);
+        }
+      } else if (holding) {
+        await supabase.from('holdings').delete().eq('id', holding.id);
+      }
+
       return NextResponse.json({
         success: true,
-        message: 'Transaction deleted successfully.',
+        message: 'Transaction deleted successfully and position reconciled.',
         storageMode: 'cloud',
       });
     }
 
     // Local mode
-    const deleted = PortfolioStorage.deleteTransaction(id, true);
-    if (!deleted) {
-      return NextResponse.json({ error: 'Transaction not found.' }, { status: 404 });
-    }
+    try {
+      const deleted = PortfolioStorage.deleteTransaction(id, true);
+      if (!deleted) {
+        return NextResponse.json({ error: 'Transaction not found.' }, { status: 404 });
+      }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Transaction deleted successfully from local ledger.',
-      storageMode: 'local',
-    });
+      return NextResponse.json({
+        success: true,
+        message: 'Transaction deleted successfully from local ledger.',
+        storageMode: 'local',
+      });
+    } catch (err: unknown) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Cannot delete transaction.' },
+        { status: 400 }
+      );
+    }
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to delete transaction.' },
@@ -664,3 +1037,4 @@ export async function DELETE(request: Request) {
     );
   }
 }
+

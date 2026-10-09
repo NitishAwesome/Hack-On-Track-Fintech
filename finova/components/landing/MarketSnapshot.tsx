@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown, Clock, AlertCircle, RefreshCw } from 'lucide-react';
 import type { MarketDataResponse } from '@/types/market';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 export function MarketSnapshot() {
   const [data, setData] = useState<MarketDataResponse | null>(null);
@@ -194,10 +194,7 @@ export function MarketSnapshot() {
 
                   <div className="mt-2.5">
                     <div className="text-xl font-extrabold tracking-tight tabular-nums text-foreground">
-                      ₹{idx.value.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {formatCurrency(idx.value)}
                     </div>
 
                     <div className="flex items-center gap-1.5 mt-1 text-xs font-semibold tabular-nums">

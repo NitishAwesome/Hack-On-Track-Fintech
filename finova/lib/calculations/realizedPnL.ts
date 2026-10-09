@@ -5,7 +5,7 @@
 // Cash Dividends, Coupon Income, and Fee Deduction Rules.
 // ============================================================
 
-import { roundCurrency, roundQuantity, roundPercent } from './portfolio';
+import { roundCurrency, roundQuantity, roundPercent } from './portfolio.ts';
 import type {
   InvestmentTransactionRow,
   HoldingRow,
@@ -16,8 +16,8 @@ import type {
   CorporateActionAdjustment,
   TransactionWithPnL,
   PositionReconciliationResult,
-  ReconciliationStatus,
 } from '@/types/financial';
+
 
 /**
  * Normalizes transaction type string to standard uppercase union.
@@ -377,24 +377,44 @@ export function reconcileHoldingsWithTransactions(
 
     const ledgerQty = ledgerState.quantity;
     const ledgerAvgPrice = ledgerState.average_cost_per_unit;
-    const diff = roundQuantity(Math.abs(holdingQty - ledgerQty));
+    const openingQty = h.opening_quantity != null ? roundQuantity(Number(h.opening_quantity)) : 0;
+    const expectedQty = roundQuantity(openingQty + ledgerQty);
+    const diff = roundQuantity(Math.abs(holdingQty - (openingQty > 0 ? expectedQty : ledgerQty)));
 
     if (diff < 0.000001) {
-      results.push({
-        instrument_id: h.instrument_id,
-        symbol: '',
-        broker_account_id: h.broker_account_id,
-        broker_name: '',
-        holding_id: h.id,
-        holding_quantity: holdingQty,
-        holding_avg_buy_price: holdingAvgPrice,
-        ledger_quantity: ledgerQty,
-        ledger_avg_buy_price: ledgerAvgPrice,
-        quantity_difference: 0,
-        status: 'FULL_LEDGER_MATCH',
-        is_consistent: true,
-        notes: 'Holding statement perfectly matches tradebook ledger.',
-      });
+      if (openingQty > 0) {
+        results.push({
+          instrument_id: h.instrument_id,
+          symbol: '',
+          broker_account_id: h.broker_account_id,
+          broker_name: '',
+          holding_id: h.id,
+          holding_quantity: holdingQty,
+          holding_avg_buy_price: holdingAvgPrice,
+          ledger_quantity: ledgerQty,
+          ledger_avg_buy_price: ledgerAvgPrice,
+          quantity_difference: 0,
+          status: 'OPENING_BALANCE_PRESERVED',
+          is_consistent: true,
+          notes: `Opening balance of ${openingQty} units preserved alongside tradebook activity (${ledgerQty} net units).`,
+        });
+      } else {
+        results.push({
+          instrument_id: h.instrument_id,
+          symbol: '',
+          broker_account_id: h.broker_account_id,
+          broker_name: '',
+          holding_id: h.id,
+          holding_quantity: holdingQty,
+          holding_avg_buy_price: holdingAvgPrice,
+          ledger_quantity: ledgerQty,
+          ledger_avg_buy_price: ledgerAvgPrice,
+          quantity_difference: 0,
+          status: 'FULL_LEDGER_MATCH',
+          is_consistent: true,
+          notes: 'Holding statement perfectly matches tradebook ledger.',
+        });
+      }
     } else {
       // Quantity mismatch: could be partial tradebook import
       results.push({
@@ -407,13 +427,14 @@ export function reconcileHoldingsWithTransactions(
         holding_avg_buy_price: holdingAvgPrice,
         ledger_quantity: ledgerQty,
         ledger_avg_buy_price: ledgerAvgPrice,
-        quantity_difference: roundQuantity(holdingQty - ledgerQty),
+        quantity_difference: roundQuantity(holdingQty - (openingQty > 0 ? expectedQty : ledgerQty)),
         status: 'QUANTITY_MISMATCH',
         is_consistent: false,
-        notes: `Statement quantity (${holdingQty}) differs from tradebook net units (${ledgerQty}). Holding preserved as authoritative balance.`,
+        notes: `Statement quantity (${holdingQty}) differs from tradebook net units (${ledgerQty}${openingQty > 0 ? ` + ${openingQty} opening` : ''}). Holding preserved as authoritative balance.`,
       });
     }
   }
+
 
   // Check ledger positions that don't have a holding row
   pureLedgerStates.forEach((state, key) => {

@@ -4,11 +4,17 @@ import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import type { AssetCategory, InvestmentInstrumentRow } from '@/types/database';
 
-// GET /api/instruments?q=...&category=... — search instrument catalog
+export const dynamic = 'force-dynamic';
+
+// GET /api/instruments?q=...&category=...&limit=... — search instrument catalog
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q') || '';
   const category = (searchParams.get('category') || undefined) as AssetCategory | undefined;
+  const limitParam = parseInt(searchParams.get('limit') || '40', 10);
+  const limit = Math.min(isNaN(limitParam) || limitParam <= 0 ? 40 : limitParam, 100);
+
+  const localInstruments = PortfolioStorage.getInstruments(q, category);
 
   if (isSupabaseConfigured()) {
     try {
@@ -18,7 +24,7 @@ export async function GET(request: Request) {
         .select('*')
         .eq('is_active', true)
         .order('symbol', { ascending: true })
-        .limit(30);
+        .limit(limit);
 
       if (category) {
         query = query.eq('asset_type', category);
@@ -31,28 +37,41 @@ export async function GET(request: Request) {
       }
 
       const { data, error } = await query;
-      if (error) {
-        console.error('[API /api/instruments GET] Supabase query error:', error.message);
-        return NextResponse.json(
-          { error: 'Database error: failed to search instruments catalog.' },
-          { status: 500 }
-        );
-      }
+      if (!error && data) {
+        // Merge Supabase instruments with local expanded catalog (deduplicated by symbol + exchange)
+        const instrumentMap = new Map<string, InvestmentInstrumentRow>();
 
-      return NextResponse.json({
-        instruments: (data as InvestmentInstrumentRow[]) || [],
-        storageMode: 'cloud',
-      });
+        // 1. Add cloud instruments
+        for (const item of data as InvestmentInstrumentRow[]) {
+          const key = `${item.symbol.toUpperCase()}|${(item.exchange || 'NSE').toUpperCase()}`;
+          instrumentMap.set(key, item);
+        }
+
+        // 2. Supplement with local expanded catalog for any items not yet in cloud DB
+        for (const item of localInstruments) {
+          const key = `${item.symbol.toUpperCase()}|${(item.exchange || 'NSE').toUpperCase()}`;
+          if (!instrumentMap.has(key)) {
+            instrumentMap.set(key, item);
+          }
+        }
+
+        const merged = Array.from(instrumentMap.values()).slice(0, limit);
+        return NextResponse.json({
+          instruments: merged,
+          storageMode: 'cloud',
+          totalFound: merged.length,
+        });
+      }
     } catch (err) {
-      console.error('[API /api/instruments GET] Unexpected error:', err instanceof Error ? err.message : err);
-      return NextResponse.json(
-        { error: 'Unable to connect to instruments database service.' },
-        { status: 500 }
-      );
+      console.warn('[API /api/instruments GET] Supabase search fallback to local catalog:', err instanceof Error ? err.message : err);
     }
   }
 
-  // Explicit local development mode
-  const instruments = PortfolioStorage.getInstruments(q, category);
-  return NextResponse.json({ instruments, storageMode: 'local' });
+  // Explicit local development mode or resilient fallback
+  const results = localInstruments.slice(0, limit);
+  return NextResponse.json({
+    instruments: results,
+    storageMode: 'local',
+    totalFound: results.length,
+  });
 }
