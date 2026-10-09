@@ -56,6 +56,20 @@ BEGIN
   ) THEN
     ALTER TABLE public.instruments ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;
   END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'instruments' AND column_name = 'sector'
+  ) THEN
+    ALTER TABLE public.instruments ADD COLUMN sector TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'instruments' AND column_name = 'industry'
+  ) THEN
+    ALTER TABLE public.instruments ADD COLUMN industry TEXT;
+  END IF;
 END $$;
 
 -- Initial backfill to align created_by and user_id for existing rows
