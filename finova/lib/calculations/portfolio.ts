@@ -96,6 +96,10 @@ export function buildPortfolioSummary(
       holding_count: 0,
       broker_count: 0,
       last_updated: new Date().toISOString(),
+      has_unquoted_assets: false,
+      unquoted_count: 0,
+      priced_count: 0,
+      is_valuation_complete: true,
     };
   }
 
@@ -106,25 +110,39 @@ export function buildPortfolioSummary(
   const pricedHoldings = holdings.filter(
     (h) => h.current_price !== null && typeof h.current_price === 'number'
   );
-
-  const total_current_value = roundCurrency(
-    holdings.reduce((sum, h) => sum + (h.current_value || h.invested_value), 0)
+  const unquotedHoldings = holdings.filter(
+    (h) => h.current_price === null || typeof h.current_price !== 'number'
   );
+  const has_unquoted_assets = unquotedHoldings.length > 0;
+  const is_valuation_complete = unquotedHoldings.length === 0;
 
-  // Return calculable on priced subset
-  const pricedInvested = pricedHoldings.reduce((s, h) => s + h.invested_value, 0);
-  const pricedCurrent = pricedHoldings.reduce(
-    (s, h) => s + (h.current_value || h.invested_value),
-    0
-  );
+  let total_current_value: number | null = null;
+  let total_absolute_return: number | null = null;
+  let total_absolute_return_pct: number | null = null;
 
-  const total_absolute_return =
-    pricedHoldings.length > 0 ? roundCurrency(pricedCurrent - pricedInvested) : 0;
+  if (pricedHoldings.length > 0) {
+    const pricedInvested = pricedHoldings.reduce((s, h) => s + h.invested_value, 0);
+    const pricedCurrent = pricedHoldings.reduce(
+      (s, h) => s + (h.current_value || 0),
+      0
+    );
+    const totalCurrentVal = pricedCurrent + unquotedHoldings.reduce((s, h) => s + h.invested_value, 0);
+    total_current_value = roundCurrency(totalCurrentVal);
 
-  const total_absolute_return_pct =
-    pricedInvested > 0
-      ? roundPercent((total_absolute_return / pricedInvested) * 100)
-      : 0;
+    total_absolute_return = roundCurrency(pricedCurrent - pricedInvested);
+    total_absolute_return_pct =
+      pricedInvested > 0
+        ? roundPercent((total_absolute_return / pricedInvested) * 100)
+        : 0;
+  } else if (!has_unquoted_assets) {
+    total_current_value = 0;
+    total_absolute_return = 0;
+    total_absolute_return_pct = 0;
+  } else {
+    total_current_value = null;
+    total_absolute_return = null;
+    total_absolute_return_pct = null;
+  }
 
   const brokerIds = new Set(
     holdings.map((h) => h.broker_account_id).filter(Boolean)
@@ -140,6 +158,10 @@ export function buildPortfolioSummary(
     holding_count: holdings.length,
     broker_count: brokerIds.size,
     last_updated: new Date().toISOString(),
+    has_unquoted_assets,
+    unquoted_count: unquotedHoldings.length,
+    priced_count: pricedHoldings.length,
+    is_valuation_complete,
   };
 }
 
@@ -150,28 +172,31 @@ export function buildAssetAllocation(
   holdings: HoldingWithMetrics[]
 ): AssetAllocation[] {
   const total = holdings.reduce(
-    (sum, h) => sum + (h.current_value || h.invested_value),
+    (sum, h) => sum + (h.current_price !== null ? h.current_value : h.invested_value),
     0
   );
   if (total === 0) return [];
 
-  const map = new Map<AssetClass, { value: number; count: number }>();
+  const map = new Map<AssetClass, { value: number; count: number; unquoted: number }>();
 
   for (const h of holdings) {
-    const existing = map.get(h.asset_class) ?? { value: 0, count: 0 };
-    const val = h.current_value || h.invested_value;
+    const existing = map.get(h.asset_class) ?? { value: 0, count: 0, unquoted: 0 };
+    const val = h.current_price !== null ? h.current_value : h.invested_value;
+    const isUnquoted = h.current_price === null;
     map.set(h.asset_class, {
       value: existing.value + val,
       count: existing.count + 1,
+      unquoted: existing.unquoted + (isUnquoted ? 1 : 0),
     });
   }
 
   return Array.from(map.entries())
-    .map(([asset_class, { value, count }]) => ({
+    .map(([asset_class, { value, count, unquoted }]) => ({
       asset_class,
       value: roundCurrency(value),
       percentage: roundPercent((value / total) * 100),
       holding_count: count,
+      unquoted_count: unquoted,
     }))
     .sort((a, b) => b.value - a.value);
 }

@@ -116,15 +116,19 @@ export interface HoldingWithMetrics extends Holding {
 }
 
 export interface PortfolioSummary {
-  total_current_value: number;
+  total_current_value: number | null;
   total_invested_value: number;
-  total_absolute_return: number;
-  total_absolute_return_pct: number;
+  total_absolute_return: number | null;
+  total_absolute_return_pct: number | null;
   total_day_change: number | null;
   total_day_change_pct: number | null;
   holding_count: number;
   broker_count: number;
   last_updated: string;
+  has_unquoted_assets?: boolean;
+  unquoted_count?: number;
+  priced_count?: number;
+  is_valuation_complete?: boolean;
 }
 
 export interface AssetAllocation {
@@ -132,6 +136,7 @@ export interface AssetAllocation {
   value: number;
   percentage: number;
   holding_count: number;
+  unquoted_count?: number;
 }
 
 export interface BrokerAllocation {

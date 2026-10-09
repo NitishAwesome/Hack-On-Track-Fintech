@@ -25,7 +25,11 @@ function generateRuleBasedInsight(
         : ' Your holdings are well-balanced across multiple instruments.';
     return `Your risk score sits at ${riskMetrics.risk_score}/100 (${riskMetrics.risk_label}) with an HHI concentration score of ${riskMetrics.hhi.toFixed(2)}.${warningText} Spreading investments across multiple brokers and depositories effectively mitigates counterparty and operational risk.`;
   }
-  return `Your portfolio reflects strong capital deployment with an overall return of ${summary.total_absolute_return_pct >= 0 ? '+' : ''}${summary.total_absolute_return_pct.toFixed(1)}% across ${summary.broker_count} broker accounts. With ${summary.holding_count} holdings spanning ${allocationSummary}, your asset mix provides both growth potential and defensive characteristics. Consider rebalancing periodically to keep your risk within target tolerance.`;
+  const returnPctText =
+    summary.total_absolute_return_pct !== null
+      ? `${summary.total_absolute_return_pct >= 0 ? '+' : ''}${summary.total_absolute_return_pct.toFixed(1)}%`
+      : 'unavailable';
+  return `Your portfolio reflects strong capital deployment with an overall return of ${returnPctText} across ${summary.broker_count} broker accounts. With ${summary.holding_count} holdings spanning ${allocationSummary}, your asset mix provides both growth potential and defensive characteristics. Consider rebalancing periodically to keep your risk within target tolerance.`;
 }
 
 // POST /api/ai/insights — generate AI portfolio insights
@@ -98,9 +102,9 @@ export async function POST(request: Request) {
     portfolio_summary: `You are a friendly, professional financial educator for Indian retail investors.
 The user has a portfolio with the following aggregated metrics (no personal identifiers):
 
-Total Portfolio Value: ₹${summary.total_current_value.toFixed(0)}
+Total Portfolio Value: ${summary.total_current_value !== null ? `₹${summary.total_current_value.toFixed(0)}` : 'Unavailable'}
 Total Invested: ₹${summary.total_invested_value.toFixed(0)}
-Overall Return: ${summary.total_absolute_return_pct.toFixed(2)}%
+Overall Return: ${summary.total_absolute_return_pct !== null ? `${summary.total_absolute_return_pct.toFixed(2)}%` : 'Unavailable'}
 Asset Allocation: ${allocationSummary}
 Number of holdings: ${summary.holding_count}
 Number of brokers/accounts: ${summary.broker_count}

@@ -378,7 +378,7 @@ export default function HoldingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4 space-y-1">
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Invested</p>
-          <p className="text-xl font-bold text-slate-100">
+          <p className="text-xl font-bold text-slate-100" title={formatCurrency(summaryMetrics.totalInvested, false)}>
             {formatCurrency(summaryMetrics.totalInvested, true)}
           </p>
           <p className="text-xs text-slate-500">Across {summaryMetrics.totalCount} total positions</p>
@@ -386,7 +386,7 @@ export default function HoldingsPage() {
 
         <div className="card p-4 space-y-1">
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Current Valuation</p>
-          <p className="text-xl font-bold text-slate-100">
+          <p className="text-xl font-bold text-slate-100" title={formatCurrency(summaryMetrics.totalCurrentVal, false)}>
             {formatCurrency(summaryMetrics.totalCurrentVal, true)}
           </p>
           <p className="text-[11px] text-slate-400 flex items-center gap-1">
@@ -399,7 +399,10 @@ export default function HoldingsPage() {
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Unrealized P&L</p>
           {summaryMetrics.totalPnL !== null ? (
             <div className="flex items-baseline gap-2">
-              <span className={`text-xl font-bold ${summaryMetrics.totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span
+                className={`text-xl font-bold ${summaryMetrics.totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+                title={formatCurrency(summaryMetrics.totalPnL, false)}
+              >
                 {summaryMetrics.totalPnL >= 0 ? '+' : ''}{formatCurrency(summaryMetrics.totalPnL, true)}
               </span>
               {summaryMetrics.totalReturnPct !== null && (
@@ -583,11 +586,17 @@ export default function HoldingsPage() {
                         )}
                       </td>
 
-                      <td className="px-4 py-3.5 text-right font-mono text-slate-300 font-medium">
+                      <td
+                        className="px-4 py-3.5 text-right font-mono text-slate-300 font-medium"
+                        title={formatCurrency(h.invested_value, false)}
+                      >
                         {formatCurrency(h.invested_value, true)}
                       </td>
 
-                      <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-100">
+                      <td
+                        className="px-4 py-3.5 text-right font-mono font-semibold text-slate-100"
+                        title={hasPrice ? formatCurrency(h.current_value || h.invested_value, false) : 'Valuation unavailable'}
+                      >
                         {hasPrice ? (
                           formatCurrency(h.current_value || h.invested_value, true)
                         ) : (
@@ -598,7 +607,10 @@ export default function HoldingsPage() {
                       <td className="px-4 py-3.5 text-right font-mono">
                         {hasPrice && h.absolute_return !== null ? (
                           <div className="flex flex-col items-end">
-                            <span className={`text-xs font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            <span
+                              className={`text-xs font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}
+                              title={formatCurrency(h.absolute_return, false)}
+                            >
                               {isPositive ? '+' : ''}{formatCurrency(h.absolute_return, true)}
                             </span>
                             {returnPct !== null && (

@@ -39,12 +39,35 @@ export function formatCurrency(
   }).format(value);
 }
 
+export function formatCurrencySafe(
+  value: number | null | undefined,
+  fallback = 'Price unavailable',
+  compact = false,
+  decimals = 2
+): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return fallback;
+  }
+  return formatCurrency(value, compact, decimals);
+}
+
 /**
  * Format a percentage value with sign
  */
 export function formatPercent(value: number, decimals = 2): string {
   const sign = value >= 0 ? '+' : '';
   return `${sign}${value.toFixed(decimals)}%`;
+}
+
+export function formatPercentSafe(
+  value: number | null | undefined,
+  fallback = 'P&L unavailable',
+  decimals = 2
+): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return fallback;
+  }
+  return formatPercent(value, decimals);
 }
 
 /**
