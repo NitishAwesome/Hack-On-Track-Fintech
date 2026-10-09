@@ -5,6 +5,8 @@
 export * from './database';
 export * from './financial';
 
+import type { PriceStatus } from './database';
+
 // ----- Database row types (mirrors Supabase schema) -----
 
 export type AssetClass = 'equity' | 'reit' | 'invit' | 'bond' | 'sgb' | 'etf' | 'mf';
@@ -75,6 +77,8 @@ export interface Holding {
   data_source?: string;
   as_of?: string;
   price_updated_at: string | null;
+  price_source?: string | null;
+  price_status?: PriceStatus | null;
   created_at: string;
   updated_at: string;
   sector?: string | null;

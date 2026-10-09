@@ -13,5 +13,6 @@ const nextConfig: NextConfig = {
   },
 };
 
+// Trigger Next.js configuration reload
 export default nextConfig;
 

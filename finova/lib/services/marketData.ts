@@ -1,8 +1,12 @@
 import type { MarketIndex, MarketDataResponse, MarketStatus } from '@/types/market';
 import {
   type MarketDataProvider,
+  type MarketQuote,
   YFinanceMarketDataProvider,
 } from '@/lib/market/providers/yfinanceProvider';
+import { extractBaseSymbol } from '@/lib/market/symbolMapper';
+
+export type { MarketQuote } from '@/lib/market/providers/yfinanceProvider';
 
 /**
  * Calculates official Indian Market (NSE/BSE) status based on IST (Asia/Kolkata).
@@ -49,18 +53,29 @@ export function getIndianMarketStatus(date = new Date()): {
   return { status: 'CLOSED', label: 'Market Closed', isTradingDay: true };
 }
 
-interface CacheEntry {
+interface IndexCacheEntry {
   response: MarketDataResponse;
   expiresAt: number;
 }
 
+interface QuoteCacheEntry {
+  quote: MarketQuote | null;
+  expiresAt: number;
+  fetchedAt: number;
+}
+
 /**
- * Server-Side In-Memory Cache Duration:
- * 60 seconds (60,000 ms).
- * Prevents unnecessary repeated requests to the market data provider while keeping data fresh.
+ * Server-Side In-Memory Cache Durations:
+ * Open market: 60s
+ * Closed market (EOD): 5m (300s)
+ * Negative cache (not found/404): 60s
  */
-const CACHE_TTL_MS = 60 * 1000;
-let memoryCache: CacheEntry | null = null;
+const CACHE_TTL_OPEN_MS = 60 * 1000;
+const CACHE_TTL_CLOSED_MS = 5 * 60 * 1000;
+const CACHE_TTL_NEGATIVE_MS = 60 * 1000;
+
+let indexMemoryCache: IndexCacheEntry | null = null;
+const quoteMemoryCache = new Map<string, QuoteCacheEntry>();
 
 /**
  * Server-Side MarketDataService
@@ -69,12 +84,13 @@ let memoryCache: CacheEntry | null = null;
  * Current Provider: YFinanceMarketDataProvider (development / prototype)
  * Future Provider: UpstoxMarketDataProvider (can be swapped in via setProvider)
  *
- * The frontend (landing page & dashboard) interacts only with this service.
+ * The frontend (landing page, holdings & dashboard) interacts only with this service.
+ * Never invents fake numbers or returns demo seed prices as if they were live quotes.
  */
 export class MarketDataService {
   /**
    * Active market data provider.
-   * Defaults to YFinanceMarketDataProvider for prototype development.
+   * Defaults to YFinanceMarketDataProvider.
    */
   private static provider: MarketDataProvider = new YFinanceMarketDataProvider();
 
@@ -84,7 +100,17 @@ export class MarketDataService {
    */
   public static setProvider(provider: MarketDataProvider): void {
     this.provider = provider;
-    memoryCache = null; // Invalidate cache on provider switch
+    indexMemoryCache = null;
+    quoteMemoryCache.clear();
+  }
+
+  public static getProvider(): MarketDataProvider {
+    return this.provider;
+  }
+
+  public static clearCache(): void {
+    indexMemoryCache = null;
+    quoteMemoryCache.clear();
   }
 
   /**
@@ -99,17 +125,16 @@ export class MarketDataService {
     const marketInfo = getIndianMarketStatus();
 
     // 1. Check server-side cache if not force-refreshed
-    if (!options?.forceRefresh && memoryCache && memoryCache.expiresAt > now) {
+    if (!options?.forceRefresh && indexMemoryCache && indexMemoryCache.expiresAt > now) {
       return {
-        ...memoryCache.response,
-        // Update live market status dynamically based on current time
+        ...indexMemoryCache.response,
         marketStatus: marketInfo.status,
         marketStatusLabel: marketInfo.label,
       };
     }
 
     try {
-      // 2. Fetch from active provider (YFinanceMarketDataProvider)
+      // 2. Fetch from active provider
       const indices = await this.provider.fetchIndices(marketInfo.status);
 
       if (!indices || indices.length === 0) {
@@ -139,15 +164,13 @@ export class MarketDataService {
         source: this.provider.sourceLabel,
       };
 
-      // Store in memory cache
-      memoryCache = {
+      indexMemoryCache = {
         response,
-        expiresAt: now + CACHE_TTL_MS,
+        expiresAt: now + (marketInfo.status === 'OPEN' ? CACHE_TTL_OPEN_MS : CACHE_TTL_CLOSED_MS),
       };
 
       return response;
     } catch {
-      // 3. Provider failure state: NEVER show fake values
       return {
         success: false,
         status: 'UNAVAILABLE',
@@ -172,5 +195,128 @@ export class MarketDataService {
       return null;
     }
     return res.indices.find((idx) => idx.symbol.toUpperCase() === symbol.toUpperCase()) || null;
+  }
+
+  /**
+   * Retrieves a dynamic, verified market quote for a single instrument.
+   * Leverages server-side in-memory cache with market-aware TTL.
+   *
+   * If quote cannot be resolved or is invalid/stale, returns null.
+   * NEVER returns demo or seed prices.
+   */
+  public static async getQuote(
+    symbol: string,
+    exchange: string = 'NSE',
+    options?: { forceRefresh?: boolean }
+  ): Promise<MarketQuote | null> {
+    const cleanSym = symbol?.trim().toUpperCase();
+    if (!cleanSym) return null;
+
+    const cleanEx = (exchange || 'NSE').trim().toUpperCase();
+    const cacheKey = `${cleanSym}|${cleanEx}`;
+    const now = Date.now();
+
+    if (!options?.forceRefresh) {
+      const cached = quoteMemoryCache.get(cacheKey);
+      if (cached && cached.expiresAt > now) {
+        return cached.quote;
+      }
+    }
+
+    const marketInfo = getIndianMarketStatus();
+    try {
+      const quote = await this.provider.fetchQuote(cleanSym, cleanEx);
+
+      const ttl = quote
+        ? marketInfo.status === 'OPEN'
+          ? CACHE_TTL_OPEN_MS
+          : CACHE_TTL_CLOSED_MS
+        : CACHE_TTL_NEGATIVE_MS;
+
+      quoteMemoryCache.set(cacheKey, {
+        quote,
+        expiresAt: now + ttl,
+        fetchedAt: now,
+      });
+
+      return quote;
+    } catch {
+      quoteMemoryCache.set(cacheKey, {
+        quote: null,
+        expiresAt: now + CACHE_TTL_NEGATIVE_MS,
+        fetchedAt: now,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Retrieves dynamic quotes for a list of instruments.
+   * Checks cache first; only queries provider for un-cached or expired symbols.
+   */
+  public static async getQuotes(
+    instruments: Array<{ symbol: string; exchange?: string }>,
+    options?: { forceRefresh?: boolean }
+  ): Promise<Map<string, MarketQuote>> {
+    const resultMap = new Map<string, MarketQuote>();
+    if (!instruments || instruments.length === 0) return resultMap;
+
+    const toFetch: Array<{ symbol: string; exchange?: string }> = [];
+    const now = Date.now();
+
+    for (const inst of instruments) {
+      if (!inst?.symbol) continue;
+      const sym = inst.symbol.trim().toUpperCase();
+      const ex = (inst.exchange || 'NSE').trim().toUpperCase();
+      const cacheKey = `${sym}|${ex}`;
+
+      if (!options?.forceRefresh) {
+        const cached = quoteMemoryCache.get(cacheKey);
+        if (cached && cached.expiresAt > now) {
+          if (cached.quote) {
+            resultMap.set(sym, cached.quote);
+          }
+          continue;
+        }
+      }
+
+      toFetch.push({ symbol: sym, exchange: ex });
+    }
+
+    if (toFetch.length === 0) {
+      return resultMap;
+    }
+
+    const marketInfo = getIndianMarketStatus();
+    const fetchedMap = await this.provider.fetchQuotes(toFetch);
+
+    for (const inst of toFetch) {
+      const sym = inst.symbol.trim().toUpperCase();
+      const baseSym = extractBaseSymbol(sym);
+      const ex = (inst.exchange || 'NSE').trim().toUpperCase();
+      const cacheKey = `${sym}|${ex}`;
+      const quote = fetchedMap.get(sym) || fetchedMap.get(baseSym) || null;
+
+      const ttl = quote
+        ? marketInfo.status === 'OPEN'
+          ? CACHE_TTL_OPEN_MS
+          : CACHE_TTL_CLOSED_MS
+        : CACHE_TTL_NEGATIVE_MS;
+
+      quoteMemoryCache.set(cacheKey, {
+        quote,
+        expiresAt: now + ttl,
+        fetchedAt: now,
+      });
+
+      if (quote) {
+        resultMap.set(sym, quote);
+        if (baseSym !== sym) {
+          resultMap.set(baseSym, quote);
+        }
+      }
+    }
+
+    return resultMap;
   }
 }

@@ -1089,7 +1089,48 @@ export class PortfolioStorage {
 
   // ─── Market Prices ──────────────────────────────────────────
 
-  public static getMarketPrice(symbol: string): InstrumentPriceRow | null {
-    return GLOBAL_SEED_PRICES[symbol.toUpperCase()] || null;
+  private static dynamicPrices: Map<string, InstrumentPriceRow> = new Map();
+
+  public static setMarketPrice(symbol: string, price: InstrumentPriceRow): void {
+    if (!symbol) return;
+    this.dynamicPrices.set(symbol.toUpperCase(), price);
+  }
+
+  public static setMarketPrices(
+    prices: Record<string, InstrumentPriceRow> | Map<string, InstrumentPriceRow>
+  ): void {
+    if (prices instanceof Map) {
+      for (const [sym, p] of prices.entries()) {
+        this.dynamicPrices.set(sym.toUpperCase(), p);
+      }
+    } else if (prices && typeof prices === 'object') {
+      for (const [sym, p] of Object.entries(prices)) {
+        this.dynamicPrices.set(sym.toUpperCase(), p);
+      }
+    }
+  }
+
+  public static clearDynamicPrices(): void {
+    this.dynamicPrices.clear();
+  }
+
+  /**
+   * Retrieves market price for a symbol.
+   * Prioritizes verified dynamic quotes from the market-data feed.
+   * If allowSeedFallback is false, never returns demo/seed fixtures.
+   */
+  public static getMarketPrice(symbol: string, allowSeedFallback = true): InstrumentPriceRow | null {
+    const sym = symbol?.toUpperCase();
+    if (!sym) return null;
+
+    if (this.dynamicPrices.has(sym)) {
+      return this.dynamicPrices.get(sym)!;
+    }
+
+    if (allowSeedFallback) {
+      return GLOBAL_SEED_PRICES[sym] || null;
+    }
+
+    return null;
   }
 }

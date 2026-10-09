@@ -7,7 +7,7 @@ import Papa from 'papaparse';
 import {
   Plus, Upload, Search, X, Loader2,
   LineChart, Trash2, Download, Eye, Building2, Info, Edit2,
-  AlertCircle, CheckCircle2, FileText, ArrowUpDown, Filter, ChevronRight
+  AlertCircle, CheckCircle2, FileText, ArrowUpDown, Filter, ChevronRight, RefreshCw
 } from 'lucide-react';
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -149,6 +149,7 @@ export default function HoldingsPage() {
   const [csvError, setCsvError] = useState<string | null>(null);
   const [importBrokerId, setImportBrokerId] = useState<string>('');
   const [duplicateMode, setDuplicateMode] = useState<'replace' | 'update' | 'skip'>('replace');
+  const [isRefreshingQuotes, setIsRefreshingQuotes] = useState<boolean>(false);
 
   const { data: holdingsData, isLoading } = useQuery({ queryKey: ['holdings'], queryFn: fetchHoldings });
   const { data: brokersData } = useQuery({ queryKey: ['brokers'], queryFn: fetchBrokers });
@@ -346,6 +347,26 @@ export default function HoldingsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2.5">
+          <button
+            id="btn-refresh-quotes"
+            disabled={isRefreshingQuotes || isLoading}
+            onClick={async () => {
+              setIsRefreshingQuotes(true);
+              try {
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: ['holdings'] }),
+                  queryClient.invalidateQueries({ queryKey: ['portfolio-summary'] }),
+                ]);
+              } finally {
+                setTimeout(() => setIsRefreshingQuotes(false), 500);
+              }
+            }}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-colors shadow-sm disabled:opacity-50"
+            title="Refresh dynamic quotes from market feed"
+          >
+            <RefreshCw className={`w-4 h-4 text-emerald-400 ${isRefreshingQuotes ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh Quotes</span>
+          </button>
           <button
             id="btn-import-csv"
             onClick={() => {
@@ -578,11 +599,41 @@ export default function HoldingsPage() {
 
                       <td className="px-4 py-3.5 text-right font-mono">
                         {hasPrice ? (
-                          <span className="text-slate-200">{formatCurrency(h.current_price!)}</span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-slate-100 font-semibold">{formatCurrency(h.current_price!)}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded font-sans font-semibold tracking-wide ${
+                                  h.price_status === 'REALTIME'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : h.price_status === 'DELAYED'
+                                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                    : h.price_status === 'EOD'
+                                    ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                }`}
+                              >
+                                {h.price_status || 'DELAYED'}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-sans">
+                                {h.price_source || 'Yahoo Finance'}
+                              </span>
+                            </div>
+                            {h.price_updated_at && (
+                              <span className="text-[9px] text-slate-500 font-sans" title={h.price_updated_at}>
+                                {new Date(h.price_updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            Price unavailable
-                          </span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-sans font-medium">
+                              Price unavailable
+                            </span>
+                            <span className="text-[9px] text-slate-500 font-sans">
+                              Feed unquoted or stale
+                            </span>
+                          </div>
                         )}
                       </td>
 

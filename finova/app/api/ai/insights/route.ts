@@ -16,7 +16,7 @@ import { generatePortfolioHash } from '@/lib/utils';
 import { enrichHolding, buildPortfolioSummary, buildAssetAllocation } from '@/lib/calculations/portfolio';
 import { buildRiskMetrics } from '@/lib/calculations/risk';
 import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
-import { DEMO_HOLDINGS } from '@/lib/demoData';
+import { resolveQuotesForHoldings } from '@/lib/market/holdingQuoteResolver';
 import {
   generatePortfolioIntelligence,
   sanitizeUntrustedInput,
@@ -142,12 +142,25 @@ export async function POST(request: Request) {
         };
       };
 
+      const quotesMap = await resolveQuotesForHoldings(
+        ((rawHoldings as unknown as RawHoldingItem[]) || []).map((r) => ({
+          symbol: r.instrument?.symbol,
+          exchange: r.instrument?.exchange,
+        }))
+      );
+
       const mapped: Holding[] = ((rawHoldings as unknown as RawHoldingItem[]) || []).map((row) => {
         const inst = row.instrument;
         const broker = row.broker_account;
         const assetClass = mapAssetTypeToClass(inst?.asset_type);
-        const priceRecord = inst?.symbol ? PortfolioStorage.getMarketPrice(inst.symbol) : null;
-        const current_price = priceRecord ? priceRecord.price : null;
+        const sym = inst?.symbol ? inst.symbol.toUpperCase() : '';
+        const quote = sym ? quotesMap.get(sym) : null;
+        const hasValidQuote = Boolean(quote && quote.isValid);
+
+        const current_price = hasValidQuote ? quote!.price : null;
+        const price_updated_at = hasValidQuote ? quote!.price_timestamp : null;
+        const price_source = hasValidQuote ? quote!.source : null;
+        const price_status = hasValidQuote ? quote!.status : null;
 
         return {
           id: row.id,
@@ -166,7 +179,9 @@ export async function POST(request: Request) {
           currency: row.currency || 'INR',
           data_source: row.data_source || 'MANUAL',
           as_of: row.as_of,
-          price_updated_at: priceRecord?.price_timestamp || null,
+          price_updated_at,
+          price_source,
+          price_status,
           created_at: row.created_at,
           updated_at: row.updated_at,
           sector: inst?.sector || null,
@@ -200,14 +215,36 @@ export async function POST(request: Request) {
     const brokers = PortfolioStorage.getBrokerAccounts();
 
     if (rawHoldings.length === 0) {
-      holdings = DEMO_HOLDINGS.map(enrichHolding);
+      holdings = [];
     } else {
-      const mapped: Holding[] = rawHoldings.map((h) => {
+      const holdingsWithInst = rawHoldings.map((h) => {
         const inst = PortfolioStorage.getInstrumentById(h.instrument_id);
+        return {
+          holding: h,
+          inst,
+          symbol: inst?.symbol,
+          exchange: inst?.exchange,
+        };
+      });
+
+      const quotesMap = await resolveQuotesForHoldings(
+        holdingsWithInst.map((item) => ({
+          symbol: item.symbol,
+          exchange: item.exchange,
+        }))
+      );
+
+      const mapped: Holding[] = holdingsWithInst.map(({ holding: h, inst }) => {
         const broker = brokers.find((b) => b.id === h.broker_account_id);
-        const priceRecord = inst ? PortfolioStorage.getMarketPrice(inst.symbol) : null;
+        const sym = inst?.symbol ? inst.symbol.toUpperCase() : '';
+        const quote = sym ? quotesMap.get(sym) : null;
+        const hasValidQuote = Boolean(quote && quote.isValid);
+
+        const current_price = hasValidQuote ? quote!.price : null;
+        const price_updated_at = hasValidQuote ? quote!.price_timestamp : null;
+        const price_source = hasValidQuote ? quote!.source : null;
+        const price_status = hasValidQuote ? quote!.status : null;
         const assetClass = mapAssetTypeToClass(inst?.asset_type);
-        const current_price = priceRecord ? priceRecord.price : null;
 
         return {
           id: h.id,
@@ -226,7 +263,9 @@ export async function POST(request: Request) {
           currency: h.currency,
           data_source: h.data_source,
           as_of: h.as_of,
-          price_updated_at: priceRecord?.price_timestamp || null,
+          price_updated_at,
+          price_source,
+          price_status,
           created_at: h.created_at,
           updated_at: h.updated_at,
           sector: inst?.sector || null,

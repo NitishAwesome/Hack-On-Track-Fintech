@@ -5,8 +5,9 @@ export interface MarketIndex {
   name: string;
   symbol: string;
   value: number;
-  change: number;
-  changePercent: number;
+  change: number | null;
+  changePercent: number | null;
+  previousClose?: number | null;
   timestamp: string;
   marketStatus: MarketStatus;
   source: string;

@@ -9,7 +9,10 @@ import {
 import { buildRiskMetrics } from '@/lib/calculations/risk';
 import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
+import { resolveQuotesForHoldings } from '@/lib/market/holdingQuoteResolver';
 import type { Holding, AssetClass, Exchange, AccountType } from '@/types/portfolio';
+
+export const dynamic = 'force-dynamic';
 
 function mapAssetTypeToClass(assetType?: string): AssetClass {
   if (assetType === 'STOCK') return 'equity';
@@ -97,12 +100,26 @@ export async function GET() {
         };
       };
 
-      const holdings: Holding[] = ((rawHoldings as unknown as RawHoldingItem[]) || []).map((row) => {
+      const rawItems = (rawHoldings as unknown as RawHoldingItem[]) || [];
+      const quotesMap = await resolveQuotesForHoldings(
+        rawItems.map((r) => ({
+          symbol: r.instrument?.symbol,
+          exchange: r.instrument?.exchange,
+        }))
+      );
+
+      const holdings: Holding[] = rawItems.map((row) => {
         const inst = row.instrument;
         const broker = row.broker_account;
         const assetClass = mapAssetTypeToClass(inst?.asset_type);
-        const priceRecord = inst?.symbol ? PortfolioStorage.getMarketPrice(inst.symbol) : null;
-        const current_price = priceRecord ? priceRecord.price : null;
+        const sym = inst?.symbol ? inst.symbol.toUpperCase() : '';
+        const quote = sym ? quotesMap.get(sym) : null;
+        const hasValidQuote = Boolean(quote && quote.isValid);
+
+        const current_price = hasValidQuote ? quote!.price : null;
+        const price_updated_at = hasValidQuote ? quote!.price_timestamp : null;
+        const price_source = hasValidQuote ? quote!.source : null;
+        const price_status = hasValidQuote ? quote!.status : null;
 
         return {
           id: row.id,
@@ -121,7 +138,9 @@ export async function GET() {
           currency: row.currency || 'INR',
           data_source: row.data_source || 'MANUAL',
           as_of: row.as_of,
-          price_updated_at: priceRecord?.price_timestamp || null,
+          price_updated_at,
+          price_source,
+          price_status,
           created_at: row.created_at,
           updated_at: row.updated_at,
           sector: inst?.sector || null,
@@ -164,12 +183,29 @@ export async function GET() {
   const rawHoldings = PortfolioStorage.getHoldings();
   const brokers = PortfolioStorage.getBrokerAccounts();
 
-  const holdings: Holding[] = rawHoldings.map((h) => {
+  const holdingsWithInst = rawHoldings.map((h) => {
     const inst = PortfolioStorage.getInstrumentById(h.instrument_id);
+    return { h, inst };
+  });
+
+  const quotesMap = await resolveQuotesForHoldings(
+    holdingsWithInst.map(({ inst }) => ({
+      symbol: inst?.symbol,
+      exchange: inst?.exchange,
+    }))
+  );
+
+  const holdings: Holding[] = holdingsWithInst.map(({ h, inst }) => {
     const broker = brokers.find((b) => b.id === h.broker_account_id);
-    const priceRecord = inst ? PortfolioStorage.getMarketPrice(inst.symbol) : null;
+    const sym = inst?.symbol ? inst.symbol.toUpperCase() : '';
+    const quote = sym ? quotesMap.get(sym) : null;
+    const hasValidQuote = Boolean(quote && quote.isValid);
+
+    const current_price = hasValidQuote ? quote!.price : null;
+    const price_updated_at = hasValidQuote ? quote!.price_timestamp : null;
+    const price_source = hasValidQuote ? quote!.source : null;
+    const price_status = hasValidQuote ? quote!.status : null;
     const assetClass = mapAssetTypeToClass(inst?.asset_type);
-    const current_price = priceRecord ? priceRecord.price : null;
 
     return {
       id: h.id,
@@ -188,7 +224,9 @@ export async function GET() {
       currency: h.currency,
       data_source: h.data_source,
       as_of: h.as_of,
-      price_updated_at: priceRecord?.price_timestamp || null,
+      price_updated_at,
+      price_source,
+      price_status,
       created_at: h.created_at,
       updated_at: h.updated_at,
       sector: inst?.sector || null,

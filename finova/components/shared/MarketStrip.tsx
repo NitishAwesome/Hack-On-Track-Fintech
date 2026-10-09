@@ -177,7 +177,14 @@ export function MarketStrip({ className, showDisclosure = true }: MarketStripPro
                     );
                   }
 
-                  const isPositive = idx.change >= 0;
+                  const hasChange =
+                    idx.change !== null &&
+                    idx.changePercent !== null &&
+                    typeof idx.change === 'number' &&
+                    typeof idx.changePercent === 'number';
+                  const isZero = hasChange && idx.change === 0;
+                  const isPositive = hasChange && idx.change! > 0;
+                  const isNegative = hasChange && idx.change! < 0;
                   const TrendIcon = isPositive ? TrendingUp : TrendingDown;
 
                   return (
@@ -204,27 +211,35 @@ export function MarketStrip({ className, showDisclosure = true }: MarketStripPro
 
                       {/* Right: Absolute & Percentage Change */}
                       <div className="flex flex-col items-end justify-center text-right flex-shrink-0">
-                        <span
-                          className={cn(
-                            'text-xs font-bold tabular-nums flex items-center gap-0.5 leading-tight',
-                            isPositive ? 'text-gain' : 'text-loss'
-                          )}
-                        >
-                          <TrendIcon className="w-3 h-3 flex-shrink-0" />
-                          <span>
-                            {isPositive ? '+' : ''}
-                            {idx.change.toFixed(2)}
+                        {hasChange ? (
+                          <>
+                            <span
+                              className={cn(
+                                'text-xs font-bold tabular-nums flex items-center gap-0.5 leading-tight',
+                                isPositive ? 'text-gain' : isNegative ? 'text-loss' : 'text-muted'
+                              )}
+                            >
+                              {!isZero && <TrendIcon className="w-3 h-3 flex-shrink-0" />}
+                              <span>
+                                {isPositive ? '+' : ''}
+                                {idx.change!.toFixed(2)}
+                              </span>
+                            </span>
+                            <span
+                              className={cn(
+                                'text-[10px] sm:text-[11px] font-semibold tabular-nums leading-tight',
+                                isPositive ? 'text-gain' : isNegative ? 'text-loss' : 'text-muted'
+                              )}
+                            >
+                              ({isPositive ? '+' : ''}
+                              {idx.changePercent!.toFixed(2)}%)
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-muted font-medium italic">
+                            Change unavailable
                           </span>
-                        </span>
-                        <span
-                          className={cn(
-                            'text-[10px] sm:text-[11px] font-semibold tabular-nums leading-tight',
-                            isPositive ? 'text-gain' : 'text-loss'
-                          )}
-                        >
-                          ({isPositive ? '+' : ''}
-                          {idx.changePercent.toFixed(2)}%)
-                        </span>
+                        )}
                       </div>
                     </div>
                   );

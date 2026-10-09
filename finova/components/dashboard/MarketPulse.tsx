@@ -59,7 +59,14 @@ export function MarketPulse({ indices, className }: MarketPulseProps) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-3">
         {hasLiveData
           ? liveIndices.map((index) => {
-              const isPositive = index.change >= 0;
+              const hasChange =
+                index.change !== null &&
+                index.changePercent !== null &&
+                typeof index.change === 'number' &&
+                typeof index.changePercent === 'number';
+              const isZero = hasChange && index.change === 0;
+              const isPositive = hasChange && index.change! > 0;
+              const isNegative = hasChange && index.change! < 0;
               const TrendIcon = isPositive ? TrendingUp : TrendingDown;
 
               return (
@@ -102,17 +109,26 @@ export function MarketPulse({ indices, className }: MarketPulseProps) {
                     </div>
 
                     <div className="flex items-center gap-1.5 mt-1 text-xs font-semibold tabular-nums">
-                      <span
-                        className="flex items-center gap-0.5"
-                        style={{
-                          color: isPositive ? 'rgb(var(--gain))' : 'rgb(var(--loss))',
-                        }}
-                      >
-                        <TrendIcon className="w-3.5 h-3.5" />
-                        {isPositive ? '+' : ''}
-                        {index.change.toFixed(2)} ({isPositive ? '+' : ''}
-                        {index.changePercent.toFixed(2)}%)
-                      </span>
+                      {hasChange ? (
+                        <span
+                          className="flex items-center gap-0.5"
+                          style={{
+                            color: isPositive ? 'rgb(var(--gain))' : isNegative ? 'rgb(var(--loss))' : 'rgb(var(--muted))',
+                          }}
+                        >
+                          {!isZero && <TrendIcon className="w-3.5 h-3.5" />}
+                          {isPositive ? '+' : ''}
+                          {index.change!.toFixed(2)} ({isPositive ? '+' : ''}
+                          {index.changePercent!.toFixed(2)}%)
+                        </span>
+                      ) : (
+                        <span
+                          className="text-xs font-medium italic"
+                          style={{ color: 'rgb(var(--muted))' }}
+                        >
+                          Change unavailable
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

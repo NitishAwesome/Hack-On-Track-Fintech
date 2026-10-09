@@ -168,7 +168,14 @@ export function MarketSnapshot() {
         {!loading && data && data.success && data.indices.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             {data.indices.map((idx) => {
-              const isPositive = idx.change >= 0;
+              const hasChange =
+                idx.change !== null &&
+                idx.changePercent !== null &&
+                typeof idx.change === 'number' &&
+                typeof idx.changePercent === 'number';
+              const isZero = hasChange && idx.change === 0;
+              const isPositive = hasChange && idx.change! > 0;
+              const isNegative = hasChange && idx.change! < 0;
               const TrendIcon = isPositive ? TrendingUp : TrendingDown;
 
               return (
@@ -194,17 +201,23 @@ export function MarketSnapshot() {
                     </div>
 
                     <div className="flex items-center gap-1.5 mt-1 text-xs font-semibold tabular-nums">
-                      <span
-                        className={cn(
-                          'flex items-center gap-0.5',
-                          isPositive ? 'text-gain' : 'text-loss'
-                        )}
-                      >
-                        <TrendIcon className="w-3.5 h-3.5" />
-                        {isPositive ? '+' : ''}
-                        {idx.change.toFixed(2)} ({isPositive ? '+' : ''}
-                        {idx.changePercent.toFixed(2)}%)
-                      </span>
+                      {hasChange ? (
+                        <span
+                          className={cn(
+                            'flex items-center gap-0.5',
+                            isPositive ? 'text-gain' : isNegative ? 'text-loss' : 'text-muted'
+                          )}
+                        >
+                          {!isZero && <TrendIcon className="w-3.5 h-3.5" />}
+                          {isPositive ? '+' : ''}
+                          {idx.change!.toFixed(2)} ({isPositive ? '+' : ''}
+                          {idx.changePercent!.toFixed(2)}%)
+                        </span>
+                      ) : (
+                        <span className="text-muted text-[11px] font-medium italic">
+                          Change unavailable
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

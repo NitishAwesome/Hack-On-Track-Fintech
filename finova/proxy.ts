@@ -79,6 +79,12 @@ export async function proxy(request: NextRequest) {
 
   // 1. Unauthenticated users attempting to access protected routes
   if (!user && !isPublic) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'Authentication required. Please sign in.' },
+        { status: 401 }
+      );
+    }
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/login';
     // Preserve intended destination safely

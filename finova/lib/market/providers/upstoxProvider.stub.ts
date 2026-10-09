@@ -1,5 +1,5 @@
 import type { MarketIndex, MarketStatus } from '@/types/market';
-import type { MarketDataProvider } from './yfinanceProvider';
+import type { MarketDataProvider, MarketQuote } from './yfinanceProvider';
 
 /**
  * UpstoxMarketDataProvider (Future Architecture Template)
@@ -26,16 +26,25 @@ export class UpstoxMarketDataProvider implements MarketDataProvider {
     if (!this.apiKey || !this.accessToken) {
       throw new Error('Upstox API credentials are not configured.');
     }
+    throw new Error('Upstox provider is a future implementation stub.');
+  }
 
-    // Example future implementation:
-    // const res = await fetch('https://api.upstox.com/v2/market-quote/quotes?instrument_key=NSE_INDEX|Nifty 50,BSE_INDEX|SENSEX,NSE_INDEX|Nifty Bank', {
-    //   headers: {
-    //     Authorization: `Bearer ${this.accessToken}`,
-    //     Accept: 'application/json',
-    //   },
-    // });
-    // parse and return MarketIndex[]
+  async fetchQuote(_symbol: string, _exchange?: string): Promise<MarketQuote | null> {
+    void _symbol;
+    void _exchange;
+    if (!this.apiKey || !this.accessToken) {
+      throw new Error('Upstox API credentials are not configured.');
+    }
+    throw new Error('Upstox provider is a future implementation stub.');
+  }
 
+  async fetchQuotes(
+    _instruments: Array<{ symbol: string; exchange?: string }>
+  ): Promise<Map<string, MarketQuote>> {
+    void _instruments;
+    if (!this.apiKey || !this.accessToken) {
+      throw new Error('Upstox API credentials are not configured.');
+    }
     throw new Error('Upstox provider is a future implementation stub.');
   }
 }
