@@ -38,8 +38,8 @@ export default function PerformancePage() {
   const holdings: HoldingWithMetrics[] = data?.holdings ?? [];
 
   // Sort by absolute return % for gainers/losers
-  const gainers = [...holdings].sort((a, b) => b.absolute_return_pct - a.absolute_return_pct).slice(0, 5);
-  const losers = [...holdings].sort((a, b) => a.absolute_return_pct - b.absolute_return_pct).slice(0, 5);
+  const gainers = [...holdings].sort((a, b) => (b.absolute_return_pct ?? 0) - (a.absolute_return_pct ?? 0)).slice(0, 5);
+  const losers = [...holdings].sort((a, b) => (a.absolute_return_pct ?? 0) - (b.absolute_return_pct ?? 0)).slice(0, 5);
 
   // Simulated performance chart data (cumulative invested vs value over time)
   // In Phase 2 this will use real transaction history
@@ -131,21 +131,21 @@ export default function PerformancePage() {
                 Top Gainers
               </h2>
               <div className="space-y-3">
-                {gainers.filter((h) => h.absolute_return_pct >= 0).slice(0, 5).map((h) => (
+                {gainers.filter((h) => h.absolute_return_pct !== null && h.absolute_return_pct >= 0).slice(0, 5).map((h) => (
                   <div key={h.id} className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium" style={{ color: 'rgb(var(--foreground))' }}>{h.name}</p>
                       <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>{h.symbol} · {ASSET_CLASS_LABELS[h.asset_class]}</p>
                     </div>
                     <div className="text-right">
-                      <PercentageBadge value={h.absolute_return_pct} size="sm" />
+                      <PercentageBadge value={h.absolute_return_pct!} size="sm" />
                       <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--gain))' }}>
-                        +{formatCurrency(h.absolute_return, true)}
+                        +{formatCurrency(h.absolute_return || 0, true)}
                       </p>
                     </div>
                   </div>
                 ))}
-                {gainers.filter((h) => h.absolute_return_pct >= 0).length === 0 && (
+                {gainers.filter((h) => h.absolute_return_pct !== null && h.absolute_return_pct >= 0).length === 0 && (
                   <p className="text-sm" style={{ color: 'rgb(var(--muted))' }}>No gainers yet</p>
                 )}
               </div>
@@ -157,21 +157,21 @@ export default function PerformancePage() {
                 Underperformers
               </h2>
               <div className="space-y-3">
-                {losers.filter((h) => h.absolute_return_pct < 0).slice(0, 5).map((h) => (
+                {losers.filter((h) => h.absolute_return_pct !== null && h.absolute_return_pct < 0).slice(0, 5).map((h) => (
                   <div key={h.id} className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium" style={{ color: 'rgb(var(--foreground))' }}>{h.name}</p>
                       <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>{h.symbol} · {ASSET_CLASS_LABELS[h.asset_class]}</p>
                     </div>
                     <div className="text-right">
-                      <PercentageBadge value={h.absolute_return_pct} size="sm" />
+                      <PercentageBadge value={h.absolute_return_pct!} size="sm" />
                       <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--loss))' }}>
-                        {formatCurrency(h.absolute_return, true)}
+                        {formatCurrency(h.absolute_return || 0, true)}
                       </p>
                     </div>
                   </div>
                 ))}
-                {losers.filter((h) => h.absolute_return_pct < 0).length === 0 && (
+                {losers.filter((h) => h.absolute_return_pct !== null && h.absolute_return_pct < 0).length === 0 && (
                   <p className="text-sm" style={{ color: 'rgb(var(--muted))' }}>All holdings in profit 🎉</p>
                 )}
               </div>

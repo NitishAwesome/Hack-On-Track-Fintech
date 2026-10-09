@@ -109,8 +109,8 @@ export interface Transaction {
 export interface HoldingWithMetrics extends Holding {
   current_value: number;
   invested_value: number;
-  absolute_return: number;
-  absolute_return_pct: number;
+  absolute_return: number | null;
+  absolute_return_pct: number | null;
   day_change: number | null;
   day_change_pct: number | null;
 }

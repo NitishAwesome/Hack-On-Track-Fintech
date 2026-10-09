@@ -1,6 +1,7 @@
-import { redirect } from 'next/navigation';
+'use client';
 
-// /investments → redirect to existing /holdings implementation
+import HoldingsPage from '../holdings/page';
+
 export default function InvestmentsPage() {
-  redirect('/holdings');
+  return <HoldingsPage />;
 }

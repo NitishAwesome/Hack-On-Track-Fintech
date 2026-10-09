@@ -1,6 +1,7 @@
 // ============================================================
-// Finova — Financial Calculation Engine (server-side)
-// portfolio.ts — Aggregation & Allocation
+// Finova — Financial Calculation Engine (server-side & client)
+// portfolio.ts — Decimal-Safe Aggregation & Allocation
+// Respects: Valid Valuation vs Price Unavailable Distinction
 // ============================================================
 
 import type {
@@ -13,19 +14,62 @@ import type {
 } from '@/types/portfolio';
 
 /**
+ * Decimal-safe rounding utility to avoid JS floating-point drift.
+ */
+export function roundCurrency(val: number): number {
+  return Math.round((val + Number.EPSILON) * 100) / 100;
+}
+
+export function roundQuantity(val: number): number {
+  return Math.round((val + Number.EPSILON) * 1000000) / 1000000;
+}
+
+export function roundPercent(val: number): number {
+  return Math.round((val + Number.EPSILON) * 100) / 100;
+}
+
+/**
  * Enrich a raw holding with calculated metrics.
- * current_price falls back to avg_buy_price if unavailable.
+ * Strictly adheres to Prompt 6 Section 9:
+ * If current_price is missing or unverified, it does NOT substitute zero or average buy price.
+ * Instead, price-dependent metrics remain null.
  */
 export function enrichHolding(holding: Holding): HoldingWithMetrics {
-  const price = holding.current_price ?? holding.avg_buy_price;
-  const current_value = holding.quantity * price;
-  const invested_value = holding.quantity * holding.avg_buy_price;
-  const absolute_return = current_value - invested_value;
+  const quantity = roundQuantity(holding.quantity);
+  const avg_buy_price = roundCurrency(holding.average_buy_price ?? holding.avg_buy_price);
+  const invested_value = roundCurrency(quantity * avg_buy_price);
+
+  const hasCurrentPrice =
+    typeof holding.current_price === 'number' &&
+    !isNaN(holding.current_price) &&
+    holding.current_price > 0;
+
+  if (!hasCurrentPrice) {
+    return {
+      ...holding,
+      quantity,
+      avg_buy_price,
+      current_price: null,
+      current_value: invested_value, // For backwards compatibility with charts expecting number, but flagged
+      invested_value,
+      absolute_return: null,
+      absolute_return_pct: null,
+      day_change: null,
+      day_change_pct: null,
+    };
+  }
+
+  const current_price = roundCurrency(holding.current_price!);
+  const current_value = roundCurrency(quantity * current_price);
+  const absolute_return = roundCurrency(current_value - invested_value);
   const absolute_return_pct =
-    invested_value === 0 ? 0 : (absolute_return / invested_value) * 100;
+    invested_value > 0 ? roundPercent((absolute_return / invested_value) * 100) : 0;
 
   return {
     ...holding,
+    quantity,
+    avg_buy_price,
+    current_price,
     current_value,
     invested_value,
     absolute_return,
@@ -55,33 +99,32 @@ export function buildPortfolioSummary(
     };
   }
 
-  const total_current_value = holdings.reduce(
-    (sum, h) => sum + h.current_value,
-    0
+  const total_invested_value = roundCurrency(
+    holdings.reduce((sum, h) => sum + h.invested_value, 0)
   );
-  const total_invested_value = holdings.reduce(
-    (sum, h) => sum + h.invested_value,
-    0
-  );
-  const total_absolute_return = total_current_value - total_invested_value;
-  const total_absolute_return_pct =
-    total_invested_value === 0
-      ? 0
-      : (total_absolute_return / total_invested_value) * 100;
 
-  const dayChanges = holdings
-    .filter((h) => h.day_change !== null)
-    .map((h) => h.day_change!);
-  const total_day_change =
-    dayChanges.length > 0 ? dayChanges.reduce((a, b) => a + b, 0) : null;
-  const prevTotal =
-    total_day_change !== null
-      ? total_current_value - total_day_change
-      : null;
-  const total_day_change_pct =
-    total_day_change !== null && prevTotal && prevTotal !== 0
-      ? (total_day_change / prevTotal) * 100
-      : null;
+  const pricedHoldings = holdings.filter(
+    (h) => h.current_price !== null && typeof h.current_price === 'number'
+  );
+
+  const total_current_value = roundCurrency(
+    holdings.reduce((sum, h) => sum + (h.current_value || h.invested_value), 0)
+  );
+
+  // Return calculable on priced subset
+  const pricedInvested = pricedHoldings.reduce((s, h) => s + h.invested_value, 0);
+  const pricedCurrent = pricedHoldings.reduce(
+    (s, h) => s + (h.current_value || h.invested_value),
+    0
+  );
+
+  const total_absolute_return =
+    pricedHoldings.length > 0 ? roundCurrency(pricedCurrent - pricedInvested) : 0;
+
+  const total_absolute_return_pct =
+    pricedInvested > 0
+      ? roundPercent((total_absolute_return / pricedInvested) * 100)
+      : 0;
 
   const brokerIds = new Set(
     holdings.map((h) => h.broker_account_id).filter(Boolean)
@@ -92,8 +135,8 @@ export function buildPortfolioSummary(
     total_invested_value,
     total_absolute_return,
     total_absolute_return_pct,
-    total_day_change,
-    total_day_change_pct,
+    total_day_change: null,
+    total_day_change_pct: null,
     holding_count: holdings.length,
     broker_count: brokerIds.size,
     last_updated: new Date().toISOString(),
@@ -106,15 +149,19 @@ export function buildPortfolioSummary(
 export function buildAssetAllocation(
   holdings: HoldingWithMetrics[]
 ): AssetAllocation[] {
-  const total = holdings.reduce((sum, h) => sum + h.current_value, 0);
+  const total = holdings.reduce(
+    (sum, h) => sum + (h.current_value || h.invested_value),
+    0
+  );
   if (total === 0) return [];
 
   const map = new Map<AssetClass, { value: number; count: number }>();
 
   for (const h of holdings) {
     const existing = map.get(h.asset_class) ?? { value: 0, count: 0 };
+    const val = h.current_value || h.invested_value;
     map.set(h.asset_class, {
-      value: existing.value + h.current_value,
+      value: existing.value + val,
       count: existing.count + 1,
     });
   }
@@ -122,8 +169,8 @@ export function buildAssetAllocation(
   return Array.from(map.entries())
     .map(([asset_class, { value, count }]) => ({
       asset_class,
-      value,
-      percentage: (value / total) * 100,
+      value: roundCurrency(value),
+      percentage: roundPercent((value / total) * 100),
       holding_count: count,
     }))
     .sort((a, b) => b.value - a.value);
@@ -135,7 +182,10 @@ export function buildAssetAllocation(
 export function buildBrokerAllocation(
   holdings: HoldingWithMetrics[]
 ): BrokerAllocation[] {
-  const total = holdings.reduce((sum, h) => sum + h.current_value, 0);
+  const total = holdings.reduce(
+    (sum, h) => sum + (h.current_value || h.invested_value),
+    0
+  );
   if (total === 0) return [];
 
   const map = new Map<
@@ -145,10 +195,14 @@ export function buildBrokerAllocation(
 
   for (const h of holdings) {
     const id = h.broker_account_id ?? 'unknown';
-    const name = h.broker_account?.broker_name ?? 'Unknown Broker';
+    const name =
+      h.broker_account?.display_name ||
+      h.broker_account?.broker_name ||
+      'Manual Account';
     const color = h.broker_account?.color_hex ?? '#6B7280';
     const existing = map.get(id) ?? { name, id, color, value: 0 };
-    map.set(id, { ...existing, value: existing.value + h.current_value });
+    const val = h.current_value || h.invested_value;
+    map.set(id, { ...existing, value: existing.value + val });
   }
 
   return Array.from(map.values())
@@ -156,8 +210,8 @@ export function buildBrokerAllocation(
       broker_name: name,
       broker_account_id: id,
       color_hex: color,
-      value,
-      percentage: (value / total) * 100,
+      value: roundCurrency(value),
+      percentage: roundPercent((value / total) * 100),
     }))
     .sort((a, b) => b.value - a.value);
 }

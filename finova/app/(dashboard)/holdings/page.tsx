@@ -1,30 +1,29 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import {
   Plus, Upload, Search, X, Loader2,
-  LineChart, Trash2, Download, Eye, Building2, Info
+  LineChart, Trash2, Download, Eye, Building2, Info, Edit2,
+  AlertCircle, CheckCircle2, FileText, ArrowUpDown, Filter, ChevronRight
 } from 'lucide-react';
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SkeletonTable } from '@/components/shared/Skeletons';
 import { formatCurrency, ASSET_CLASS_LABELS } from '@/lib/utils';
 import type { HoldingWithMetrics, AssetClass, BrokerAccount } from '@/types/portfolio';
+import { GLOBAL_SEED_INSTRUMENTS } from '@/lib/storage/portfolioStorage';
 
-const ASSET_CLASSES: AssetClass[] = ['equity', 'reit', 'invit', 'bond', 'sgb', 'etf', 'mf'];
-
-const ASSET_CLASS_EXPLANATIONS: Record<string, string> = {
-  equity: 'Equity represents shares of ownership in listed companies. Generates returns through stock price appreciation and corporate dividend distributions.',
-  reit: 'Real Estate Investment Trusts (REITs) own commercial properties. Mandated by SEBI to distribute at least 90% of net cash flows as regular quarterly dividends.',
-  invit: 'Infrastructure Investment Trusts (InvITs) own long-term infrastructure assets like power grids and national highways. Generates high, predictable dividend cash flows.',
-  bond: 'Bonds and Government Securities (G-Secs) represent fixed-income loans to sovereigns or corporations. They provide guaranteed periodic coupon payments and capital stability.',
-  sgb: 'Sovereign Gold Bonds are government securities denominated in grams of gold. They offer 2.5% annual sovereign interest and tax-free capital gains at maturity.',
-  etf: 'Exchange Traded Funds track indices like Nifty 50 or Sensex with minimal expense ratios and instant exchange liquidity.',
-  mf: 'Mutual Funds pool capital managed by registered fund houses across equities, debt, and balanced asset classes.',
-};
+const TAB_CATEGORIES: { id: string; label: string; assetClass?: AssetClass }[] = [
+  { id: 'all', label: 'All Investments' },
+  { id: 'stocks', label: 'Stocks', assetClass: 'equity' },
+  { id: 'mutual_funds', label: 'Mutual Funds', assetClass: 'mf' },
+  { id: 'reits', label: 'REITs', assetClass: 'reit' },
+  { id: 'invits', label: 'InvITs', assetClass: 'invit' },
+  { id: 'bonds', label: 'Bonds', assetClass: 'bond' },
+];
 
 async function fetchHoldings() {
   const res = await fetch('/api/portfolio/holdings');
@@ -38,7 +37,7 @@ async function fetchBrokers() {
   return res.json();
 }
 
-async function addHolding(data: Record<string, unknown>) {
+async function addHoldingApi(data: Record<string, unknown>) {
   const res = await fetch('/api/portfolio/holdings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -51,11 +50,24 @@ async function addHolding(data: Record<string, unknown>) {
   return res.json();
 }
 
-async function bulkImportHoldings(holdings: unknown[]) {
+async function updateHoldingApi(data: { id: string; quantity: number; avg_buy_price: number }) {
+  const res = await fetch('/api/portfolio/holdings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to update holding');
+  }
+  return res.json();
+}
+
+async function bulkImportHoldings(data: { holdings: unknown[]; duplicate_mode: string; broker_account_id?: string }) {
   const res = await fetch('/api/portfolio/holdings/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ holdings }),
+    body: JSON.stringify(data),
   });
   if (!res.ok) {
     const err = await res.json();
@@ -83,6 +95,9 @@ interface AddHoldingForm {
   quantity: string;
   avg_buy_price: string;
   broker_account_id: string;
+  isin: string;
+  as_of: string;
+  notes: string;
 }
 
 const EMPTY_FORM: AddHoldingForm = {
@@ -93,54 +108,84 @@ const EMPTY_FORM: AddHoldingForm = {
   quantity: '',
   avg_buy_price: '',
   broker_account_id: '',
+  isin: '',
+  as_of: new Date().toISOString().split('T')[0],
+  notes: '',
 };
 
-interface ParsedCsvRow {
+interface CsvValidationRow {
+  rowNumber: number;
   symbol: string;
   name: string;
   asset_class: AssetClass;
   exchange: string;
   quantity: number;
   avg_buy_price: number;
+  broker_account_id?: string;
+  isin?: string;
+  isValid: boolean;
+  errors: string[];
 }
 
 export default function HoldingsPage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [activeTab, setActiveTab] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [editingHolding, setEditingHolding] = useState<HoldingWithMetrics | null>(null);
+  const [deletingHolding, setDeletingHolding] = useState<HoldingWithMetrics | null>(null);
   const [selectedHolding, setSelectedHolding] = useState<HoldingWithMetrics | null>(null);
 
   const [search, setSearch] = useState('');
-  const [filterClass, setFilterClass] = useState<AssetClass | ''>('');
+  const [selectedBrokerFilter, setSelectedBrokerFilter] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'value' | 'invested' | 'return' | 'name'>('value');
   const [form, setForm] = useState<AddHoldingForm>(EMPTY_FORM);
-  const [sortBy, setSortBy] = useState<'value' | 'return' | 'name'>('value');
+  const [catalogQuery, setCatalogQuery] = useState('');
 
   // CSV Import State
-  const [csvPreview, setCsvPreview] = useState<ParsedCsvRow[]>([]);
+  const [csvRows, setCsvRows] = useState<CsvValidationRow[]>([]);
   const [csvError, setCsvError] = useState<string | null>(null);
+  const [importBrokerId, setImportBrokerId] = useState<string>('');
+  const [duplicateMode, setDuplicateMode] = useState<'replace' | 'update' | 'skip'>('replace');
 
   const { data: holdingsData, isLoading } = useQuery({ queryKey: ['holdings'], queryFn: fetchHoldings });
   const { data: brokersData } = useQuery({ queryKey: ['brokers'], queryFn: fetchBrokers });
 
+  const holdings: HoldingWithMetrics[] = holdingsData?.holdings ?? [];
+  const brokers: BrokerAccount[] = brokersData?.brokers ?? [];
+
+  // Mutations
   const addMutation = useMutation({
-    mutationFn: addHolding,
+    mutationFn: addHoldingApi,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['holdings'] });
+      queryClient.invalidateQueries({ queryKey: ['brokers'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio-summary'] });
       setShowAddModal(false);
       setForm(EMPTY_FORM);
+      setCatalogQuery('');
+    },
+  });
+
+  const editMutation = useMutation({
+    mutationFn: updateHoldingApi,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['holdings'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio-summary'] });
+      setEditingHolding(null);
     },
   });
 
   const importMutation = useMutation({
     mutationFn: bulkImportHoldings,
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['holdings'] });
+      queryClient.invalidateQueries({ queryKey: ['brokers'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio-summary'] });
       setShowImportModal(false);
-      setCsvPreview([]);
+      setCsvRows([]);
       setCsvError(null);
     },
   });
@@ -149,44 +194,58 @@ export default function HoldingsPage() {
     mutationFn: deleteHoldingApi,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['holdings'] });
+      queryClient.invalidateQueries({ queryKey: ['brokers'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio-summary'] });
+      setDeletingHolding(null);
       if (selectedHolding) setSelectedHolding(null);
     },
   });
 
-  const holdings: HoldingWithMetrics[] = holdingsData?.holdings ?? [];
-  const brokers: BrokerAccount[] = brokersData?.brokers ?? [];
+  // Calculate Unified Summary
+  const summaryMetrics = useMemo(() => {
+    const totalInvested = holdings.reduce((sum, h) => sum + h.invested_value, 0);
+    const pricedHoldings = holdings.filter((h) => h.current_price !== null && typeof h.current_price === 'number');
+    const totalCurrentVal = holdings.reduce((sum, h) => sum + (h.current_value || h.invested_value), 0);
+    const pricedInvested = pricedHoldings.reduce((sum, h) => sum + h.invested_value, 0);
+    const pricedCurrent = pricedHoldings.reduce((sum, h) => sum + (h.current_value || h.invested_value), 0);
+    const totalPnL = pricedHoldings.length > 0 ? pricedCurrent - pricedInvested : null;
+    const totalReturnPct = pricedInvested > 0 && totalPnL !== null ? (totalPnL / pricedInvested) * 100 : null;
 
-  const filtered = holdings
-    .filter((h) => {
-      const matchSearch =
-        !search ||
-        h.name.toLowerCase().includes(search.toLowerCase()) ||
-        h.symbol.toLowerCase().includes(search.toLowerCase());
-      const matchClass = !filterClass || h.asset_class === filterClass;
-      return matchSearch && matchClass;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'value') return b.current_value - a.current_value;
-      if (sortBy === 'return') return b.absolute_return_pct - a.absolute_return_pct;
-      return a.name.localeCompare(b.name);
-    });
+    return {
+      totalInvested,
+      totalCurrentVal,
+      totalPnL,
+      totalReturnPct,
+      totalCount: holdings.length,
+      pricedCount: pricedHoldings.length,
+    };
+  }, [holdings]);
 
-  function handleFormChange(key: keyof AddHoldingForm, value: string) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
+  // Tab & Filters logic
+  const currentTabAssetClass = TAB_CATEGORIES.find((t) => t.id === activeTab)?.assetClass;
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    addMutation.mutate({
-      ...form,
-      quantity: Number(form.quantity),
-      avg_buy_price: Number(form.avg_buy_price),
-      broker_account_id: form.broker_account_id || null,
-    });
-  }
+  const filteredHoldings = useMemo(() => {
+    return holdings
+      .filter((h) => {
+        const matchesTab = !currentTabAssetClass || h.asset_class === currentTabAssetClass;
+        const matchesSearch =
+          !search ||
+          h.name.toLowerCase().includes(search.toLowerCase()) ||
+          h.symbol.toLowerCase().includes(search.toLowerCase()) ||
+          h.isin?.toLowerCase().includes(search.toLowerCase());
+        const matchesBroker = !selectedBrokerFilter || h.broker_account_id === selectedBrokerFilter;
+        return matchesTab && matchesSearch && matchesBroker;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'value') return (b.current_value || b.invested_value) - (a.current_value || a.invested_value);
+        if (sortBy === 'invested') return b.invested_value - a.invested_value;
+        if (sortBy === 'return') return (b.absolute_return_pct ?? -999) - (a.absolute_return_pct ?? -999);
+        return a.name.localeCompare(b.name);
+      });
+  }, [holdings, currentTabAssetClass, search, selectedBrokerFilter, sortBy]);
 
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // CSV Parsing
+  function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -196,855 +255,968 @@ export default function HoldingsPage() {
       skipEmptyLines: true,
       complete: (results) => {
         if (!results.data || results.data.length === 0) {
-          setCsvError('The uploaded CSV file is empty.');
+          setCsvError('Uploaded CSV is empty.');
           return;
         }
 
-        const parsedRows: ParsedCsvRow[] = [];
-        for (const row of results.data) {
-          // Normalize case-insensitive keys
+        const rows: CsvValidationRow[] = [];
+        results.data.forEach((row, idx) => {
           const keys = Object.keys(row);
           const findKey = (name: string) => keys.find((k) => k.trim().toLowerCase() === name.toLowerCase());
 
           const symbolKey = findKey('symbol') || findKey('ticker') || findKey('scrip');
-          const nameKey = findKey('name') || findKey('company') || findKey('instrument');
+          const nameKey = findKey('name') || findKey('asset_name') || findKey('company');
           const qtyKey = findKey('quantity') || findKey('qty') || findKey('units');
-          const priceKey = findKey('avg buy price') || findKey('avg cost') || findKey('price') || findKey('avg_buy_price');
-          const assetClassKey = findKey('asset class') || findKey('type') || findKey('asset_class');
-          const exchangeKey = findKey('exchange') || findKey('market');
+          const priceKey = findKey('average_buy_price') || findKey('avg buy price') || findKey('avg_price') || findKey('price');
+          const assetClassKey = findKey('asset_type') || findKey('asset_class') || findKey('type');
+          const exchangeKey = findKey('exchange');
+          const isinKey = findKey('isin');
 
           const symbol = symbolKey ? (row[symbolKey] || '').toUpperCase().trim() : '';
-          if (!symbol) continue;
-
+          const name = nameKey && row[nameKey] ? row[nameKey].trim() : symbol;
           const rawClass = assetClassKey ? (row[assetClassKey] || '').toLowerCase().trim() : 'equity';
-          const assetClass: AssetClass = ASSET_CLASSES.includes(rawClass as AssetClass) ? (rawClass as AssetClass) : 'equity';
+          let assetClass: AssetClass = 'equity';
+          if (['equity', 'reit', 'invit', 'bond', 'sgb', 'etf', 'mf'].includes(rawClass)) {
+            assetClass = rawClass as AssetClass;
+          }
 
-          parsedRows.push({
+          const exchange = exchangeKey && row[exchangeKey] ? row[exchangeKey].toUpperCase().trim() : 'NSE';
+          const isin = isinKey && row[isinKey] ? row[isinKey].trim() : undefined;
+
+          const rawQty = qtyKey ? parseFloat(row[qtyKey]) : NaN;
+          const rawPrice = priceKey ? parseFloat(row[priceKey]) : NaN;
+
+          const errors: string[] = [];
+          if (!symbol) errors.push('Missing Symbol');
+          if (isNaN(rawQty) || rawQty <= 0) errors.push('Quantity must be > 0');
+          if (isNaN(rawPrice) || rawPrice < 0) errors.push('Price cannot be negative');
+
+          rows.push({
+            rowNumber: idx + 1,
             symbol,
-            name: nameKey && row[nameKey] ? row[nameKey].trim() : symbol,
+            name: name || symbol,
             asset_class: assetClass,
-            exchange: exchangeKey && row[exchangeKey] ? row[exchangeKey].toUpperCase().trim() : 'NSE',
-            quantity: qtyKey ? Math.max(0.001, parseFloat(row[qtyKey]) || 1) : 1,
-            avg_buy_price: priceKey ? Math.max(0.01, parseFloat(row[priceKey]) || 100) : 100,
+            exchange,
+            quantity: isNaN(rawQty) ? 0 : rawQty,
+            avg_buy_price: isNaN(rawPrice) ? 0 : rawPrice,
+            isin,
+            isValid: errors.length === 0,
+            errors,
           });
-        }
+        });
 
-        if (parsedRows.length === 0) {
-          setCsvError('Could not find valid holding rows. Required columns: Symbol, Quantity, Avg Buy Price');
-        } else {
-          setCsvPreview(parsedRows);
-        }
+        setCsvRows(rows);
       },
       error: (err) => {
-        setCsvError(`CSV Parse Error: ${err.message}`);
+        setCsvError(`CSV parse failed: ${err.message}`);
       },
     });
   }
 
   function downloadSampleCsv() {
     const csvContent =
-      'Symbol,Name,Asset Class,Exchange,Quantity,Avg Buy Price\n' +
-      'RELIANCE,Reliance Industries Ltd,equity,NSE,50,2480\n' +
-      'INFY,Infosys Technologies Ltd,equity,NSE,40,1490\n' +
-      'EMBASSY,Embassy Office Parks REIT,reit,NSE,350,340\n' +
-      'PGINVIT,PowerGrid Infrastructure InvIT,invit,NSE,600,105\n' +
-      '726GS2033,7.26% GS 2033 Govt Bond,bond,NSE,100,101.5\n' +
-      'SGB2028,Sovereign Gold Bond 2028-IV,sgb,NSE,15,5300\n';
+      'broker,asset_type,symbol,isin,exchange,asset_name,quantity,average_buy_price,as_of_date\n' +
+      'Groww,equity,ICICIBANK,INE090A01021,NSE,ICICI Bank Ltd,100,1200,2026-10-09\n' +
+      'Zerodha,equity,RELIANCE,INE002A01018,NSE,Reliance Industries Ltd,45,2480,2026-10-09\n' +
+      'Groww,reit,EMBASSY,INE041025011,NSE,Embassy Office Parks REIT,300,340,2026-10-09\n' +
+      'Zerodha,invit,PGINVIT,INE0CW523019,NSE,PowerGrid InvIT,800,105,2026-10-09\n' +
+      'CDSL,bond,GS2033_718,IN0020330030,NSE,7.18% GS 2033 Sovereign Bond,100,101.5,2026-10-09\n' +
+      'Groww,mf,NIFTYBEES,INF204KB14I2,NSE,Nippon India ETF Nifty BeES,250,265,2026-10-09\n';
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'finova_sample_holdings.csv');
+    link.setAttribute('download', 'finova_holdings_sample.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   }
 
   return (
-    <div className="page-container space-y-5">
+    <div className="page-container space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-            Holdings
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'rgb(var(--foreground))' }}>
+            Unified Portfolio Holdings
           </h1>
-          <p className="text-sm mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
-            {holdings.length} holding{holdings.length !== 1 ? 's' : ''} across all connected brokers & depositories
+          <p className="text-sm mt-1" style={{ color: 'rgb(var(--muted))' }}>
+            All your investments across brokers, depositories and asset classes in one place
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             id="btn-import-csv"
             onClick={() => {
-              setCsvPreview([]);
+              setCsvRows([]);
               setCsvError(null);
+              if (brokers.length > 0 && !importBrokerId) setImportBrokerId(brokers[0].id);
               setShowImportModal(true);
             }}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors"
-            style={{
-              backgroundColor: 'rgb(var(--surface-raised))',
-              border: '1px solid rgb(var(--border))',
-              color: 'rgb(var(--foreground))',
-            }}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-colors shadow-sm"
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 text-blue-400" />
             Import CSV
           </button>
           <button
             id="btn-add-holding"
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+            onClick={() => {
+              if (brokers.length > 0) setForm((p) => ({ ...p, broker_account_id: brokers[0].id }));
+              setShowAddModal(true);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm hover:opacity-95 transition-opacity"
             style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
           >
             <Plus className="w-4 h-4" />
-            Add Holding
+            Add Investment
           </button>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="card p-4 space-y-1">
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Invested</p>
+          <p className="text-xl font-bold text-slate-100">
+            {formatCurrency(summaryMetrics.totalInvested, true)}
+          </p>
+          <p className="text-xs text-slate-500">Across {summaryMetrics.totalCount} total positions</p>
+        </div>
+
+        <div className="card p-4 space-y-1">
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Current Valuation</p>
+          <p className="text-xl font-bold text-slate-100">
+            {formatCurrency(summaryMetrics.totalCurrentVal, true)}
+          </p>
+          <p className="text-[11px] text-slate-400 flex items-center gap-1">
+            <Info className="w-3.5 h-3.5 text-blue-400" />
+            {summaryMetrics.pricedCount} of {summaryMetrics.totalCount} assets priced
+          </p>
+        </div>
+
+        <div className="card p-4 space-y-1">
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Unrealized P&L</p>
+          {summaryMetrics.totalPnL !== null ? (
+            <div className="flex items-baseline gap-2">
+              <span className={`text-xl font-bold ${summaryMetrics.totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {summaryMetrics.totalPnL >= 0 ? '+' : ''}{formatCurrency(summaryMetrics.totalPnL, true)}
+              </span>
+              {summaryMetrics.totalReturnPct !== null && (
+                <PercentageBadge value={summaryMetrics.totalReturnPct} size="sm" />
+              )}
+            </div>
+          ) : (
+            <p className="text-sm font-semibold text-amber-400/90 pt-1">P&L unavailable</p>
+          )}
+          <p className="text-xs text-slate-500">Calculated from verified quotes</p>
+        </div>
+
+        <div className="card p-4 space-y-1">
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Accounts & Coverage</p>
+          <p className="text-xl font-bold text-slate-100">
+            {brokers.length} {brokers.length === 1 ? 'Broker' : 'Brokers'}
+          </p>
+          <p className="text-xs text-slate-500">Manual Demat & Depositories</p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
+        {TAB_CATEGORIES.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                isActive
+                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Search, Filter & Sort Controls */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-            style={{ color: 'rgb(var(--muted))' }}
-          />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by name or symbol…"
+            placeholder="Search by symbol, company name, or ISIN…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-lg text-sm focus:outline-none"
-            style={{
-              backgroundColor: 'rgb(var(--surface))',
-              border: '1px solid rgb(var(--border))',
-              color: 'rgb(var(--foreground))',
-            }}
+            className="w-full pl-9 pr-4 py-2 rounded-lg text-sm bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
           />
         </div>
+
         <select
-          value={filterClass}
-          onChange={(e) => setFilterClass(e.target.value as AssetClass | '')}
-          className="px-3 py-2 rounded-lg text-sm focus:outline-none"
-          style={{
-            backgroundColor: 'rgb(var(--surface))',
-            border: '1px solid rgb(var(--border))',
-            color: 'rgb(var(--foreground))',
-          }}
+          value={selectedBrokerFilter}
+          onChange={(e) => setSelectedBrokerFilter(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm bg-slate-900 border border-slate-800 text-slate-300 focus:outline-none focus:border-blue-500"
         >
-          <option value="">All Asset Classes</option>
-          {ASSET_CLASSES.map((c) => (
-            <option key={c} value={c}>{ASSET_CLASS_LABELS[c]}</option>
+          <option value="">All Brokers</option>
+          {brokers.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.display_name || b.broker_name}
+            </option>
           ))}
         </select>
+
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          className="px-3 py-2 rounded-lg text-sm focus:outline-none"
-          style={{
-            backgroundColor: 'rgb(var(--surface))',
-            border: '1px solid rgb(var(--border))',
-            color: 'rgb(var(--foreground))',
-          }}
+          onChange={(e) => setSortBy(e.target.value as any)}
+          className="px-3 py-2 rounded-lg text-sm bg-slate-900 border border-slate-800 text-slate-300 focus:outline-none focus:border-blue-500"
         >
-          <option value="value">Sort: Value</option>
-          <option value="return">Sort: Return %</option>
-          <option value="name">Sort: Name</option>
+          <option value="value">Sort by Value</option>
+          <option value="invested">Sort by Invested</option>
+          <option value="return">Sort by Returns %</option>
+          <option value="name">Sort by Name</option>
         </select>
       </div>
 
-      {/* Holdings Table */}
+      {/* Content Table / Empty States */}
       {isLoading ? (
-        <SkeletonTable rows={6} />
-      ) : filtered.length === 0 ? (
+        <SkeletonTable rows={5} />
+      ) : holdings.length === 0 ? (
         <EmptyState
-          icon={<LineChart className="w-8 h-8" style={{ color: 'rgb(var(--brand-500))' }} />}
-          title={holdings.length === 0 ? 'No holdings yet' : 'No results found'}
-          description={
-            holdings.length === 0
-              ? 'Add your first holding manually or import a CAS/CSV statement to start tracking your unified portfolio.'
-              : 'Try adjusting your search or asset class filter.'
-          }
+          icon={<Building2 className="w-10 h-10" style={{ color: 'rgb(var(--brand-500))' }} />}
+          title="Your unified portfolio starts here."
+          description="Add your first investment or import your holdings to begin tracking your portfolio."
           action={
-            holdings.length === 0 ? (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white"
-                  style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
-                >
-                  <Plus className="w-4 h-4" />
-                  Add holding
-                </button>
-                <button
-                  onClick={() => setShowImportModal(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium"
-                  style={{
-                    backgroundColor: 'rgb(var(--surface-raised))',
-                    border: '1px solid rgb(var(--border))',
-                    color: 'rgb(var(--foreground))',
-                  }}
-                >
-                  <Upload className="w-4 h-4" />
-                  Import CSV
-                </button>
-              </div>
-            ) : undefined
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  if (brokers.length > 0) setForm((p) => ({ ...p, broker_account_id: brokers[0].id }));
+                  setShowAddModal(true);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white shadow-sm"
+                style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
+              >
+                <Plus className="w-4 h-4" />
+                Add Investment
+              </button>
+              <button
+                onClick={() => {
+                  setCsvRows([]);
+                  setShowImportModal(true);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-700 bg-slate-800 text-slate-200"
+              >
+                <Upload className="w-4 h-4 text-blue-400" />
+                Import CSV
+              </button>
+            </div>
           }
         />
+      ) : filteredHoldings.length === 0 ? (
+        <div className="card p-8 text-center space-y-2">
+          <Filter className="w-8 h-8 text-slate-500 mx-auto" />
+          <p className="font-semibold text-slate-300">No matching investments found</p>
+          <p className="text-xs text-slate-500">Try adjusting your search query, broker filter, or category tab.</p>
+        </div>
       ) : (
         <div className="card overflow-hidden">
-          {/* Table Header */}
-          <div
-            className="hidden md:grid grid-cols-12 gap-2 px-4 py-2.5 text-xs font-medium border-b"
-            style={{
-              color: 'rgb(var(--muted))',
-              borderColor: 'rgb(var(--border))',
-              backgroundColor: 'rgb(var(--surface-raised))',
-            }}
-          >
-            <div className="col-span-4">Asset / Instrument</div>
-            <div className="col-span-1 text-right">Qty</div>
-            <div className="col-span-2 text-right">Avg Buy</div>
-            <div className="col-span-2 text-right">Curr Value</div>
-            <div className="col-span-2 text-right">Return</div>
-            <div className="col-span-1 text-right">Actions</div>
-          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-900/80 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3">Asset & Symbol</th>
+                  <th className="px-4 py-3">Broker</th>
+                  <th className="px-4 py-3 text-right">Quantity</th>
+                  <th className="px-4 py-3 text-right">Avg Buy Price</th>
+                  <th className="px-4 py-3 text-right">Current Price</th>
+                  <th className="px-4 py-3 text-right">Invested Value</th>
+                  <th className="px-4 py-3 text-right">Current Value</th>
+                  <th className="px-4 py-3 text-right">P&L / Return</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80">
+                {filteredHoldings.map((h) => {
+                  const hasPrice = h.current_price !== null && typeof h.current_price === 'number';
+                  const returnPct = h.absolute_return_pct;
+                  const isPositive = (h.absolute_return ?? 0) >= 0;
 
-          <div className="divide-y" style={{ borderColor: 'rgb(var(--border))' }}>
-            {filtered.map((h, i) => (
-              <motion.div
-                key={h.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: i * 0.02 }}
-                className="grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors cursor-pointer"
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = 'rgb(var(--surface-raised))';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = '';
-                }}
-                onClick={() => setSelectedHolding(h)}
-              >
-                {/* Name + badges */}
-                <div className="col-span-6 md:col-span-4 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate" style={{ color: 'rgb(var(--foreground))' }}>
-                        {h.name}
-                      </p>
-                      <div className="flex items-center flex-wrap gap-1.5 mt-0.5">
-                        <span
-                          className="text-xs px-1.5 py-0.5 rounded font-mono font-medium"
-                          style={{
-                            backgroundColor: 'rgb(var(--brand-500) / 0.12)',
-                            color: 'rgb(var(--brand-500))',
-                          }}
-                        >
-                          {h.symbol}
-                        </span>
-                        <span
-                          className="text-xs px-1.5 py-0.5 rounded uppercase font-semibold text-[10px]"
-                          style={{
-                            backgroundColor: 'rgb(var(--surface-raised))',
-                            border: '1px solid rgb(var(--border))',
-                            color: 'rgb(var(--muted))',
-                          }}
-                        >
-                          {h.asset_class}
-                        </span>
-                        {h.broker_account && (
+                  return (
+                    <tr key={h.id} className="hover:bg-slate-850/50 transition-colors group">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2.5">
                           <span
-                            className="text-xs px-1.5 py-0.5 rounded font-medium text-[11px]"
-                            style={{
-                              backgroundColor: `${h.broker_account.color_hex}22`,
-                              color: h.broker_account.color_hex,
-                            }}
+                            className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
+                            style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#60A5FA' }}
                           >
-                            {h.broker_account.broker_name}
+                            {h.asset_class}
+                          </span>
+                          <div>
+                            <p className="font-semibold text-slate-100">{h.name}</p>
+                            <p className="text-xs text-slate-500 font-mono">{h.symbol} • {h.exchange || 'NSE'}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <span className="text-xs px-2 py-0.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300">
+                          {h.broker_account?.display_name || h.broker_account?.broker_name || 'Manual'}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-right font-mono font-medium text-slate-200">
+                        {h.quantity}
+                      </td>
+
+                      <td className="px-4 py-3.5 text-right font-mono text-slate-300">
+                        {formatCurrency(h.avg_buy_price)}
+                      </td>
+
+                      <td className="px-4 py-3.5 text-right font-mono">
+                        {hasPrice ? (
+                          <span className="text-slate-200">{formatCurrency(h.current_price!)}</span>
+                        ) : (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            Price unavailable
                           </span>
                         )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                      </td>
 
-                {/* Qty */}
-                <div className="col-span-1 text-right text-sm hidden md:block" style={{ color: 'rgb(var(--muted))' }}>
-                  {h.quantity}
-                </div>
+                      <td className="px-4 py-3.5 text-right font-mono text-slate-300 font-medium">
+                        {formatCurrency(h.invested_value, true)}
+                      </td>
 
-                {/* Avg Buy */}
-                <div className="col-span-2 text-right text-sm hidden md:block" style={{ color: 'rgb(var(--muted))' }}>
-                  {formatCurrency(h.avg_buy_price)}
-                </div>
+                      <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-100">
+                        {hasPrice ? (
+                          formatCurrency(h.current_value || h.invested_value, true)
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
+                      </td>
 
-                {/* Current Value */}
-                <div className="col-span-3 md:col-span-2 text-right">
-                  <p className="text-sm font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-                    {formatCurrency(h.current_value, true)}
-                  </p>
-                  <p className="text-xs hidden md:block" style={{ color: 'rgb(var(--muted))' }}>
-                    {formatCurrency(h.current_price ?? h.avg_buy_price)} ea.
-                  </p>
-                </div>
+                      <td className="px-4 py-3.5 text-right font-mono">
+                        {hasPrice && h.absolute_return !== null ? (
+                          <div className="flex flex-col items-end">
+                            <span className={`text-xs font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {isPositive ? '+' : ''}{formatCurrency(h.absolute_return, true)}
+                            </span>
+                            {returnPct !== null && (
+                              <PercentageBadge value={returnPct} size="sm" />
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                            P&L unavailable
+                          </span>
+                        )}
+                      </td>
 
-                {/* Return */}
-                <div className="col-span-3 md:col-span-2 text-right">
-                  <div className="flex flex-col items-end">
-                    <p
-                      className="text-sm font-medium"
-                      style={{
-                        color: h.absolute_return >= 0 ? 'rgb(var(--gain))' : 'rgb(var(--loss))',
-                      }}
-                    >
-                      {h.absolute_return >= 0 ? '+' : ''}
-                      {formatCurrency(h.absolute_return, true)}
-                    </p>
-                    <div className="mt-0.5">
-                      <PercentageBadge value={h.absolute_return_pct} size="sm" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div
-                  className="col-span-1 text-right hidden md:flex items-center justify-end gap-1.5"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    title="View Details"
-                    onClick={() => setSelectedHolding(h)}
-                    className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                    style={{ color: 'rgb(var(--muted))' }}
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    title="Delete holding"
-                    onClick={() => {
-                      if (confirm(`Remove ${h.symbol} from your portfolio?`)) {
-                        deleteMutation.mutate(h.id);
-                      }
-                    }}
-                    className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
-                    style={{ color: 'rgb(var(--loss))' }}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </motion.div>
-            ))}
+                      <td className="px-4 py-3.5 text-center">
+                        <div className="flex items-center justify-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button
+                            title="Edit Holding"
+                            onClick={() => setEditingHolding(h)}
+                            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            title="Delete Holding"
+                            onClick={() => setDeletingHolding(h)}
+                            className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* Holding Detail Inspection Modal */}
+      {/* Add Investment Modal */}
       <AnimatePresence>
-        {selectedHolding && (
-          <>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              key="detail-overlay"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-              onClick={() => setSelectedHolding(null)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowAddModal(false)}
             />
             <motion.div
-              key="detail-modal"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 card p-6 mx-auto max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto"
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              className="relative w-full max-w-lg card p-6 shadow-2xl border border-slate-700 bg-slate-900 z-10 space-y-4 max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-start justify-between pb-4 border-b" style={{ borderColor: 'rgb(var(--border))' }}>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold" style={{ color: 'rgb(var(--foreground))' }}>
-                      {selectedHolding.name}
-                    </h2>
-                    <span
-                      className="text-xs px-2 py-0.5 rounded font-mono font-bold"
-                      style={{ backgroundColor: 'rgb(var(--brand-500) / 0.15)', color: 'rgb(var(--brand-500))' }}
-                    >
-                      {selectedHolding.symbol}
-                    </span>
-                  </div>
-                  <p className="text-xs mt-1" style={{ color: 'rgb(var(--muted))' }}>
-                    Listed on {selectedHolding.exchange || 'NSE'} · Asset Class: <strong className="capitalize">{ASSET_CLASS_LABELS[selectedHolding.asset_class]}</strong>
-                  </p>
-                </div>
-                <button onClick={() => setSelectedHolding(null)} style={{ color: 'rgb(var(--muted))' }}>
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-blue-400" />
+                  Add Investment Position
+                </h2>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-2 gap-3 my-4">
-                <div className="card p-3 bg-opacity-40" style={{ backgroundColor: 'rgb(var(--surface-raised))' }}>
-                  <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>Current Value</p>
-                  <p className="text-lg font-bold mt-0.5" style={{ color: 'rgb(var(--foreground))' }}>
-                    {formatCurrency(selectedHolding.current_value, true)}
-                  </p>
-                </div>
-                <div className="card p-3 bg-opacity-40" style={{ backgroundColor: 'rgb(var(--surface-raised))' }}>
-                  <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>Total Invested</p>
-                  <p className="text-lg font-bold mt-0.5" style={{ color: 'rgb(var(--foreground))' }}>
-                    {formatCurrency(selectedHolding.invested_value, true)}
-                  </p>
-                </div>
-                <div className="card p-3 bg-opacity-40" style={{ backgroundColor: 'rgb(var(--surface-raised))' }}>
-                  <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>Absolute P&L</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p
-                      className="text-lg font-bold"
-                      style={{ color: selectedHolding.absolute_return >= 0 ? 'rgb(var(--gain))' : 'rgb(var(--loss))' }}
-                    >
-                      {selectedHolding.absolute_return >= 0 ? '+' : ''}
-                      {formatCurrency(selectedHolding.absolute_return, true)}
-                    </p>
-                    <PercentageBadge value={selectedHolding.absolute_return_pct} size="sm" />
-                  </div>
-                </div>
-                <div className="card p-3 bg-opacity-40" style={{ backgroundColor: 'rgb(var(--surface-raised))' }}>
-                  <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>Quantity & Cost</p>
-                  <p className="text-sm font-medium mt-0.5" style={{ color: 'rgb(var(--foreground))' }}>
-                    {selectedHolding.quantity} units @ {formatCurrency(selectedHolding.avg_buy_price)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Asset Class Financial Education */}
-              <div
-                className="p-3.5 rounded-xl border text-xs space-y-1.5"
-                style={{
-                  backgroundColor: 'rgb(var(--surface-raised))',
-                  borderColor: 'rgb(var(--border))',
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  addMutation.mutate({
+                    ...form,
+                    quantity: Number(form.quantity),
+                    avg_buy_price: Number(form.avg_buy_price),
+                  });
                 }}
+                className="space-y-4 text-xs"
               >
-                <div className="flex items-center gap-1.5 font-semibold" style={{ color: 'rgb(var(--brand-500))' }}>
-                  <Info className="w-4 h-4" />
-                  About {ASSET_CLASS_LABELS[selectedHolding.asset_class]} in India:
+                {/* Broker Account Selection */}
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-300">
+                    Broker / Depository Account *
+                  </label>
+                  <select
+                    value={form.broker_account_id}
+                    onChange={(e) => setForm((p) => ({ ...p, broker_account_id: e.target.value }))}
+                    required
+                    className="w-full px-3 py-2.5 rounded-lg text-sm bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
+                  >
+                    {brokers.length === 0 && <option value="">No broker accounts (create one first)</option>}
+                    {brokers.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.display_name || b.broker_name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <p style={{ color: 'rgb(var(--muted))', lineHeight: 1.5 }}>
-                  {ASSET_CLASS_EXPLANATIONS[selectedHolding.asset_class] || ASSET_CLASS_EXPLANATIONS.equity}
-                </p>
+
+                {/* Asset Category */}
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-300">
+                    Asset Class *
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { val: 'equity', lbl: 'Stock' },
+                      { val: 'mf', lbl: 'Mutual Fund' },
+                      { val: 'reit', lbl: 'REIT' },
+                      { val: 'invit', lbl: 'InvIT' },
+                      { val: 'bond', lbl: 'Bond' },
+                    ].map((item) => (
+                      <button
+                        type="button"
+                        key={item.val}
+                        onClick={() => setForm((p) => ({ ...p, asset_class: item.val as AssetClass }))}
+                        className={`py-2 px-3 rounded-lg font-medium border text-center transition-colors ${
+                          form.asset_class === item.val
+                            ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {item.lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Quick Catalog Autocomplete */}
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-300">
+                    Pick from Verified Catalog or Enter Custom
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Search verified catalog (e.g. ICICIBANK, RELIANCE, EMBASSY, PGINVIT)..."
+                    value={catalogQuery}
+                    onChange={(e) => {
+                      const q = e.target.value;
+                      setCatalogQuery(q);
+                      const matched = GLOBAL_SEED_INSTRUMENTS.find(
+                        (i) => i.symbol.toLowerCase() === q.toLowerCase()
+                      );
+                      if (matched) {
+                        setForm((prev) => ({
+                          ...prev,
+                          symbol: matched.symbol,
+                          name: matched.instrument_name,
+                          isin: matched.isin || '',
+                          exchange: matched.exchange || 'NSE',
+                        }));
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
+                  />
+                  {catalogQuery.trim() && (
+                    <div className="max-h-28 overflow-y-auto rounded border border-slate-700 bg-slate-850 divide-y divide-slate-800">
+                      {GLOBAL_SEED_INSTRUMENTS.filter(
+                        (i) =>
+                          i.symbol.toLowerCase().includes(catalogQuery.toLowerCase()) ||
+                          i.instrument_name.toLowerCase().includes(catalogQuery.toLowerCase())
+                      ).map((inst) => (
+                        <div
+                          key={inst.id}
+                          onClick={() => {
+                            let mappedClass: AssetClass = 'equity';
+                            if (inst.asset_type === 'STOCK') mappedClass = 'equity';
+                            else if (inst.asset_type === 'MUTUAL_FUND') mappedClass = 'mf';
+                            else if (inst.asset_type === 'REIT') mappedClass = 'reit';
+                            else if (inst.asset_type === 'INVIT') mappedClass = 'invit';
+                            else if (inst.asset_type === 'BOND') mappedClass = 'bond';
+
+                            setForm((p) => ({
+                              ...p,
+                              symbol: inst.symbol,
+                              name: inst.instrument_name,
+                              asset_class: mappedClass,
+                              exchange: inst.exchange || 'NSE',
+                              isin: inst.isin || '',
+                            }));
+                            setCatalogQuery(inst.symbol);
+                          }}
+                          className="px-3 py-1.5 hover:bg-slate-750 cursor-pointer flex justify-between items-center"
+                        >
+                          <span className="font-semibold text-slate-200">{inst.symbol}</span>
+                          <span className="text-[11px] text-slate-400 truncate max-w-[200px]">{inst.instrument_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Symbol & Name */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-300">Ticker Symbol *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ICICIBANK"
+                      value={form.symbol}
+                      onChange={(e) => setForm((p) => ({ ...p, symbol: e.target.value.toUpperCase() }))}
+                      required
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono uppercase focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-300">Instrument Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ICICI Bank Ltd"
+                      value={form.name}
+                      onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                      required
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Quantity & Price */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-300">Quantity / Units *</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.000001"
+                      placeholder="100"
+                      value={form.quantity}
+                      onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))}
+                      required
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-300">Avg Purchase Price (₹) *</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="1200"
+                      value={form.avg_buy_price}
+                      onChange={(e) => setForm((p) => ({ ...p, avg_buy_price: e.target.value }))}
+                      required
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Invested Calculation */}
+                {Number(form.quantity) > 0 && Number(form.avg_buy_price) >= 0 && (
+                  <div className="p-2.5 rounded-lg bg-blue-950/30 border border-blue-900/40 text-blue-300 flex justify-between items-center font-mono">
+                    <span>Invested Amount:</span>
+                    <strong className="text-sm text-blue-200">
+                      {formatCurrency(Number(form.quantity) * Number(form.avg_buy_price), true)}
+                    </strong>
+                  </div>
+                )}
+
+                <div className="pt-2 flex justify-end gap-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 rounded-lg font-medium border border-slate-700 text-slate-300 hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addMutation.isPending}
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-lg font-medium text-white shadow-sm"
+                    style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
+                  >
+                    {addMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Save Holding
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Holding Modal */}
+      <AnimatePresence>
+        {editingHolding && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setEditingHolding(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="relative w-full max-w-md card p-6 shadow-2xl border border-slate-700 bg-slate-900 z-10 space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100">Edit Position</h2>
+                  <p className="text-xs text-slate-400 font-mono">{editingHolding.symbol} • {editingHolding.name}</p>
+                </div>
+                <button
+                  onClick={() => setEditingHolding(null)}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              {/* Broker representation */}
-              {selectedHolding.broker_account && (
-                <div className="mt-3 flex items-center justify-between p-3 rounded-lg border text-xs" style={{ borderColor: 'rgb(var(--border))' }}>
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4" style={{ color: selectedHolding.broker_account.color_hex }} />
-                    <span style={{ color: 'rgb(var(--foreground))' }}>
-                      Held in <strong>{selectedHolding.broker_account.broker_name}</strong>
-                      {selectedHolding.broker_account.account_label ? ` (${selectedHolding.broker_account.account_label})` : ''}
-                    </span>
-                  </div>
-                  <span
-                    className="px-2 py-0.5 rounded text-[10px] uppercase font-bold"
-                    style={{
-                      backgroundColor: `${selectedHolding.broker_account.color_hex}22`,
-                      color: selectedHolding.broker_account.color_hex,
-                    }}
-                  >
-                    {selectedHolding.broker_account.account_type}
-                  </span>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const target = e.currentTarget;
+                  const qty = parseFloat((target.elements.namedItem('quantity') as HTMLInputElement).value);
+                  const price = parseFloat((target.elements.namedItem('avg_buy_price') as HTMLInputElement).value);
+                  editMutation.mutate({
+                    id: editingHolding.id,
+                    quantity: qty,
+                    avg_buy_price: price,
+                  });
+                }}
+                className="space-y-4 text-xs"
+              >
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-300">Quantity / Units *</label>
+                  <input
+                    name="quantity"
+                    type="number"
+                    step="any"
+                    min="0.000001"
+                    defaultValue={editingHolding.quantity}
+                    required
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                  />
                 </div>
-              )}
 
-              {/* Modal footer */}
-              <div className="mt-5 flex items-center justify-between pt-3 border-t" style={{ borderColor: 'rgb(var(--border))' }}>
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-300">Average Purchase Price (₹) *</label>
+                  <input
+                    name="avg_buy_price"
+                    type="number"
+                    step="any"
+                    min="0"
+                    defaultValue={editingHolding.avg_buy_price}
+                    required
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="pt-2 flex justify-end gap-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setEditingHolding(null)}
+                    className="px-4 py-2 rounded-lg font-medium border border-slate-700 text-slate-300 hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editMutation.isPending}
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-500 shadow-sm"
+                  >
+                    {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deletingHolding && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setDeletingHolding(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="relative w-full max-w-md card p-6 shadow-2xl border border-red-500/30 bg-slate-900 z-10 space-y-4"
+            >
+              <div className="flex items-center gap-3 text-red-400">
+                <AlertCircle className="w-6 h-6 flex-shrink-0" />
+                <h3 className="text-lg font-bold">Delete Investment Holding?</h3>
+              </div>
+
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Are you sure you want to delete your position in{' '}
+                <strong className="text-white">{deletingHolding.name} ({deletingHolding.symbol})</strong>?
+                This will remove the position and update your portfolio valuation immediately.
+              </p>
+
+              <div className="pt-3 flex justify-end gap-3">
                 <button
-                  onClick={() => {
-                    if (confirm(`Remove ${selectedHolding.symbol} from your portfolio?`)) {
-                      deleteMutation.mutate(selectedHolding.id);
-                    }
-                  }}
-                  className="px-3 py-2 text-xs font-medium rounded-lg text-red-500 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"
+                  type="button"
+                  onClick={() => setDeletingHolding(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border border-slate-700 text-slate-300 hover:bg-slate-800"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Remove Holding
+                  Cancel
                 </button>
                 <button
-                  onClick={() => setSelectedHolding(null)}
-                  className="px-4 py-2 text-xs font-medium rounded-lg transition-colors"
-                  style={{ backgroundColor: 'rgb(var(--surface-raised))', border: '1px solid rgb(var(--border))' }}
+                  type="button"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => deleteMutation.mutate(deletingHolding.id)}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-500 shadow-sm"
                 >
-                  Close
+                  {deleteMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Delete Position
                 </button>
               </div>
             </motion.div>
-          </>
+          </div>
         )}
       </AnimatePresence>
 
       {/* CSV Import Modal */}
       <AnimatePresence>
         {showImportModal && (
-          <>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              key="import-overlay"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setShowImportModal(false)}
             />
             <motion.div
-              key="import-modal"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 card p-6 mx-auto max-w-xl shadow-2xl max-h-[90vh] overflow-y-auto"
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              className="relative w-full max-w-2xl card p-6 shadow-2xl border border-slate-700 bg-slate-900 z-10 space-y-5 max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'rgb(var(--border))' }}>
-                <div className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" style={{ color: 'rgb(var(--brand-500))' }} />
-                  <h2 className="text-lg font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-                    Import Holdings from CSV
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <Upload className="w-5 h-5 text-blue-400" />
+                    CSV Portfolio Import
                   </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Select broker → Upload CSV → Validate & Preview → Import
+                  </p>
                 </div>
-                <button onClick={() => setShowImportModal(false)} style={{ color: 'rgb(var(--muted))' }}>
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-4 my-4">
-                <p className="text-xs" style={{ color: 'rgb(var(--muted))' }}>
-                  Upload your Consolidated Account Statement (CAS) export or a CSV file with your stocks, REITs, InvITs, and bonds.
-                </p>
-
-                {/* Dropzone */}
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors hover:border-blue-500"
-                  style={{
-                    borderColor: 'rgb(var(--border))',
-                    backgroundColor: 'rgb(var(--surface-raised))',
-                  }}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                  <Upload className="w-8 h-8 mx-auto mb-2" style={{ color: 'rgb(var(--brand-500))' }} />
-                  <p className="text-sm font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-                    Click to select CSV file
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: 'rgb(var(--muted))' }}>
-                    Supports UTF-8 CSV exports from CDSL, NSDL, Zerodha, or Groww
-                  </p>
-                </div>
-
-                {/* Template download link */}
-                <div className="flex items-center justify-between text-xs">
-                  <span style={{ color: 'rgb(var(--muted))' }}>Don&apos;t have a file ready?</span>
-                  <button
-                    type="button"
-                    onClick={downloadSampleCsv}
-                    className="inline-flex items-center gap-1 font-medium hover:underline"
-                    style={{ color: 'rgb(var(--brand-500))' }}
+              {/* Target Broker & Duplicate Mode */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-300">Target Broker Account *</label>
+                  <select
+                    value={importBrokerId}
+                    onChange={(e) => setImportBrokerId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    Download Sample CSV Template
-                  </button>
+                    {brokers.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.display_name || b.broker_name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {csvError && (
-                  <div className="p-3 rounded-lg text-xs font-medium" style={{ backgroundColor: 'rgb(var(--loss) / 0.1)', color: 'rgb(var(--loss))' }}>
-                    {csvError}
-                  </div>
-                )}
-
-                {/* Preview Table */}
-                {csvPreview.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-                      Ready to Import ({csvPreview.length} instrument{csvPreview.length !== 1 ? 's' : ''}):
-                    </p>
-                    <div
-                      className="max-h-48 overflow-y-auto rounded-lg border text-xs divide-y"
-                      style={{ borderColor: 'rgb(var(--border))' }}
-                    >
-                      {csvPreview.map((row, idx) => (
-                        <div key={idx} className="p-2 flex items-center justify-between bg-black/5 dark:bg-white/5">
-                          <div>
-                            <span className="font-mono font-bold mr-2">{row.symbol}</span>
-                            <span className="text-[11px] opacity-80">{row.name}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="capitalize px-1.5 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-500 mr-2">
-                              {row.asset_class}
-                            </span>
-                            <span>{row.quantity} @ ₹{row.avg_buy_price}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-300">Duplicate Handling Strategy</label>
+                  <select
+                    value={duplicateMode}
+                    onChange={(e) => setDuplicateMode(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="replace">Replace Existing Position (Recommended)</option>
+                    <option value="update">Update / Add to Position</option>
+                    <option value="skip">Skip if Already Exists</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Modal footer */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: 'rgb(var(--border))' }}>
+              {/* Dropzone */}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-700 hover:border-blue-500/60 rounded-xl p-6 text-center cursor-pointer transition-colors bg-slate-850/40"
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleCsvUpload}
+                  className="hidden"
+                />
+                <FileText className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-slate-200">
+                  Click to select a CSV file or drag and drop
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Supported format: broker, asset_type, symbol, isin, exchange, quantity, average_buy_price
+                </p>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadSampleCsv();
+                  }}
+                  className="mt-3 text-xs text-blue-400 hover:underline inline-flex items-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download Sample CSV Template
+                </button>
+              </div>
+
+              {csvError && (
+                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{csvError}</span>
+                </div>
+              )}
+
+              {/* Import Preview */}
+              {csvRows.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-300">
+                      Import Preview: {csvRows.length} Rows Parsed
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        {csvRows.filter((r) => r.isValid).length} Valid
+                      </span>
+                      {csvRows.filter((r) => !r.isValid).length > 0 && (
+                        <span className="text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          {csvRows.filter((r) => !r.isValid).length} Errors
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 divide-y divide-slate-850 text-xs font-mono">
+                    {csvRows.map((r) => (
+                      <div key={r.rowNumber} className="p-2.5 flex items-center justify-between hover:bg-slate-900">
+                        <div className="flex items-center gap-2">
+                          <span className={r.isValid ? 'text-emerald-400' : 'text-rose-400'}>
+                            {r.isValid ? '✓' : '✗'}
+                          </span>
+                          <strong className="text-slate-200">{r.symbol}</strong>
+                          <span className="text-slate-500">Qty: {r.quantity}</span>
+                          <span className="text-slate-500">Price: ₹{r.avg_buy_price}</span>
+                        </div>
+                        {r.isValid ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            Valid
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            {r.errors.join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="pt-2 flex justify-end gap-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowImportModal(false)}
-                  className="px-4 py-2 text-sm font-medium rounded-lg"
-                  style={{ backgroundColor: 'rgb(var(--surface-raised))', border: '1px solid rgb(var(--border))' }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border border-slate-700 text-slate-300 hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  disabled={csvPreview.length === 0 || importMutation.isPending}
-                  onClick={() => importMutation.mutate(csvPreview)}
-                  className="px-5 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-50 flex items-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
+                  disabled={importMutation.isPending || csvRows.filter((r) => r.isValid).length === 0}
+                  onClick={() => {
+                    const validItems = csvRows.filter((r) => r.isValid).map((r) => ({
+                      symbol: r.symbol,
+                      name: r.name,
+                      asset_class: r.asset_class,
+                      exchange: r.exchange,
+                      quantity: r.quantity,
+                      avg_buy_price: r.avg_buy_price,
+                      broker_account_id: importBrokerId,
+                      isin: r.isin,
+                    }));
+
+                    importMutation.mutate({
+                      holdings: validItems,
+                      duplicate_mode: duplicateMode,
+                      broker_account_id: importBrokerId,
+                    });
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white shadow-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50"
                 >
-                  {importMutation.isPending ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Importing…</>
-                  ) : (
-                    `Import ${csvPreview.length > 0 ? csvPreview.length : ''} Holdings`
-                  )}
+                  {importMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Confirm Import ({csvRows.filter((r) => r.isValid).length} Holdings)
                 </button>
               </div>
             </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Add Holding Modal */}
-      <AnimatePresence>
-        {showAddModal && (
-          <>
-            <motion.div
-              key="overlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-              onClick={() => setShowAddModal(false)}
-            />
-            <motion.div
-              key="modal"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 card p-6 mx-auto max-w-lg shadow-2xl"
-            >
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-                  Add Holding
-                </h2>
-                <button onClick={() => setShowAddModal(false)} style={{ color: 'rgb(var(--muted))' }}>
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Symbol */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-                      Symbol / Ticker *
-                    </label>
-                    <input
-                      type="text"
-                      value={form.symbol}
-                      onChange={(e) => handleFormChange('symbol', e.target.value.toUpperCase())}
-                      placeholder="RELIANCE"
-                      required
-                      className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none font-mono"
-                      style={{
-                        backgroundColor: 'rgb(var(--surface-raised))',
-                        border: '1px solid rgb(var(--border))',
-                        color: 'rgb(var(--foreground))',
-                      }}
-                    />
-                  </div>
-
-                  {/* Asset Class */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-                      Asset Class *
-                    </label>
-                    <select
-                      value={form.asset_class}
-                      onChange={(e) => handleFormChange('asset_class', e.target.value as AssetClass)}
-                      required
-                      className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                      style={{
-                        backgroundColor: 'rgb(var(--surface-raised))',
-                        border: '1px solid rgb(var(--border))',
-                        color: 'rgb(var(--foreground))',
-                      }}
-                    >
-                      {ASSET_CLASSES.map((c) => (
-                        <option key={c} value={c}>{ASSET_CLASS_LABELS[c]}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Name */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-                    Company / Instrument Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => handleFormChange('name', e.target.value)}
-                    placeholder="Reliance Industries Ltd"
-                    required
-                    className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                    style={{
-                      backgroundColor: 'rgb(var(--surface-raised))',
-                      border: '1px solid rgb(var(--border))',
-                      color: 'rgb(var(--foreground))',
-                    }}
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  {/* Exchange */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-                      Exchange
-                    </label>
-                    <select
-                      value={form.exchange}
-                      onChange={(e) => handleFormChange('exchange', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                      style={{
-                        backgroundColor: 'rgb(var(--surface-raised))',
-                        border: '1px solid rgb(var(--border))',
-                        color: 'rgb(var(--foreground))',
-                      }}
-                    >
-                      <option value="NSE">NSE</option>
-                      <option value="BSE">BSE</option>
-                      <option value="NCD">NCD</option>
-                      <option value="OTHER">Other</option>
-                    </select>
-                  </div>
-
-                  {/* Quantity */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-                      Quantity *
-                    </label>
-                    <input
-                      type="number"
-                      min="0.001"
-                      step="any"
-                      value={form.quantity}
-                      onChange={(e) => handleFormChange('quantity', e.target.value)}
-                      placeholder="100"
-                      required
-                      className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                      style={{
-                        backgroundColor: 'rgb(var(--surface-raised))',
-                        border: '1px solid rgb(var(--border))',
-                        color: 'rgb(var(--foreground))',
-                      }}
-                    />
-                  </div>
-
-                  {/* Avg Buy Price */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-                      Avg Buy (₹) *
-                    </label>
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="any"
-                      value={form.avg_buy_price}
-                      onChange={(e) => handleFormChange('avg_buy_price', e.target.value)}
-                      placeholder="2800"
-                      required
-                      className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                      style={{
-                        backgroundColor: 'rgb(var(--surface-raised))',
-                        border: '1px solid rgb(var(--border))',
-                        color: 'rgb(var(--foreground))',
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Broker */}
-                {brokers.length > 0 && (
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium" style={{ color: 'rgb(var(--foreground))' }}>
-                      Broker / Account
-                    </label>
-                    <select
-                      value={form.broker_account_id}
-                      onChange={(e) => handleFormChange('broker_account_id', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                      style={{
-                        backgroundColor: 'rgb(var(--surface-raised))',
-                        border: '1px solid rgb(var(--border))',
-                        color: 'rgb(var(--foreground))',
-                      }}
-                    >
-                      <option value="">No broker selected</option>
-                      {brokers.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.broker_name}{b.account_label ? ` (${b.account_label})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {addMutation.error && (
-                  <p className="text-sm" style={{ color: 'rgb(var(--loss))' }}>
-                    {(addMutation.error as Error).message}
-                  </p>
-                )}
-
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors"
-                    style={{
-                      backgroundColor: 'rgb(var(--surface-raised))',
-                      border: '1px solid rgb(var(--border))',
-                      color: 'rgb(var(--foreground))',
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    id="btn-submit-holding"
-                    type="submit"
-                    disabled={addMutation.isPending}
-                    className="flex-1 py-2.5 rounded-lg text-sm font-medium text-white disabled:opacity-60 flex items-center justify-center gap-2"
-                    style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
-                  >
-                    {addMutation.isPending ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Adding…</>
-                    ) : (
-                      'Add Holding'
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </>
+          </div>
         )}
       </AnimatePresence>
     </div>
