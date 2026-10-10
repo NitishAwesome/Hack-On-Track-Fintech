@@ -79,6 +79,9 @@ export interface Holding {
   price_updated_at: string | null;
   price_source?: string | null;
   price_status?: PriceStatus | null;
+  price_unavailability_reason?: string | null;
+  day_change?: number | null;
+  day_change_pct?: number | null;
   created_at: string;
   updated_at: string;
   sector?: string | null;
@@ -114,7 +117,7 @@ export interface Transaction {
 // ----- Calculated / Derived Types -----
 
 export interface HoldingWithMetrics extends Holding {
-  current_value: number;
+  current_value: number | null;
   invested_value: number;
   absolute_return: number | null;
   absolute_return_pct: number | null;
@@ -125,6 +128,9 @@ export interface HoldingWithMetrics extends Holding {
 export interface PortfolioSummary {
   total_current_value: number | null;
   total_invested_value: number;
+  priced_current_value?: number | null;
+  priced_invested_value?: number | null;
+  unquoted_invested_value?: number | null;
   total_absolute_return: number | null;
   total_absolute_return_pct: number | null;
   total_day_change: number | null;
@@ -136,12 +142,14 @@ export interface PortfolioSummary {
   unquoted_count?: number;
   priced_count?: number;
   is_valuation_complete?: boolean;
+  quote_coverage_pct?: number;
 }
 
 export interface AssetAllocation {
   asset_class: AssetClass;
   value: number;
   percentage: number;
+  allocation_pct?: number;
   holding_count: number;
   unquoted_count?: number;
 }
@@ -152,6 +160,7 @@ export interface BrokerAllocation {
   color_hex: string;
   value: number;
   percentage: number;
+  allocation_pct?: number;
 }
 
 export interface SectorAllocation {

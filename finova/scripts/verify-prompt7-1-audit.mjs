@@ -145,8 +145,8 @@ test('Audit 3: Weighted average accumulation on duplicate holdings update', () =
 // 4. Quote Provenance & Unquoted Fallback Safety
 // -------------------------------------------------------------
 test('Audit 4: Quote provenance and unquoted asset safety', () => {
-  // Reliance quote check
-  const relQuote = PortfolioStorage.getMarketPrice('RELIANCE');
+  // Reliance quote check (auditing legacy seed schema with explicit allowSeedFallback=true)
+  const relQuote = PortfolioStorage.getMarketPrice('RELIANCE', true);
   assert(relQuote !== null, 'RELIANCE quote should exist in quote cache');
   assert.strictEqual(relQuote.currency, 'INR');
   assert(relQuote.source === 'NSE_EOD' || relQuote.source === 'BSE_EOD', 'Source should be EOD exchange feed');

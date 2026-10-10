@@ -3,7 +3,7 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Layers, Building2, HelpCircle } from 'lucide-react';
 import type { PortfolioSummary } from '@/types/portfolio';
-import { formatCurrency, formatCurrencySafe, formatPercentSafe } from '@/lib/utils';
+import { formatCurrency, formatPercentSafe } from '@/lib/utils';
 
 interface PortfolioSummaryMetricsProps {
   summary: PortfolioSummary | null;
@@ -32,14 +32,18 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
     );
   }
 
-  const isValueUnavailable = summary.total_current_value === null;
+  const isComplete = Boolean(summary.is_valuation_complete);
+  const displayValuation = isComplete
+    ? summary.total_current_value
+    : summary.priced_current_value ?? null;
+  const isValueUnavailable = displayValuation === null;
   const isReturnUnavailable = summary.total_absolute_return === null;
   const isPositiveReturn = (summary.total_absolute_return ?? 0) >= 0;
   const hasUnquoted = Boolean(summary.has_unquoted_assets);
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
-      {/* 1. Total Portfolio Value */}
+      {/* 1. Total Portfolio Value / Valued Subtotal */}
       <div
         className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200"
         style={{
@@ -51,7 +55,7 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
-              Current Value
+              {isComplete ? 'Current Value' : 'Valued Subtotal'}
             </span>
             <Wallet className="w-3.5 h-3.5 text-muted opacity-70" />
           </div>
@@ -61,7 +65,7 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
           >
             {isValueUnavailable
               ? 'Valuation unavailable'
-              : formatCurrency(summary.total_current_value!)}
+              : formatCurrency(displayValuation!)}
           </div>
         </div>
         <div className="mt-2.5">
@@ -72,10 +76,10 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
                 backgroundColor: 'rgba(245, 158, 11, 0.1)',
                 color: '#F59E0B',
               }}
-              title="Some assets lack verified real-time quotes"
+              title={`${summary.priced_count ?? 0} of ${summary.holding_count} holdings quoted; unpriced positions excluded from valuation`}
             >
               <HelpCircle className="w-2.5 h-2.5" />
-              <span>Partial pricing</span>
+              <span>Partial pricing ({summary.priced_count ?? 0}/{summary.holding_count})</span>
             </span>
           ) : (
             <span className="text-[11px] text-muted">

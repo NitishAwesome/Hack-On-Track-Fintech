@@ -195,11 +195,11 @@ export function HoldingsPreviewSection({
 
                       {/* Current Value */}
                       <td className="py-3 px-3 text-right font-semibold tabular-nums" style={{ color: 'rgb(var(--foreground))' }}>
-                        {hasPrice ? (
+                        {hasPrice && h.current_value !== null ? (
                           formatCurrency(h.current_value)
                         ) : (
-                          <span className="text-muted font-normal text-[11px]" title="Valued at purchase cost">
-                            {formatCurrency(h.invested_value)}*
+                          <span className="text-muted font-normal text-xs" title="Market valuation unavailable">
+                            —
                           </span>
                         )}
                       </td>

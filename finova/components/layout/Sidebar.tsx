@@ -26,6 +26,9 @@ import {
   LogOut,
   Sparkles,
   Receipt,
+  Shield,
+  FlaskConical,
+  Target,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
@@ -50,15 +53,18 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/investments', label: 'My Investments', icon: TrendingUp },
       { href: '/transactions', label: 'Transactions', icon: Receipt },
-      { href: '/analysis', label: 'Portfolio Analysis', icon: BarChart3 },
+      { href: '/analysis', label: 'Investment X-Ray', icon: BarChart3 },
+      { href: '/risk', label: 'Risk Radar', icon: Shield },
+      { href: '/future-lab', label: 'Future Lab', icon: FlaskConical },
       { href: '/insights', label: 'AI Intelligence', icon: Sparkles },
       { href: '/news', label: 'News & Market', icon: Newspaper },
-      { href: '/explore', label: 'Explore', icon: Compass, comingSoon: true },
+      { href: '/explore', label: 'Investment Explorer', icon: Compass },
     ],
   },
   {
     title: 'Personal',
     items: [
+      { href: '/goals', label: 'Financial Goals', icon: Target },
       { href: '/watchlist', label: 'Watchlist', icon: Bookmark, comingSoon: true },
       { href: '/orders', label: 'Orders', icon: ClipboardList, comingSoon: true },
     ],
@@ -68,9 +74,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/ipo', label: 'IPO', icon: Rocket, comingSoon: true },
       { href: '/mutual-funds', label: 'Mutual Funds', icon: Layers, comingSoon: true },
-      { href: '/bonds', label: 'Bonds', icon: Link2, comingSoon: true },
-      { href: '/reit', label: 'REITs', icon: Building2, comingSoon: true },
-      { href: '/invit', label: 'InvITs', icon: Zap, comingSoon: true },
+      { href: '/bonds', label: 'Bonds', icon: Link2 },
+      { href: '/reit', label: 'REITs', icon: Building2 },
+      { href: '/invit', label: 'InvITs', icon: Zap },
     ],
   },
   {
@@ -109,7 +115,9 @@ export function Sidebar({
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/portfolio' || pathname === '/';
     if (href === '/investments') return pathname === '/investments' || pathname === '/holdings';
-    if (href === '/analysis') return ['/analysis', '/performance', '/allocation', '/risk'].some((p) => pathname.startsWith(p));
+    if (href === '/analysis') return ['/analysis', '/performance', '/allocation'].some((p) => pathname.startsWith(p));
+    if (href === '/risk') return pathname.startsWith('/risk');
+    if (href === '/explore') return pathname.startsWith('/explore');
     if (href === '/insights') return pathname === '/insights';
     if (href === '/news') return pathname === '/news';
     return pathname === href || (href !== '/' && pathname.startsWith(href));

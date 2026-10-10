@@ -30,14 +30,26 @@ export function roundPercent(val: number): number {
 
 /**
  * Enrich a raw holding with calculated metrics.
- * Strictly adheres to Prompt 6 Section 9:
+ * Strictly adheres to Prompt 9.1B:
  * If current_price is missing or unverified, it does NOT substitute zero or average buy price.
- * Instead, price-dependent metrics remain null.
+ * Instead, price-dependent metrics remain strictly null.
  */
 export function enrichHolding(holding: Holding): HoldingWithMetrics {
   const quantity = roundQuantity(holding.quantity);
-  const avg_buy_price = roundCurrency(holding.average_buy_price ?? holding.avg_buy_price);
-  const invested_value = roundCurrency(quantity * avg_buy_price);
+  const hRecord = holding as unknown as Record<string, unknown>;
+  const rawBuyPrice = typeof hRecord.buy_price === 'number' ? hRecord.buy_price : undefined;
+  const rawInvestedValue = typeof hRecord.invested_value === 'number' ? hRecord.invested_value : undefined;
+
+  const avg_buy_price = roundCurrency(
+    holding.average_buy_price ??
+    holding.avg_buy_price ??
+    rawBuyPrice ??
+    0
+  );
+  const invested_value =
+    typeof rawInvestedValue === 'number' && !isNaN(rawInvestedValue)
+      ? roundCurrency(rawInvestedValue)
+      : roundCurrency(quantity * avg_buy_price);
 
   const hasCurrentPrice =
     typeof holding.current_price === 'number' &&
@@ -50,12 +62,15 @@ export function enrichHolding(holding: Holding): HoldingWithMetrics {
       quantity,
       avg_buy_price,
       current_price: null,
-      current_value: invested_value, // For backwards compatibility with charts expecting number, but flagged
+      current_value: null, // Strictly null. Never replace with invested_value or zero.
       invested_value,
       absolute_return: null,
       absolute_return_pct: null,
       day_change: null,
       day_change_pct: null,
+      price_status: 'UNAVAILABLE',
+      price_unavailability_reason:
+        holding.price_unavailability_reason || 'No reliable market quote available',
     };
   }
 
@@ -74,13 +89,20 @@ export function enrichHolding(holding: Holding): HoldingWithMetrics {
     invested_value,
     absolute_return,
     absolute_return_pct,
-    day_change: null,
-    day_change_pct: null,
+    day_change: holding.day_change ?? null,
+    day_change_pct: holding.day_change_pct ?? null,
+    price_status: holding.price_status || 'DELAYED',
+    price_source: holding.price_source || 'YAHOO_FINANCE',
   };
 }
 
 /**
- * Aggregate all holdings into a PortfolioSummary
+ * Aggregate all holdings into a PortfolioSummary.
+ * Strictly adheres to Prompt 9.1B:
+ * - Distinguishes complete portfolio valuation from partial market valuation.
+ * - Does NOT add unquoted invested cost into market valuation totals.
+ * - For incomplete coverage, total_current_value is null to avoid presenting
+ *   a partial value as a complete total, while priced_current_value provides the valued subtotal.
  */
 export function buildPortfolioSummary(
   holdings: HoldingWithMetrics[]
@@ -89,6 +111,9 @@ export function buildPortfolioSummary(
     return {
       total_current_value: 0,
       total_invested_value: 0,
+      priced_current_value: 0,
+      priced_invested_value: 0,
+      unquoted_invested_value: 0,
       total_absolute_return: 0,
       total_absolute_return_pct: 0,
       total_day_change: null,
@@ -100,6 +125,7 @@ export function buildPortfolioSummary(
       unquoted_count: 0,
       priced_count: 0,
       is_valuation_complete: true,
+      quote_coverage_pct: 100,
     };
   }
 
@@ -108,38 +134,48 @@ export function buildPortfolioSummary(
   );
 
   const pricedHoldings = holdings.filter(
-    (h) => h.current_price !== null && typeof h.current_price === 'number'
+    (h) => h.current_price !== null && typeof h.current_price === 'number' && h.current_value !== null
   );
   const unquotedHoldings = holdings.filter(
-    (h) => h.current_price === null || typeof h.current_price !== 'number'
+    (h) => h.current_price === null || typeof h.current_price !== 'number' || h.current_value === null
   );
   const has_unquoted_assets = unquotedHoldings.length > 0;
   const is_valuation_complete = unquotedHoldings.length === 0;
+  const priced_count = pricedHoldings.length;
+  const unquoted_count = unquotedHoldings.length;
+  const quote_coverage_pct = roundPercent((priced_count / holdings.length) * 100);
+
+  const pricedInvested = roundCurrency(
+    pricedHoldings.reduce((s, h) => s + h.invested_value, 0)
+  );
+  const unquotedInvested = roundCurrency(
+    unquotedHoldings.reduce((s, h) => s + h.invested_value, 0)
+  );
 
   let total_current_value: number | null = null;
+  let priced_current_value: number | null = null;
   let total_absolute_return: number | null = null;
   let total_absolute_return_pct: number | null = null;
 
   if (pricedHoldings.length > 0) {
-    const pricedInvested = pricedHoldings.reduce((s, h) => s + h.invested_value, 0);
-    const pricedCurrent = pricedHoldings.reduce(
-      (s, h) => s + (h.current_value || 0),
-      0
+    const pricedCurrent = roundCurrency(
+      pricedHoldings.reduce((s, h) => s + (h.current_value || 0), 0)
     );
-    const totalCurrentVal = pricedCurrent + unquotedHoldings.reduce((s, h) => s + h.invested_value, 0);
-    total_current_value = roundCurrency(totalCurrentVal);
+    priced_current_value = pricedCurrent;
+
+    // Do NOT present a partial value as a complete portfolio total.
+    // If complete, total_current_value equals pricedCurrent.
+    // If incomplete, total_current_value is null, and callers use priced_current_value.
+    total_current_value = is_valuation_complete ? pricedCurrent : null;
 
     total_absolute_return = roundCurrency(pricedCurrent - pricedInvested);
     total_absolute_return_pct =
       pricedInvested > 0
         ? roundPercent((total_absolute_return / pricedInvested) * 100)
         : 0;
-  } else if (!has_unquoted_assets) {
-    total_current_value = 0;
-    total_absolute_return = 0;
-    total_absolute_return_pct = 0;
   } else {
     total_current_value = null;
+    priced_current_value = null;
     total_absolute_return = null;
     total_absolute_return_pct = null;
   }
@@ -151,6 +187,9 @@ export function buildPortfolioSummary(
   return {
     total_current_value,
     total_invested_value,
+    priced_current_value,
+    priced_invested_value: pricedInvested,
+    unquoted_invested_value: unquotedInvested,
     total_absolute_return,
     total_absolute_return_pct,
     total_day_change: null,
@@ -159,35 +198,59 @@ export function buildPortfolioSummary(
     broker_count: brokerIds.size,
     last_updated: new Date().toISOString(),
     has_unquoted_assets,
-    unquoted_count: unquotedHoldings.length,
-    priced_count: pricedHoldings.length,
+    unquoted_count,
+    priced_count,
     is_valuation_complete,
+    quote_coverage_pct,
   };
 }
 
 /**
- * Build asset class allocation breakdown
+ * Build asset class allocation breakdown.
+ * Uses a single defensible valuation denominator:
+ * - If priced holdings exist, computes market-value allocation strictly across priced holdings.
+ * - If NO holdings are priced, computes cost-basis allocation across all holdings.
+ * - Never mixes current_value and invested_value in the same sum or denominator.
  */
 export function buildAssetAllocation(
   holdings: HoldingWithMetrics[]
 ): AssetAllocation[] {
-  const total = holdings.reduce(
-    (sum, h) => sum + (h.current_price !== null ? h.current_value : h.invested_value),
-    0
+  if (holdings.length === 0) return [];
+
+  const pricedHoldings = holdings.filter(
+    (h) => h.current_price !== null && h.current_value !== null
   );
-  if (total === 0) return [];
+  const usingMarketVal = pricedHoldings.length > 0;
+
+  const total = usingMarketVal
+    ? pricedHoldings.reduce((sum, h) => sum + (h.current_value || 0), 0)
+    : holdings.reduce((sum, h) => sum + h.invested_value, 0);
+
+  if (total <= 0) return [];
 
   const map = new Map<AssetClass, { value: number; count: number; unquoted: number }>();
 
   for (const h of holdings) {
-    const existing = map.get(h.asset_class) ?? { value: 0, count: 0, unquoted: 0 };
-    const val = h.current_price !== null ? h.current_value : h.invested_value;
-    const isUnquoted = h.current_price === null;
-    map.set(h.asset_class, {
-      value: existing.value + val,
-      count: existing.count + 1,
-      unquoted: existing.unquoted + (isUnquoted ? 1 : 0),
-    });
+    if (!map.has(h.asset_class)) {
+      map.set(h.asset_class, { value: 0, count: 0, unquoted: 0 });
+    }
+    const entry = map.get(h.asset_class)!;
+    entry.count += 1;
+    if (h.current_price === null || h.current_value === null) {
+      entry.unquoted += 1;
+    }
+  }
+
+  if (usingMarketVal) {
+    for (const h of pricedHoldings) {
+      const entry = map.get(h.asset_class)!;
+      entry.value += h.current_value || 0;
+    }
+  } else {
+    for (const h of holdings) {
+      const entry = map.get(h.asset_class)!;
+      entry.value += h.invested_value;
+    }
   }
 
   return Array.from(map.entries())
@@ -195,6 +258,7 @@ export function buildAssetAllocation(
       asset_class,
       value: roundCurrency(value),
       percentage: roundPercent((value / total) * 100),
+      allocation_pct: roundPercent((value / total) * 100),
       holding_count: count,
       unquoted_count: unquoted,
     }))
@@ -202,23 +266,35 @@ export function buildAssetAllocation(
 }
 
 /**
- * Build broker-wise allocation breakdown
+ * Build broker-wise allocation breakdown.
+ * Follows the same defensible denominator rule:
+ * - If priced holdings exist, computes allocation using priced market value only.
+ * - If NO holdings are priced, computes allocation using invested cost only.
+ * - Never blends market value and cost basis in the same calculation.
  */
 export function buildBrokerAllocation(
   holdings: HoldingWithMetrics[]
 ): BrokerAllocation[] {
-  const total = holdings.reduce(
-    (sum, h) => sum + (h.current_value || h.invested_value),
-    0
+  if (holdings.length === 0) return [];
+
+  const pricedHoldings = holdings.filter(
+    (h) => h.current_price !== null && h.current_value !== null
   );
-  if (total === 0) return [];
+  const usingMarketVal = pricedHoldings.length > 0;
+
+  const total = usingMarketVal
+    ? pricedHoldings.reduce((sum, h) => sum + (h.current_value || 0), 0)
+    : holdings.reduce((sum, h) => sum + h.invested_value, 0);
+
+  if (total <= 0) return [];
 
   const map = new Map<
     string,
     { name: string; id: string; color: string; value: number }
   >();
 
-  for (const h of holdings) {
+  const targetList = usingMarketVal ? pricedHoldings : holdings;
+  for (const h of targetList) {
     const id = h.broker_account_id ?? 'unknown';
     const name =
       h.broker_account?.display_name ||
@@ -226,7 +302,7 @@ export function buildBrokerAllocation(
       'Manual Account';
     const color = h.broker_account?.color_hex ?? '#6B7280';
     const existing = map.get(id) ?? { name, id, color, value: 0 };
-    const val = h.current_value || h.invested_value;
+    const val = usingMarketVal ? (h.current_value || 0) : h.invested_value;
     map.set(id, { ...existing, value: existing.value + val });
   }
 
@@ -237,6 +313,7 @@ export function buildBrokerAllocation(
       color_hex: color,
       value: roundCurrency(value),
       percentage: roundPercent((value / total) * 100),
+      allocation_pct: roundPercent((value / total) * 100),
     }))
     .sort((a, b) => b.value - a.value);
 }

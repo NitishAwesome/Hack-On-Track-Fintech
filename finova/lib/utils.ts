@@ -58,6 +58,13 @@ export function formatCurrency(
 }
 
 /**
+ * Format a number as Indian Rupees (₹) with standard 2 decimal places and full numeric grouping.
+ */
+export function formatIndianCurrency(value: number): string {
+  return formatCurrency(value, false, 2);
+}
+
+/**
  * Safe wrapper for currency formatting with fallback
  */
 export function formatCurrencySafe(

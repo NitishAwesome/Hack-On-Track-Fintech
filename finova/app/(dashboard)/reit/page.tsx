@@ -1,16 +1,25 @@
-import { ComingSoon } from '@/components/shared/ComingSoon';
-import { Building2 } from 'lucide-react';
 import type { Metadata } from 'next';
+import { AlternativeInvestmentExplorer } from '@/components/explorer/AlternativeInvestmentExplorer';
 
-export const metadata: Metadata = { title: 'REITs' };
+export const metadata: Metadata = {
+  title: 'REITs Explorer — FINOVA',
+  description:
+    'Learn how Real Estate Investment Trusts work in India, commercial lease models, mandatory distributions, and interest-rate risks.',
+};
 
-export default function ReitDiscoverPage() {
+export default function REITsPage() {
   return (
-    <ComingSoon
-      title="REITs Marketplace"
-      description="Invest in listed Real Estate Investment Trusts. Compare portfolios, DPU, and yield histories."
-      icon={<Building2 className="w-7 h-7" />}
-      eta="Coming in Phase 2"
-    />
+    <div className="page-container space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          REITs — Real Estate Investment Trusts
+        </h1>
+        <p className="text-sm text-muted mt-1">
+          Co-own Grade-A commercial real estate and understand distribution yields, tenancy leases, and property risks.
+        </p>
+      </div>
+
+      <AlternativeInvestmentExplorer initialCategory="reit" />
+    </div>
   );
 }

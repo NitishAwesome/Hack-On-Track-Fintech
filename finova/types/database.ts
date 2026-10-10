@@ -55,7 +55,7 @@ export type TransactionType =
   | 'SPLIT'
   | 'FEE';
 
-export type PriceStatus = 'REALTIME' | 'DELAYED' | 'EOD' | 'STALE';
+export type PriceStatus = 'REALTIME' | 'DELAYED' | 'EOD' | 'STALE' | 'UNAVAILABLE';
 
 export type CompletenessStatus =
   | 'COMPLETE'
@@ -174,6 +174,7 @@ export interface InvestmentTransactionRow {
 export interface InstrumentPriceRow {
   id: string;
   instrument_id: string;
+  symbol?: string;
   price: number;
   currency: string;
   source: string;

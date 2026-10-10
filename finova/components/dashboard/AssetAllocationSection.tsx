@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { PieChart, Plus, AlertCircle, HelpCircle } from 'lucide-react';
 import type { AssetAllocation } from '@/types/portfolio';
-import { formatCurrency, formatPercent } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 
 interface AssetAllocationSectionProps {
   allocations: AssetAllocation[];

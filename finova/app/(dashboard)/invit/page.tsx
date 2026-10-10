@@ -1,16 +1,25 @@
-import { ComingSoon } from '@/components/shared/ComingSoon';
-import { Zap } from 'lucide-react';
 import type { Metadata } from 'next';
+import { AlternativeInvestmentExplorer } from '@/components/explorer/AlternativeInvestmentExplorer';
 
-export const metadata: Metadata = { title: 'InvITs' };
+export const metadata: Metadata = {
+  title: 'InvITs Explorer — FINOVA',
+  description:
+    'Learn how Infrastructure Investment Trusts work in India, highway and grid concession lifespans, cash flow models, and risks.',
+};
 
-export default function InvitDiscoverPage() {
+export default function InvITsPage() {
   return (
-    <ComingSoon
-      title="InvITs Marketplace"
-      description="Invest in Infrastructure Investment Trusts. Access roads, power grids, and pipeline assets."
-      icon={<Zap className="w-7 h-7" />}
-      eta="Coming in Phase 2"
-    />
+    <div className="page-container space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          InvITs — Infrastructure Investment Trusts
+        </h1>
+        <p className="text-sm text-muted mt-1">
+          Explore fractional ownership of national highways, power grids, and transmission lines with cash distribution models.
+        </p>
+      </div>
+
+      <AlternativeInvestmentExplorer initialCategory="invit" />
+    </div>
   );
 }

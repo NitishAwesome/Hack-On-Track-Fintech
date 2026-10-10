@@ -20,7 +20,7 @@ import type {
 import { formatCurrencySafe } from '../utils.ts';
 
 export const EDUCATIONAL_DISCLAIMER =
-  'FINOVA is a financial education and portfolio tracking platform, not a SEBI-registered investment adviser. Insights and observations are generated for informational purposes only and do not constitute personalized financial advice or recommendations to buy, sell, or hold any security.';
+  'FINOVA is a financial education and portfolio tracking platform, not a SEBI-registered investment adviser. Insights and observations are generated using deterministic financial calculations augmented by external AI processing (Google Gemini) for educational and informational purposes only, and do not constitute personalized financial advice or recommendations to buy, sell, or hold any security.';
 
 /**
  * Sanitize untrusted input strings before including in AI prompts.
@@ -30,7 +30,7 @@ export function sanitizeUntrustedInput(val: unknown, maxLen = 80): string {
   if (typeof val !== 'string') return '';
   return val
     .replace(/[^\w\s.,&%()/-]/gi, '')
-    .replace(/\b(ignore\s+all\s+previous|system\s+prompt|delete|drop\s+table)\b/gi, '')
+    .replace(/\b(ignore\s+(all\s+)?(previous\s+)?instructions?|system\s+prompt|delete|drop\s+table)\b/gi, '')
     .trim()
     .slice(0, maxLen);
 }
@@ -343,20 +343,27 @@ export async function generatePortfolioIntelligence(
       percentage: Number(s.percentage.toFixed(1)),
     }));
 
+    const valuationBase = summary.priced_current_value && summary.priced_current_value > 0
+      ? summary.priced_current_value
+      : summary.total_invested_value;
+
     const sanitizedHoldingsTop = holdings.slice(0, 5).map((h) => ({
       symbol: sanitizeUntrustedInput(h.symbol, 15),
       name: sanitizeUntrustedInput(h.name, 40),
       asset_class: sanitizeUntrustedInput(h.asset_class, 20),
-      weight_pct: summary.total_current_value && summary.total_current_value > 0
-        ? Number(((h.current_value / summary.total_current_value) * 100).toFixed(1))
+      weight_pct: valuationBase > 0 && h.current_value !== null
+        ? Number(((h.current_value / valuationBase) * 100).toFixed(1))
         : 0,
-      has_quote: h.current_price !== null,
+      has_quote: h.current_price !== null && h.current_value !== null,
     }));
 
     const promptPayload = {
       aggregated_metrics: {
         total_invested_inr: summary.total_invested_value,
         total_current_value_inr: summary.total_current_value,
+        priced_subtotal_inr: summary.priced_current_value,
+        priced_invested_inr: summary.priced_invested_value,
+        unquoted_invested_inr: summary.unquoted_invested_value,
         overall_return_pct: summary.total_absolute_return_pct,
         holding_count: summary.holding_count,
         broker_count: summary.broker_count,
@@ -384,7 +391,7 @@ RULES:
    - Why it matters for an Indian retail investor (significance).
    - Which holdings or allocations contribute (key_drivers).
    - What the user could investigate next (investigation_steps).
-5. Highlight incomplete quotes if unquoted_count > 0.
+5. If quote_coverage_pct < 100% or unquoted_count > 0, you MUST explicitly state that market valuations and concentration reflect priced positions only, and unpriced positions are excluded from current market totals.
 6. Provide objective observations only.
 7. Return raw JSON matching this schema:
 {

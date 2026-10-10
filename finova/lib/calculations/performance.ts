@@ -5,8 +5,8 @@
 // Strictly avoids fabricating missing market data or unverified metrics.
 // ============================================================
 
-import { roundCurrency, roundPercent } from './portfolio';
-import { calculateRealizedPnL } from './realizedPnL';
+import { roundCurrency, roundPercent } from './portfolio.ts';
+import { calculateRealizedPnL } from './realizedPnL.ts';
 import type { HoldingWithMetrics, PortfolioSummary } from '@/types/portfolio';
 import type { InvestmentTransactionRow } from '@/types/database';
 import type { PerformanceSummary } from '@/types/financial';
@@ -54,16 +54,16 @@ export function buildPerformanceSummary(
     currentPortfolioValue = 0;
     unrealizedPnL = 0;
     unrealizedPnLPct = 0;
-  } else if (portfolioSummary && portfolioSummary.total_current_value !== null) {
+  } else if (portfolioSummary) {
     currentPortfolioValue = portfolioSummary.total_current_value;
     unrealizedPnL = portfolioSummary.total_absolute_return;
     unrealizedPnLPct = portfolioSummary.total_absolute_return_pct;
   } else if (pricedHoldings.length > 0) {
     const pricedInvested = pricedHoldings.reduce((s, h) => s + (h.invested_value || 0), 0);
     const pricedCurrent = pricedHoldings.reduce((s, h) => s + (h.current_value || 0), 0);
-    const totalVal = pricedCurrent + unquotedHoldings.reduce((s, h) => s + (h.invested_value || 0), 0);
 
-    currentPortfolioValue = roundCurrency(totalVal);
+    // Strictly null if valuation is incomplete to avoid presenting partial value as complete total
+    currentPortfolioValue = isValuationComplete ? roundCurrency(pricedCurrent) : null;
     unrealizedPnL = roundCurrency(pricedCurrent - pricedInvested);
     unrealizedPnLPct =
       pricedInvested > 0 ? roundPercent((unrealizedPnL / pricedInvested) * 100) : 0;

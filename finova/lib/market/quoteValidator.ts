@@ -4,7 +4,7 @@
 // and ensures demo/seed data is NEVER treated as live quotes.
 // ============================================================
 
-export type PriceStatus = 'REALTIME' | 'DELAYED' | 'EOD' | 'STALE';
+export type PriceStatus = 'REALTIME' | 'DELAYED' | 'EOD' | 'STALE' | 'UNAVAILABLE';
 
 export interface RawQuoteInput {
   symbol: string;
@@ -67,7 +67,7 @@ export function validateMarketQuote(
   ) {
     return {
       isValid: false,
-      status: 'STALE',
+      status: 'UNAVAILABLE',
       rejectionReason: `Invalid or non-positive price: ${quote.price}`,
     };
   }
@@ -78,7 +78,7 @@ export function validateMarketQuote(
     if (cleanCurr !== opts.expectedCurrency.toUpperCase()) {
       return {
         isValid: false,
-        status: 'STALE',
+        status: 'UNAVAILABLE',
         rejectionReason: `Currency mismatch: expected ${opts.expectedCurrency}, received ${quote.currency}`,
       };
     }
@@ -89,7 +89,7 @@ export function validateMarketQuote(
   if (!quote.timestamp) {
     return {
       isValid: false,
-      status: 'STALE',
+      status: 'UNAVAILABLE',
       rejectionReason: 'Missing quote timestamp',
     };
   }
@@ -106,7 +106,7 @@ export function validateMarketQuote(
   if (isNaN(quoteTimeMs) || quoteTimeMs <= 0) {
     return {
       isValid: false,
-      status: 'STALE',
+      status: 'UNAVAILABLE',
       rejectionReason: `Unparseable timestamp: ${quote.timestamp}`,
     };
   }
@@ -151,3 +151,5 @@ export function validateMarketQuote(
     normalizedTimestamp: new Date(quoteTimeMs).toISOString(),
   };
 }
+
+export const validateQuote = validateMarketQuote;

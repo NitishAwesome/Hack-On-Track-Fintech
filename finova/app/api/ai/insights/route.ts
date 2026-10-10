@@ -155,12 +155,13 @@ export async function POST(request: Request) {
         const assetClass = mapAssetTypeToClass(inst?.asset_type);
         const sym = inst?.symbol ? inst.symbol.toUpperCase() : '';
         const quote = sym ? quotesMap.get(sym) : null;
-        const hasValidQuote = Boolean(quote && quote.isValid);
+        const hasValidQuote = Boolean(quote && quote.isValid && quote.price !== null && quote.price > 0);
 
         const current_price = hasValidQuote ? quote!.price : null;
         const price_updated_at = hasValidQuote ? quote!.price_timestamp : null;
         const price_source = hasValidQuote ? quote!.source : null;
-        const price_status = hasValidQuote ? quote!.status : null;
+        const price_status = hasValidQuote ? quote!.status : (quote?.status || 'UNAVAILABLE');
+        const price_unavailability_reason = hasValidQuote ? null : (quote?.rejectionReason || 'Price unavailable');
 
         return {
           id: row.id,
@@ -182,6 +183,7 @@ export async function POST(request: Request) {
           price_updated_at,
           price_source,
           price_status,
+          price_unavailability_reason,
           created_at: row.created_at,
           updated_at: row.updated_at,
           sector: inst?.sector || null,
@@ -238,12 +240,13 @@ export async function POST(request: Request) {
         const broker = brokers.find((b) => b.id === h.broker_account_id);
         const sym = inst?.symbol ? inst.symbol.toUpperCase() : '';
         const quote = sym ? quotesMap.get(sym) : null;
-        const hasValidQuote = Boolean(quote && quote.isValid);
+        const hasValidQuote = Boolean(quote && quote.isValid && quote.price !== null && quote.price > 0);
 
         const current_price = hasValidQuote ? quote!.price : null;
         const price_updated_at = hasValidQuote ? quote!.price_timestamp : null;
         const price_source = hasValidQuote ? quote!.source : null;
-        const price_status = hasValidQuote ? quote!.status : null;
+        const price_status = hasValidQuote ? quote!.status : (quote?.status || 'UNAVAILABLE');
+        const price_unavailability_reason = hasValidQuote ? null : (quote?.rejectionReason || 'Price unavailable');
         const assetClass = mapAssetTypeToClass(inst?.asset_type);
 
         return {
@@ -266,6 +269,7 @@ export async function POST(request: Request) {
           price_updated_at,
           price_source,
           price_status,
+          price_unavailability_reason,
           created_at: h.created_at,
           updated_at: h.updated_at,
           sector: inst?.sector || null,

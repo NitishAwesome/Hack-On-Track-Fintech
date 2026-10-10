@@ -1,12 +1,12 @@
-import type { MarketIndex, MarketDataResponse, MarketStatus } from '@/types/market';
+import type { MarketIndex, MarketDataResponse, MarketStatus } from '../../types/market';
 import {
   type MarketDataProvider,
   type MarketQuote,
   YFinanceMarketDataProvider,
-} from '@/lib/market/providers/yfinanceProvider';
-import { extractBaseSymbol } from '@/lib/market/symbolMapper';
+} from '../market/providers/yfinanceProvider.ts';
+import { extractBaseSymbol } from '../market/symbolMapper.ts';
 
-export type { MarketQuote } from '@/lib/market/providers/yfinanceProvider';
+export type { MarketQuote } from '../market/providers/yfinanceProvider.ts';
 
 /**
  * Calculates official Indian Market (NSE/BSE) status based on IST (Asia/Kolkata).

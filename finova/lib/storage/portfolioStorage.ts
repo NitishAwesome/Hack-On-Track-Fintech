@@ -563,6 +563,21 @@ export class PortfolioStorage {
     }
   }
 
+  public static clear(): void {
+    serverState = {
+      broker_accounts: [],
+      holdings: [],
+      custom_instruments: [],
+      transactions: [],
+    };
+    this.dynamicPrices.clear();
+    if (this.isClient()) {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+    }
+  }
+
   // ─── Broker Accounts ────────────────────────────────────────
 
   public static getBrokerAccounts(userId: string = 'current_user'): BrokerAccountRow[] {
@@ -1231,6 +1246,10 @@ export class PortfolioStorage {
     this.dynamicPrices.set(symbol.toUpperCase(), price);
   }
 
+  public static setDynamicPrice(symbol: string, price: InstrumentPriceRow): void {
+    this.setMarketPrice(symbol, price);
+  }
+
   public static setMarketPrices(
     prices: Record<string, InstrumentPriceRow> | Map<string, InstrumentPriceRow>
   ): void {
@@ -1252,9 +1271,10 @@ export class PortfolioStorage {
   /**
    * Retrieves market price for a symbol.
    * Prioritizes verified dynamic quotes from the market-data feed.
-   * If allowSeedFallback is false, never returns demo/seed fixtures.
+   * Defaults allowSeedFallback to false in production to ensure static seed prices
+   * never reach real portfolio calculations or valuations.
    */
-  public static getMarketPrice(symbol: string, allowSeedFallback = true): InstrumentPriceRow | null {
+  public static getMarketPrice(symbol: string, allowSeedFallback = false): InstrumentPriceRow | null {
     const sym = symbol?.toUpperCase();
     if (!sym) return null;
 

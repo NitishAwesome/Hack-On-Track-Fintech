@@ -29,6 +29,7 @@ export interface MarketQuote {
   low_52w: number | null;
   volume: number | null;
   isValid: boolean;
+  rejectionReason?: string;
 }
 
 export interface MarketDataProvider {

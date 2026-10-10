@@ -101,7 +101,7 @@ export default function PerformancePage() {
           return {
             month: month.toLocaleDateString('en-IN', { month: 'short' }),
             Invested: holdings.reduce((s, h) => s + h.invested_value, 0) * (0.7 + i * 0.025),
-            Value: holdings.reduce((s, h) => s + (h.current_value || h.invested_value), 0) * factor,
+            Value: holdings.reduce((s, h) => s + (h.current_value ?? 0), 0) * factor,
           };
         })
       : [];

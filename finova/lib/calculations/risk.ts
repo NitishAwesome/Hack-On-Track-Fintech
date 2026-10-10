@@ -26,10 +26,13 @@ export function computeHHI(shares: number[]): number {
 
 /**
  * Compute sector concentration and distribution when sector metadata is present.
+ * Strictly adheres to Prompt 9.1B:
+ * Uses consistent valuation denominator without mixing cost basis into market valuation.
  */
 export function computeSectorAllocation(
   holdings: HoldingWithMetrics[],
-  valuationBase: number
+  valuationBase: number,
+  usingMarketValuation = true
 ): {
   allocations: SectorAllocation[];
   topSector: string | null;
@@ -47,18 +50,28 @@ export function computeSectorAllocation(
     const rawSector = h.sector?.trim();
     const sectorName = rawSector && rawSector.length > 0 ? rawSector : 'Unclassified';
     if (rawSector && rawSector.length > 0) hasValidSector = true;
-
-    const val = typeof h.current_price === 'number' && h.current_price > 0
-      ? (h.quantity * h.current_price)
-      : h.invested_value;
     const isUnquoted = h.current_price === null || typeof h.current_price !== 'number';
 
-    const current = sectorMap.get(sectorName) ?? { value: 0, count: 0, unquoted: 0 };
-    sectorMap.set(sectorName, {
-      value: current.value + val,
-      count: current.count + 1,
-      unquoted: current.unquoted + (isUnquoted ? 1 : 0),
-    });
+    if (!sectorMap.has(sectorName)) {
+      sectorMap.set(sectorName, { value: 0, count: 0, unquoted: 0 });
+    }
+    const current = sectorMap.get(sectorName)!;
+    current.count += 1;
+    if (isUnquoted) current.unquoted += 1;
+  }
+
+  const activeHoldings = usingMarketValuation
+    ? holdings.filter((h) => typeof h.current_price === 'number' && h.current_price > 0)
+    : holdings;
+
+  for (const h of activeHoldings) {
+    const rawSector = h.sector?.trim();
+    const sectorName = rawSector && rawSector.length > 0 ? rawSector : 'Unclassified';
+    const current = sectorMap.get(sectorName)!;
+    const val = usingMarketValuation
+      ? (h.quantity * (h.current_price || 0))
+      : h.invested_value;
+    current.value += val;
   }
 
   const allocations: SectorAllocation[] = Array.from(sectorMap.entries())
@@ -198,11 +211,11 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
   });
   const hhi = computeHHI(shares);
 
-  // 5. Asset Class Weight & Top Asset Class
+  // 5. Asset Class Weight & Top Asset Class (Defensible single denominator: uses holdingsForConcentration only)
   const assetClassTotals = new Map<string, number>();
-  for (const h of holdings) {
-    const val = usingMarketValuation && h.current_price
-      ? (h.quantity * h.current_price)
+  for (const h of holdingsForConcentration) {
+    const val = usingMarketValuation
+      ? (h.quantity * (h.current_price || 0))
       : h.invested_value;
     assetClassTotals.set(h.asset_class, (assetClassTotals.get(h.asset_class) || 0) + val);
   }
@@ -220,7 +233,7 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
   const brokerDiversification = clamp((brokerCount - 1) / 3, 0, 1);
 
   // 7. Sector Allocation
-  const sectorResult = computeSectorAllocation(holdings, valuationBase);
+  const sectorResult = computeSectorAllocation(holdings, valuationBase, usingMarketValuation);
 
   // 8. Composite Risk Score (0–100)
   const minHHI = holdingsForConcentration.length > 0 ? 1 / holdingsForConcentration.length : 1;

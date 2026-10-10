@@ -110,14 +110,18 @@ export default function BrokersPage() {
   const brokerStats = brokers.reduce((acc, b) => {
     const bHoldings = holdings.filter((h) => h.broker_account_id === b.id);
     const totalInvested = bHoldings.reduce((sum, h) => sum + h.invested_value, 0);
-    const totalValue = bHoldings.reduce((sum, h) => sum + (h.current_value || h.invested_value), 0);
+    const pricedHoldings = bHoldings.filter((h) => h.current_value !== null && h.current_value !== undefined);
+    const totalPricedValue = pricedHoldings.reduce((sum, h) => sum + (h.current_value ?? 0), 0);
+    const isFullyValued = bHoldings.length === 0 || pricedHoldings.length === bHoldings.length;
     acc[b.id] = {
       count: bHoldings.length,
       invested: totalInvested,
-      currentValue: totalValue,
+      currentValue: totalPricedValue,
+      isFullyValued,
+      pricedCount: pricedHoldings.length,
     };
     return acc;
-  }, {} as Record<string, { count: number; invested: number; currentValue: number }>);
+  }, {} as Record<string, { count: number; invested: number; currentValue: number; isFullyValued: boolean; pricedCount: number }>);
 
   const addMutation = useMutation({
     mutationFn: addBroker,
@@ -288,9 +292,17 @@ export default function BrokersPage() {
                       </p>
                     </div>
                     <div>
-                      <span className="text-slate-400">Portfolio Value</span>
+                      <span className="text-slate-400">
+                        {stats.isFullyValued ? 'Portfolio Value' : 'Valued Subtotal'}
+                      </span>
                       <p className="font-semibold text-sm text-slate-200 mt-0.5">
-                        {formatCurrency(stats.currentValue, true)}
+                        {stats.count === 0
+                          ? formatCurrency(0, true)
+                          : stats.isFullyValued
+                          ? formatCurrency(stats.currentValue, true)
+                          : stats.currentValue > 0
+                          ? `${formatCurrency(stats.currentValue, true)}*`
+                          : 'Price unavail.'}
                       </p>
                     </div>
                   </div>

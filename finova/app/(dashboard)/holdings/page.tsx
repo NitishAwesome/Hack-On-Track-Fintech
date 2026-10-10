@@ -203,16 +203,20 @@ export default function HoldingsPage() {
   // Calculate Unified Summary
   const summaryMetrics = useMemo(() => {
     const totalInvested = holdings.reduce((sum, h) => sum + h.invested_value, 0);
-    const pricedHoldings = holdings.filter((h) => h.current_price !== null && typeof h.current_price === 'number');
-    const totalCurrentVal = holdings.reduce((sum, h) => sum + (h.current_value || h.invested_value), 0);
+    const pricedHoldings = holdings.filter(
+      (h) => h.current_price !== null && typeof h.current_price === 'number' && h.current_value !== null
+    );
+    const isComplete = holdings.length > 0 && pricedHoldings.length === holdings.length;
     const pricedInvested = pricedHoldings.reduce((sum, h) => sum + h.invested_value, 0);
-    const pricedCurrent = pricedHoldings.reduce((sum, h) => sum + (h.current_value || h.invested_value), 0);
+    const pricedCurrent = pricedHoldings.reduce((sum, h) => sum + (h.current_value || 0), 0);
     const totalPnL = pricedHoldings.length > 0 ? pricedCurrent - pricedInvested : null;
     const totalReturnPct = pricedInvested > 0 && totalPnL !== null ? (totalPnL / pricedInvested) * 100 : null;
 
     return {
       totalInvested,
-      totalCurrentVal,
+      pricedCurrent: pricedHoldings.length > 0 ? pricedCurrent : null,
+      totalCurrentVal: isComplete ? pricedCurrent : null,
+      isComplete,
       totalPnL,
       totalReturnPct,
       totalCount: holdings.length,
@@ -236,7 +240,11 @@ export default function HoldingsPage() {
         return matchesTab && matchesSearch && matchesBroker;
       })
       .sort((a, b) => {
-        if (sortBy === 'value') return (b.current_value || b.invested_value) - (a.current_value || a.invested_value);
+        if (sortBy === 'value') {
+          const valA = a.current_value ?? -1;
+          const valB = b.current_value ?? -1;
+          return valB - valA;
+        }
         if (sortBy === 'invested') return b.invested_value - a.invested_value;
         if (sortBy === 'return') return (b.absolute_return_pct ?? -999) - (a.absolute_return_pct ?? -999);
         return a.name.localeCompare(b.name);
@@ -404,13 +412,17 @@ export default function HoldingsPage() {
         </div>
 
         <div className="card p-4 space-y-1">
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Current Valuation</p>
-          <p className="text-xl font-bold text-slate-100" title={formatCurrency(summaryMetrics.totalCurrentVal)}>
-            {formatCurrency(summaryMetrics.totalCurrentVal)}
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+            {summaryMetrics.isComplete ? 'Current Valuation' : 'Valued Subtotal'}
+          </p>
+          <p className="text-xl font-bold text-slate-100" title={summaryMetrics.pricedCurrent !== null ? formatCurrency(summaryMetrics.pricedCurrent) : 'Valuation unavailable'}>
+            {summaryMetrics.pricedCurrent !== null ? formatCurrency(summaryMetrics.pricedCurrent) : 'Valuation unavailable'}
           </p>
           <p className="text-[11px] text-slate-400 flex items-center gap-1">
             <Info className="w-3.5 h-3.5 text-blue-400" />
-            {summaryMetrics.pricedCount} of {summaryMetrics.totalCount} assets priced
+            {summaryMetrics.isComplete
+              ? `${summaryMetrics.totalCount} assets priced`
+              : `${summaryMetrics.pricedCount} of ${summaryMetrics.totalCount} assets priced (partial)`}
           </p>
         </div>
 
@@ -644,10 +656,10 @@ export default function HoldingsPage() {
 
                       <td
                         className="px-4 py-3.5 text-right font-mono font-semibold text-slate-100"
-                        title={hasPrice ? formatCurrency(h.current_value || h.invested_value) : 'Valuation unavailable'}
+                        title={hasPrice && h.current_value !== null ? formatCurrency(h.current_value) : 'Valuation unavailable'}
                       >
-                        {hasPrice ? (
-                          formatCurrency(h.current_value || h.invested_value)
+                        {hasPrice && h.current_value !== null ? (
+                          formatCurrency(h.current_value)
                         ) : (
                           <span className="text-slate-500">—</span>
                         )}

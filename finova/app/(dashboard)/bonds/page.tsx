@@ -1,16 +1,25 @@
-import { ComingSoon } from '@/components/shared/ComingSoon';
-import { Link2 } from 'lucide-react';
 import type { Metadata } from 'next';
+import { AlternativeInvestmentExplorer } from '@/components/explorer/AlternativeInvestmentExplorer';
 
-export const metadata: Metadata = { title: 'Bonds' };
+export const metadata: Metadata = {
+  title: 'Bonds & Fixed Income Explorer — FINOVA',
+  description:
+    'Learn how bonds, G-Secs, and debentures work in India, coupon versus yield, credit rating risks, and duration sensitivity.',
+};
 
-export default function BondsDiscoverPage() {
+export default function BondsPage() {
   return (
-    <ComingSoon
-      title="Bonds Marketplace"
-      description="Explore corporate bonds, G-Secs, and SDLs. Compare yields, ratings, and maturity profiles."
-      icon={<Link2 className="w-7 h-7" />}
-      eta="Coming in Phase 2"
-    />
+    <div className="page-container space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          Bonds & Fixed Income Securities
+        </h1>
+        <p className="text-sm text-muted mt-1">
+          Explore Government Securities, SDLs, and Corporate NCDs. Understand coupon vs yield, maturity, and duration risks.
+        </p>
+      </div>
+
+      <AlternativeInvestmentExplorer initialCategory="bond" />
+    </div>
   );
 }

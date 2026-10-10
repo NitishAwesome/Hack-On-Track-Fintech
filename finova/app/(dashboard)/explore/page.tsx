@@ -1,16 +1,25 @@
-import { ComingSoon } from '@/components/shared/ComingSoon';
-import { Compass } from 'lucide-react';
 import type { Metadata } from 'next';
+import { AlternativeInvestmentExplorer } from '@/components/explorer/AlternativeInvestmentExplorer';
 
-export const metadata: Metadata = { title: 'Explore' };
+export const metadata: Metadata = {
+  title: 'Alternative Investment Explorer — FINOVA',
+  description:
+    'Educational exploration of REITs, InvITs, and Bonds for Indian retail investors with live portfolio exposure connection.',
+};
 
 export default function ExplorePage() {
   return (
-    <ComingSoon
-      title="Explore"
-      description="Discover new investment opportunities across equities, ETFs, and alternative assets tailored for Indian retail investors."
-      icon={<Compass className="w-7 h-7" />}
-      eta="Coming in Phase 2"
-    />
+    <div className="page-container space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          Alternative Investment Explorer
+        </h1>
+        <p className="text-sm text-muted mt-1">
+          Understand REITs, InvITs, and Bonds: their asset structures, distribution mechanisms, and risk realities.
+        </p>
+      </div>
+
+      <AlternativeInvestmentExplorer initialCategory="reit" />
+    </div>
   );
 }

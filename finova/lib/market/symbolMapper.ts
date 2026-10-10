@@ -104,3 +104,25 @@ export function isIndianEquity(symbol: string): boolean {
   if (upper.startsWith('^')) return false;
   return /^[A-Z0-9_\-]+(\.(NS|BO))?$/.test(upper);
 }
+
+/**
+ * Checks whether symbol is a market index (^NSEI, SENSEX, etc.)
+ */
+export function isIndexSymbol(symbol: string): boolean {
+  if (!symbol) return false;
+  const upper = symbol.trim().toUpperCase();
+  return upper.startsWith('^') || Boolean(KNOWN_INDICES[upper]);
+}
+
+/**
+ * Resolves symbol to provider ticker, with asset-class aware mapping (e.g. commodities to ETFs)
+ */
+export function toProviderTicker(symbol: string, assetClass?: string): string {
+  if (!symbol) return '';
+  const upper = symbol.trim().toUpperCase();
+  if (assetClass === 'commodity') {
+    if (upper === 'GOLD') return 'GOLDBEES.NS';
+    if (upper === 'SILVER') return 'SILVERBEES.NS';
+  }
+  return resolveYahooFinanceSymbol(upper) || upper;
+}
