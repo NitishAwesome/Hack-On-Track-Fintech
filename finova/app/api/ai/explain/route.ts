@@ -6,6 +6,7 @@
 // - Deterministic context feeding (AI never invents metrics)
 // - Supports investment categories & X-Ray/Risk questions
 // - Strict input sanitization (strips prompt injections)
+// - Server-side verified portfolio context (never trusts client financial metrics)
 // - Resilient curated fallbacks when Gemini API key is absent or failing
 // - Explicit SEBI educational disclaimer attached
 // ============================================================
@@ -13,6 +14,8 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { sanitizeUntrustedInput } from '@/lib/ai/intelligenceEngine';
+import { resolveServerPortfolioContext } from '@/lib/news/portfolioContextResolver';
+import { consolidateUserHoldings, matchesSymbolOrCompany } from '@/lib/news/personalizationEngine';
 
 const SUPPORTED_TOPICS = [
   'equity',
@@ -24,6 +27,8 @@ const SUPPORTED_TOPICS = [
   'asset_allocation',
   'reit_vs_invit',
   'incomplete_valuation',
+  'news_article',
+  'news_relevance',
   'custom',
 ] as const;
 
@@ -48,6 +53,10 @@ const CURATED_EXPLANATIONS: Record<SupportedTopic, string> = {
 
   incomplete_valuation: `FINOVA strictly refuses to fabricate market prices or substitute purchase cost as market value. When a security lacks a reliable active market quote, its market value is marked as unavailable. Concentration metrics and market values are honestly calculated using only verified quotes to prevent misleading risk calculations.`,
 
+  news_article: `Financial news affects investor sentiment and company fundamentals. FINOVA verifies article mentions against your actual tracked holdings to explain real portfolio exposure without predicting market movements.`,
+
+  news_relevance: `Personalized news helps you identify developments directly concerning companies, sectors, or asset classes in your portfolio. Always review official regulatory filings on NSE/BSE before making investment decisions.`,
+
   custom: `FINOVA calculates your portfolio exposures deterministically to provide transparent, explainable insights across your tracked broker accounts. Always conduct independent research before making financial decisions.`,
 };
 
@@ -59,9 +68,62 @@ export async function POST(request: Request) {
       ? (rawTopic as SupportedTopic)
       : 'custom';
 
-    // Extract optional deterministic context provided by client
-    const context = body.context || {};
+    // 1. Resolve verified portfolio context server-side (NEVER blindly trust client numbers)
+    const serverPortfolio = await resolveServerPortfolioContext();
+    const consolidatedHoldings = consolidateUserHoldings(serverPortfolio);
+
+    // Extract sanitized query and article context
     const customQuery = typeof body.query === 'string' ? sanitizeUntrustedInput(body.query) : '';
+    const article = body.article || {};
+    const articleTitle = typeof article.title === 'string' ? sanitizeUntrustedInput(article.title) : '';
+    const articleSource = typeof article.source_name === 'string' ? sanitizeUntrustedInput(article.source_name) : 'Financial Media';
+    const articlePubDate = typeof article.pubDate === 'string' ? article.pubDate : '';
+    const articleDesc = typeof article.description === 'string' ? sanitizeUntrustedInput(article.description) : '';
+
+    // Check if article matches any holding in user's verified portfolio
+    let verifiedMatchedHolding: {
+      symbol: string;
+      name: string;
+      weight_pct: number;
+      sector: string | null;
+      is_cross_broker: boolean;
+      broker_names: string[];
+    } | null = null;
+
+    if (articleTitle || articleDesc) {
+      const fullText = `${articleTitle} ${articleDesc}`;
+      for (const item of consolidatedHoldings.values()) {
+        if (matchesSymbolOrCompany(fullText, item.symbol, item.name, item.isin)) {
+          if (!verifiedMatchedHolding || item.weight_pct > verifiedMatchedHolding.weight_pct) {
+            verifiedMatchedHolding = {
+              symbol: item.symbol,
+              name: item.name,
+              weight_pct: item.weight_pct,
+              sector: item.sector,
+              is_cross_broker: item.broker_names.length > 1,
+              broker_names: item.broker_names,
+            };
+          }
+        }
+      }
+    }
+
+    // Server-verified concentration metrics for non-news queries
+    let verifiedTopHoldingName = '';
+    let verifiedTopHoldingWeight = 0;
+    for (const item of consolidatedHoldings.values()) {
+      if (item.weight_pct > verifiedTopHoldingWeight) {
+        verifiedTopHoldingWeight = item.weight_pct;
+        verifiedTopHoldingName = item.name;
+      }
+    }
+
+    let verifiedCrossBrokerOverlapCount = 0;
+    for (const item of consolidatedHoldings.values()) {
+      if (item.broker_names.length > 1) {
+        verifiedCrossBrokerOverlapCount++;
+      }
+    }
 
     const hasApiKey =
       Boolean(process.env.GEMINI_API_KEY) &&
@@ -73,7 +135,42 @@ export async function POST(request: Request) {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-        const prompt = `You are the FINOVA AI Financial Intelligence Assistant, explaining investment and portfolio concepts to an Indian retail investor.
+        let prompt = '';
+
+        if (topic === 'news_article' || topic === 'news_relevance') {
+          prompt = `You are FINOVA's AI News Intelligence Assistant explaining financial news to an Indian retail investor.
+Strict Regulatory & Safety Rules:
+1. Provide neutral, educational explanations grounded ONLY in the verified facts provided below.
+2. NEVER give financial advice, buy/sell recommendations, or price targets.
+3. NEVER predict stock market movements or claim guaranteed returns.
+4. Keep the explanation under 3-4 clear, professional sentences.
+5. Emphasize Indian financial context (SEBI, NSE/BSE, RBI).
+
+Verified Article Context:
+- Headline: "${articleTitle}"
+- Publisher: ${articleSource}
+- Publication Date: ${articlePubDate}
+- Excerpt: "${articleDesc.slice(0, 300)}"
+
+Verified Investor Portfolio Context:
+${
+  verifiedMatchedHolding
+    ? `- Directly Held Security: ${verifiedMatchedHolding.name} (${verifiedMatchedHolding.symbol})
+- Verified Portfolio Weight: ${verifiedMatchedHolding.weight_pct}% of investor's capital
+- Sector: ${verifiedMatchedHolding.sector || 'Classified equity'}
+- Multi-Broker Status: ${
+        verifiedMatchedHolding.is_cross_broker
+          ? `Held across ${verifiedMatchedHolding.broker_names.length} broker accounts (${verifiedMatchedHolding.broker_names.join(', ')})`
+          : 'Held in single broker account'
+      }`
+    : `- Holding Association: No direct verified security match in investor's tracked portfolio. (General market news)`
+}
+
+${customQuery ? `User Question: "${customQuery}"` : 'Explain: What is this story about, why does it matter to an investor, and what should they research further?'}
+
+Deliver a concise, educational, structured explanation.`;
+        } else {
+          prompt = `You are the FINOVA AI Financial Intelligence Assistant, explaining investment and portfolio concepts to an Indian retail investor.
 Strict Rules:
 1. Provide neutral, educational explanations suitable for beginners.
 2. NEVER give financial advice, buy/sell recommendations, or price targets.
@@ -83,11 +180,11 @@ Strict Rules:
 
 Topic: ${topic}
 ${customQuery ? `User Question: "${customQuery}"` : ''}
-${context.topHoldingName ? `Deterministic Context: Top Holding is ${context.topHoldingName} representing ${context.topHoldingWeight || 'a significant'}% of valued assets.` : ''}
-${context.overlapCount ? `Deterministic Context: User holds ${context.overlapCount} overlapping instruments across multiple brokers totaling ${context.overlapValue || 'significant'} capital.` : ''}
-${context.unquotedCount ? `Deterministic Context: Portfolio has ${context.unquotedCount} unquoted positions with ${context.quoteCoveragePct || 0}% price coverage.` : ''}
+${verifiedTopHoldingName ? `Verified Context: Top Holding is ${verifiedTopHoldingName} representing ${verifiedTopHoldingWeight}% of valued assets.` : ''}
+${verifiedCrossBrokerOverlapCount > 0 ? `Verified Context: User holds ${verifiedCrossBrokerOverlapCount} overlapping instruments across multiple brokers.` : ''}
 
 Deliver a concise, educational, structured explanation.`;
+        }
 
         const result = await model.generateContent(prompt);
         const text = result.response.text();
@@ -96,9 +193,17 @@ Deliver a concise, educational, structured explanation.`;
           success: true,
           type: topic,
           explanation: text,
+          grounded_context: {
+            article_title: articleTitle,
+            publisher: articleSource,
+            matched_symbol: verifiedMatchedHolding?.symbol || null,
+            verified_portfolio_weight: verifiedMatchedHolding?.weight_pct || null,
+            verified_sector: verifiedMatchedHolding?.sector || null,
+            is_held_in_portfolio: Boolean(verifiedMatchedHolding),
+          },
           source: 'gemini',
           disclaimer:
-            'AI-generated educational explanation based on deterministic portfolio figures. Not SEBI-registered financial advice.',
+            'AI-generated educational explanation based on verified server portfolio context. Not SEBI-registered financial advice.',
         });
       } catch (aiErr) {
         console.warn('[API /api/ai/explain] Gemini error, falling back to curated answer:', aiErr);
@@ -108,20 +213,32 @@ Deliver a concise, educational, structured explanation.`;
     // Curated deterministic fallback
     let fallbackText = CURATED_EXPLANATIONS[topic] || CURATED_EXPLANATIONS.custom;
 
-    if (topic === 'concentration' && context.topHoldingName && context.topHoldingWeight) {
-      fallbackText = `Your largest holding, ${context.topHoldingName}, accounts for ${context.topHoldingWeight}% of your valued portfolio. ${fallbackText}`;
-    } else if (topic === 'cross_broker_overlap' && context.overlapCount) {
-      fallbackText = `You have ${context.overlapCount} instrument(s) held in more than one broker account. ${fallbackText}`;
-    } else if (topic === 'incomplete_valuation' && context.unquotedCount) {
-      fallbackText = `${context.unquotedCount} of your positions currently lack active market prices (${context.quoteCoveragePct || 0}% coverage). ${fallbackText}`;
+    if (topic === 'news_article' || topic === 'news_relevance') {
+      if (verifiedMatchedHolding) {
+        fallbackText = `This article directly mentions ${verifiedMatchedHolding.name} (${verifiedMatchedHolding.symbol}), which represents approximately ${verifiedMatchedHolding.weight_pct}% of your tracked portfolio. Consider reviewing official exchange disclosures on NSE/BSE to evaluate the business impact.`;
+      } else {
+        fallbackText = `This story covers general Indian market developments. While it does not directly match any individual security in your tracked portfolio, broader regulatory or interest rate changes can impact general market sentiment.`;
+      }
+    } else if (topic === 'concentration' && verifiedTopHoldingName) {
+      fallbackText = `Your largest holding, ${verifiedTopHoldingName}, accounts for ${verifiedTopHoldingWeight}% of your valued portfolio. ${fallbackText}`;
+    } else if (topic === 'cross_broker_overlap' && verifiedCrossBrokerOverlapCount > 0) {
+      fallbackText = `You have ${verifiedCrossBrokerOverlapCount} instrument(s) held in more than one broker account. ${fallbackText}`;
     }
 
     return NextResponse.json({
       success: true,
       type: topic,
       explanation: fallbackText,
-      source: 'curated_deterministic',
-      disclaimer: 'Curated financial educational explanation. Not financial advice.',
+      grounded_context: {
+        article_title: articleTitle,
+        publisher: articleSource,
+        matched_symbol: verifiedMatchedHolding?.symbol || null,
+        verified_portfolio_weight: verifiedMatchedHolding?.weight_pct || null,
+        verified_sector: verifiedMatchedHolding?.sector || null,
+        is_held_in_portfolio: Boolean(verifiedMatchedHolding),
+      },
+      source: 'deterministic_fallback',
+      disclaimer: 'Curated financial educational explanation based on deterministic portfolio figures. Not financial advice.',
     });
   } catch (err: unknown) {
     console.error('[API /api/ai/explain] Exception:', err);

@@ -1,92 +1,186 @@
+// ============================================================
+// FINOVA — Personalized Financial News API (Prompt 12)
+// app/api/news/route.ts
+//
+// Key Principles:
+// 1. ZERO fabricated/curated headlines in production.
+// 2. Verified real NewsData.io integration (server-only key).
+// 3. Authenticated server-side portfolio context retrieval.
+// 4. Deterministic relevance ranking & factual explanations.
+// 5. Strict error states (NOT_CONFIGURED, RATE_LIMITED, UNAVAILABLE).
+// ============================================================
+
 import { NextResponse } from 'next/server';
+import { fetchIndianFinancialNews } from '@/lib/news/newsProvider';
+import { resolveServerPortfolioContext } from '@/lib/news/portfolioContextResolver';
+import { personalizeAndRankNews } from '@/lib/news/personalizationEngine';
+import type { NewsApiResponse, PersonalizedNewsArticle } from '@/types/news';
 
-const CURATED_NEWS = [
-  {
-    article_id: 'news-1',
-    title: 'SEBI Streamlines REIT & InvIT Minimum Investment Sizes to Boost Retail Participation',
-    link: 'https://www.moneycontrol.com',
-    description: 'Capital markets regulator SEBI has enacted progressive guidelines easing trading lot requirements, making listed Real Estate & Infrastructure Investment Trusts more accessible to retail portfolios.',
-    source_name: 'Economic Times',
-    pubDate: new Date(Date.now() - 3600000 * 2).toISOString(),
-    image_url: null,
-    keywords: ['SEBI', 'REIT', 'InvIT', 'Regulations'],
-  },
-  {
-    article_id: 'news-2',
-    title: 'RBI Keeps Repo Rate Steady: Bond Yields Consolidate Around 7.05% Benchmark',
-    link: 'https://www.livemint.com',
-    description: 'The Monetary Policy Committee voted to maintain policy repo rates, signaling macroeconomic stability as institutional and retail investors lock in attractive yields on Government Securities.',
-    source_name: 'LiveMint',
-    pubDate: new Date(Date.now() - 3600000 * 5).toISOString(),
-    image_url: null,
-    keywords: ['RBI', 'Bonds', 'G-Sec', 'Monetary Policy'],
-  },
-  {
-    article_id: 'news-3',
-    title: 'Indian IT & Conglomerate Earnings Show Steady Cash Flow Resilience',
-    link: 'https://www.business-standard.com',
-    description: 'Leading index heavyweights including Reliance Industries and TCS reported healthy quarterly margin performance driven by domestic demand and digital transformation initiatives.',
-    source_name: 'Business Standard',
-    pubDate: new Date(Date.now() - 3600000 * 12).toISOString(),
-    image_url: null,
-    keywords: ['Earnings', 'Nifty 50', 'Reliance', 'TCS'],
-  },
-  {
-    article_id: 'news-4',
-    title: 'Sovereign Gold Bonds Continue Outperforming Physical Gold with 2.5% Annual Interest',
-    link: 'https://www.financialexpress.com',
-    description: 'Investors in RBI Sovereign Gold Bond tranches benefit from purity assurance, exemption from capital gains tax upon redemption, and bi-annual sovereign interest credits.',
-    source_name: 'Financial Express',
-    pubDate: new Date(Date.now() - 3600000 * 24).toISOString(),
-    image_url: null,
-    keywords: ['SGB', 'Gold', 'RBI', 'Tax Free'],
-  },
-];
-
-// GET /api/news?symbols=RELIANCE,INFY
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const symbolsParam = searchParams.get('symbols') || '';
+  try {
+    const { searchParams } = new URL(request.url);
+    const filter = (searchParams.get('filter') || 'all').toLowerCase();
+    const specificSymbol = searchParams.get('symbol')?.toUpperCase()?.trim();
+    const customQuery = searchParams.get('q')?.trim();
+    const forceRefresh = searchParams.get('refresh') === 'true';
 
-  if (process.env.NEWSDATA_API_KEY && !process.env.NEWSDATA_API_KEY.includes('your_')) {
-    try {
-      const query = symbolsParam
-        ? `(${symbolsParam.split(',').slice(0, 3).join(' OR ')}) India stock`
-        : 'India stock market investment';
+    // 1. Resolve authenticated user portfolio context server-side
+    const portfolio = await resolveServerPortfolioContext();
 
-      const url = new URL('https://newsdata.io/api/1/news');
-      url.searchParams.set('apikey', process.env.NEWSDATA_API_KEY);
-      url.searchParams.set('q', query);
-      url.searchParams.set('country', 'in');
-      url.searchParams.set('language', 'en');
-      url.searchParams.set('category', 'business');
-      url.searchParams.set('size', '10');
+    // 2. Fetch real news from NewsData.io
+    const portfolioSymbols = portfolio.holdings.map((h) => h.symbol);
+    const fetchResult = await fetchIndianFinancialNews({
+      query: customQuery,
+      symbols: specificSymbol ? [specificSymbol] : portfolioSymbols,
+      forceRefresh,
+    });
 
-      const res = await fetch(url.toString(), {
-        next: { revalidate: 1800 },
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        const articles = (json.results || []).map((a: Record<string, unknown>) => ({
-          article_id: a.article_id,
-          title: a.title,
-          link: a.link,
-          description: a.description,
-          source_name: a.source_name,
-          pubDate: a.pubDate,
-          image_url: a.image_url || null,
-          keywords: a.keywords || [],
-        }));
-
-        if (articles.length > 0) {
-          return NextResponse.json({ articles });
-        }
-      }
-    } catch (err) {
-      console.warn('NewsData fetch error, serving curated feed:', err);
+    // Handle provider error states cleanly without fabricating news
+    if (fetchResult.providerStatus === 'NOT_CONFIGURED') {
+      const response: NewsApiResponse = {
+        status: 'not_configured',
+        articles: [],
+        provider_status: 'NOT_CONFIGURED',
+        message: fetchResult.message,
+        meta: {
+          total_fetched: 0,
+          direct_matches_count: 0,
+          sector_matches_count: 0,
+          cached: false,
+          provider: 'newsdata',
+          last_updated: new Date().toISOString(),
+          portfolio_symbols_count: portfolioSymbols.length,
+        },
+      };
+      return NextResponse.json(response);
     }
-  }
 
-  return NextResponse.json({ articles: CURATED_NEWS, isCurated: true });
+    if (fetchResult.providerStatus === 'RATE_LIMITED') {
+      const response: NewsApiResponse = {
+        status: 'rate_limited',
+        articles: [],
+        provider_status: 'RATE_LIMITED',
+        message: fetchResult.message,
+        meta: {
+          total_fetched: 0,
+          direct_matches_count: 0,
+          sector_matches_count: 0,
+          cached: false,
+          provider: 'newsdata',
+          last_updated: new Date().toISOString(),
+          portfolio_symbols_count: portfolioSymbols.length,
+        },
+      };
+      return NextResponse.json(response, { status: 429 });
+    }
+
+    if (fetchResult.providerStatus === 'UNAVAILABLE' || fetchResult.providerStatus === 'ERROR') {
+      const response: NewsApiResponse = {
+        status: 'error',
+        articles: [],
+        provider_status: fetchResult.providerStatus,
+        message: fetchResult.message,
+        meta: {
+          total_fetched: 0,
+          direct_matches_count: 0,
+          sector_matches_count: 0,
+          cached: false,
+          provider: 'newsdata',
+          last_updated: new Date().toISOString(),
+          portfolio_symbols_count: portfolioSymbols.length,
+        },
+      };
+      return NextResponse.json(response, { status: 502 });
+    }
+
+    if (fetchResult.articles.length === 0) {
+      const response: NewsApiResponse = {
+        status: 'empty',
+        articles: [],
+        provider_status: 'EMPTY',
+        message: fetchResult.message || 'No news articles found.',
+        meta: {
+          total_fetched: 0,
+          direct_matches_count: 0,
+          sector_matches_count: 0,
+          cached: fetchResult.isCached,
+          provider: 'newsdata',
+          last_updated: new Date().toISOString(),
+          portfolio_symbols_count: portfolioSymbols.length,
+        },
+      };
+      return NextResponse.json(response);
+    }
+
+    // 3. Personalize and rank all returned real articles against user's portfolio
+    const personalizedArticles = personalizeAndRankNews(fetchResult.articles, portfolio);
+
+    // 4. Apply optional filters
+    let filteredArticles: PersonalizedNewsArticle[] = personalizedArticles;
+
+    if (specificSymbol) {
+      filteredArticles = filteredArticles.filter(
+        (a) => a.matched_holding?.symbol.toUpperCase() === specificSymbol
+      );
+    } else if (filter === 'portfolio') {
+      filteredArticles = filteredArticles.filter(
+        (a) =>
+          a.relevance_category === 'DIRECT_HOLDING' ||
+          a.relevance_category === 'SECTOR_RELEVANCE' ||
+          a.relevance_category === 'ASSET_CLASS'
+      );
+    } else if (filter === 'direct') {
+      filteredArticles = filteredArticles.filter(
+        (a) => a.relevance_category === 'DIRECT_HOLDING'
+      );
+    } else if (filter === 'sector') {
+      filteredArticles = filteredArticles.filter(
+        (a) => a.relevance_category === 'SECTOR_RELEVANCE'
+      );
+    } else if (filter === 'market') {
+      filteredArticles = filteredArticles.filter(
+        (a) => a.relevance_category === 'GENERAL_MARKET'
+      );
+    }
+
+    const directCount = personalizedArticles.filter((a) => a.relevance_category === 'DIRECT_HOLDING').length;
+    const sectorCount = personalizedArticles.filter((a) => a.relevance_category === 'SECTOR_RELEVANCE').length;
+
+    const response: NewsApiResponse = {
+      status: 'success',
+      articles: filteredArticles,
+      provider_status: 'ACTIVE',
+      meta: {
+        total_fetched: fetchResult.articles.length,
+        direct_matches_count: directCount,
+        sector_matches_count: sectorCount,
+        cached: fetchResult.isCached,
+        provider: 'newsdata',
+        last_updated: new Date().toISOString(),
+        portfolio_symbols_count: portfolioSymbols.length,
+      },
+    };
+
+    return NextResponse.json(response);
+  } catch (err: unknown) {
+    console.error('[API /api/news] Unexpected error:', err);
+    return NextResponse.json(
+      {
+        status: 'error',
+        articles: [],
+        provider_status: 'ERROR',
+        message: err instanceof Error ? err.message : 'Internal news processing error.',
+        meta: {
+          total_fetched: 0,
+          direct_matches_count: 0,
+          sector_matches_count: 0,
+          cached: false,
+          provider: 'newsdata',
+          last_updated: new Date().toISOString(),
+          portfolio_symbols_count: 0,
+        },
+      },
+      { status: 500 }
+    );
+  }
 }

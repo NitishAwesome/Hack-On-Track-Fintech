@@ -260,7 +260,19 @@ export interface AIIntelligenceResponse {
   };
 }
 
-// ----- News Types -----
+// ----- News Types (Re-exported from types/news) -----
+export type {
+  NewsFreshness,
+  NewsRelevanceCategory,
+  NewsProviderStatus,
+  NormalizedNewsArticle,
+  MatchedHoldingContext,
+  PersonalizedNewsArticle,
+  UserPortfolioContext,
+  NewsApiResponse,
+  NewsExplainerRequest,
+  NewsExplainerResponse,
+} from './news';
 
 export interface NewsArticle {
   article_id: string;
@@ -271,6 +283,12 @@ export interface NewsArticle {
   pubDate: string;
   image_url: string | null;
   keywords: string[] | null;
+  relevance_category?: import('./news').NewsRelevanceCategory;
+  relevance_score?: number;
+  matched_holding?: import('./news').MatchedHoldingContext | null;
+  matched_sector?: string | null;
+  explanation?: string;
+  investigation_prompts?: string[];
 }
 
 // ----- Market Data Types -----

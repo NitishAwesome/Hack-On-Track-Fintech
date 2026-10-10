@@ -11,6 +11,7 @@ import { HoldingsPreviewSection } from './HoldingsPreviewSection';
 import { BrokerAccountsSection } from './BrokerAccountsSection';
 import { RecentActivitySection } from './RecentActivitySection';
 import { AIInsightCard } from '@/components/insights/AIInsightCard';
+import { NewsCard } from './NewsCard';
 
 import type { PortfolioSummary, AssetAllocation, HoldingWithMetrics } from '@/types/portfolio';
 import type { BrokerAccountRow, PortfolioSnapshotRow, InvestmentTransactionRow } from '@/types/database';
@@ -290,6 +291,11 @@ export function FinovaDashboard() {
           error={transactionsError}
           onRetry={fetchTransactions}
         />
+      </div>
+
+      {/* Row 5: Market & Portfolio News Intelligence Preview */}
+      <div className="w-full">
+        <NewsCard />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@
 // ============================================================
 
 import React from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { ExternalLink, Newspaper } from 'lucide-react';
@@ -20,8 +21,8 @@ async function fetchHoldings() {
   return res.json();
 }
 
-async function fetchNews(symbols: string) {
-  const res = await fetch(`/api/news?symbols=${symbols}`);
+async function fetchPortfolioNews() {
+  const res = await fetch('/api/news?filter=portfolio');
   if (!res.ok) throw new Error();
   return res.json();
 }
@@ -29,16 +30,14 @@ async function fetchNews(symbols: string) {
 export default function InsightsPage() {
   const { data: holdingsData } = useQuery({ queryKey: ['holdings'], queryFn: fetchHoldings });
   const holdings: HoldingWithMetrics[] = holdingsData?.holdings ?? [];
-  const symbols = holdings.slice(0, 5).map((h) => h.symbol).join(',');
 
   const { data: newsData, isLoading: newsLoading } = useQuery({
-    queryKey: ['news', symbols],
-    queryFn: () => fetchNews(symbols),
-    enabled: true,
+    queryKey: ['portfolio-news'],
+    queryFn: fetchPortfolioNews,
   });
 
   const articles: NewsArticle[] = newsData?.articles ?? [];
-  const noApiKey = newsData?.message?.includes('NEWSDATA_API_KEY');
+  const noApiKey = newsData?.provider_status === 'NOT_CONFIGURED';
 
   return (
     <div className="page-container space-y-8">
@@ -63,11 +62,13 @@ export default function InsightsPage() {
               Holdings-Relevant Market News
             </h2>
           </div>
-          {holdings.length > 0 && (
-            <span className="text-xs" style={{ color: 'rgb(var(--muted))' }}>
-              Filtered for top portfolio symbols
-            </span>
-          )}
+          <Link
+            href="/news"
+            className="text-xs text-brand font-semibold hover:underline flex items-center gap-1"
+          >
+            <span>Open News & Market Intelligence</span>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
         </div>
 
         {noApiKey && (

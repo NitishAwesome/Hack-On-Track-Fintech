@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import {
   Plus, Upload, Search, X, Loader2,
-  LineChart, Trash2, Download, Eye, Building2, Info, Edit2,
+  LineChart, Trash2, Download, Eye, Building2, Info, Edit2, Newspaper,
   AlertCircle, CheckCircle2, FileText, ArrowUpDown, Filter, ChevronRight, RefreshCw
 } from 'lucide-react';
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
@@ -687,6 +688,13 @@ export default function HoldingsPage() {
 
                       <td className="px-4 py-3.5 text-center">
                         <div className="flex items-center justify-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <Link
+                            href={`/news?symbol=${encodeURIComponent(h.symbol)}`}
+                            title={`View news for ${h.symbol}`}
+                            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition-colors"
+                          >
+                            <Newspaper className="w-4 h-4" />
+                          </Link>
                           <button
                             title="Edit Holding"
                             onClick={() => setEditingHolding(h)}
