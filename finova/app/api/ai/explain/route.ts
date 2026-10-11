@@ -133,7 +133,13 @@ export async function POST(request: Request) {
     if (hasApiKey) {
       try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const candidateModels = [
+          process.env.GEMINI_MODEL,
+          'gemini-3.8-flash',
+          'gemini-flash-lite-latest',
+          'gemini-2.5-flash',
+          'gemini-1.5-flash',
+        ].filter(Boolean) as string[];
 
         let prompt = '';
 
@@ -186,13 +192,33 @@ ${verifiedCrossBrokerOverlapCount > 0 ? `Verified Context: User holds ${verified
 Deliver a concise, educational, structured explanation.`;
         }
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
+        let text = '';
+        let successfulModel = '';
+
+        for (const mName of candidateModels) {
+          try {
+            const model = genAI.getGenerativeModel({ model: mName });
+            const result = await model.generateContent(prompt);
+            const candidateText = result.response.text();
+            if (candidateText && candidateText.trim().length > 0) {
+              text = candidateText.trim();
+              successfulModel = mName;
+              break;
+            }
+          } catch {
+            // Try next candidate model
+          }
+        }
+
+        if (!text) {
+          throw new Error('All candidate Gemini models failed to generate content.');
+        }
 
         return NextResponse.json({
           success: true,
           type: topic,
           explanation: text,
+          model: successfulModel,
           grounded_context: {
             article_title: articleTitle,
             publisher: articleSource,

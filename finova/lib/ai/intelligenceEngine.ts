@@ -323,13 +323,13 @@ export async function generatePortfolioIntelligence(
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey!);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.2, // Low temperature for high deterministic fidelity
-      },
-    });
+    const candidateModels = [
+      process.env.GEMINI_MODEL,
+      'gemini-3.8-flash',
+      'gemini-flash-lite-latest',
+      'gemini-2.5-flash',
+      'gemini-1.5-flash',
+    ].filter(Boolean) as string[];
 
     // Constrain & sanitize data sent to Gemini (ZERO credentials/PII)
     const sanitizedAllocation = allocations.map((a) => ({
@@ -417,8 +417,33 @@ RULES:
     };
 
     const promptText = JSON.stringify(promptPayload);
-    const result = await model.generateContent(promptText);
-    const text = result.response.text();
+    let text = '';
+    let successfulModelName = 'Gemini';
+
+    for (const mName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: mName,
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+          },
+        });
+        const result = await model.generateContent(promptText);
+        const candidateText = result.response.text();
+        if (candidateText && candidateText.trim().length > 0) {
+          text = candidateText;
+          successfulModelName = mName;
+          break;
+        }
+      } catch {
+        // Try next candidate model
+      }
+    }
+
+    if (!text) {
+      throw new Error('All candidate Gemini models failed to generate content');
+    }
 
     // Clean any markdown code fences if present
     const cleanJson = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
@@ -429,7 +454,7 @@ RULES:
       return {
         report: validated,
         provider: 'gemini',
-        model: 'Gemini 1.5 Flash',
+        model: successfulModelName,
         isAiAvailable: true,
         status: 'success',
       };

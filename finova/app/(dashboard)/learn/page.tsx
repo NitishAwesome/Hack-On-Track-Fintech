@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, Building2, Zap, FileText,
   ChevronUp, Sparkles, Loader2,
-  CheckCircle, AlertTriangle, Scale
+  CheckCircle, AlertTriangle, Scale,
+  Compass, ArrowRight,
 } from 'lucide-react';
 
 type InvestmentType = 'equity' | 'reit' | 'invit' | 'bond';
@@ -20,6 +22,7 @@ interface LearnCard {
   features: string[];
   risks: string[];
   suitedFor: string;
+  explorerHref: string;
 }
 
 const LEARN_CARDS: LearnCard[] = [
@@ -32,76 +35,80 @@ const LEARN_CARDS: LearnCard[] = [
     bgColor: 'rgb(var(--brand-500) / 0.1)',
     features: [
       'Part ownership of a listed company',
-      'Returns via price appreciation + dividends',
+      'Returns via price appreciation + discretionary dividends',
       'Listed on NSE and BSE',
       'Can be bought/sold on any trading day',
     ],
     risks: [
-      'High market volatility',
-      'Company-specific risk',
-      'Requires research and monitoring',
+      'High market volatility and economic cyclicality',
+      'Company-specific operational and business risk',
+      'Requires fundamental and valuation research',
     ],
-    suitedFor: 'Investors with a long-term horizon (5+ years) and moderate to high risk appetite.',
+    suitedFor: 'Investors with long-term horizons (5+ years) seeking growth who can tolerate daily price volatility.',
+    explorerHref: '/explore',
   },
   {
     type: 'reit',
     title: 'REITs',
-    tagline: 'Real estate income without the property',
+    tagline: 'Commercial real estate cash flows without physical property ownership',
     icon: <Building2 className="w-5 h-5" />,
     color: '#8B5CF6',
     bgColor: 'rgba(139,92,246,0.1)',
     features: [
-      'Invest in income-generating real estate',
-      'Mandated to distribute 90% income as dividends',
-      'Listed on stock exchanges (NSE/BSE)',
-      'Lower ticket size vs physical property',
+      'Co-own Grade-A commercial office parks, tech hubs, and malls',
+      'SEBI mandates distributing >= 90% Net Distributable Cash Flows (NDCF)',
+      '1 unit minimum trading lot size on NSE/BSE (standardized July 2021)',
+      'Distributions comprise dividends, loan interest, and capital return',
     ],
     risks: [
-      'Sensitive to interest rate changes',
-      'Lower capital appreciation vs equities',
-      'Limited liquidity vs stocks',
+      'Inverse sensitivity to RBI benchmark interest rate hikes',
+      'Tenant vacancy and lease non-renewal risks upon expiry',
+      'Secondary market unit price fluctuation',
     ],
-    suitedFor: 'Investors seeking regular income with real estate exposure, without large capital requirements.',
+    suitedFor: 'Investors seeking regular income from commercial real estate leases with low capital thresholds.',
+    explorerHref: '/reit',
   },
   {
     type: 'invit',
     title: 'InvITs',
-    tagline: 'Infrastructure income trusts',
+    tagline: 'Fractional participation in national infrastructure assets',
     icon: <Zap className="w-5 h-5" />,
     color: '#F59E0B',
     bgColor: 'rgba(245,158,11,0.1)',
     features: [
-      'Hold infrastructure assets (roads, pipelines, power)',
-      'Regular cash distributions from asset revenues',
-      'Stable, predictable income streams',
-      'Listed on stock exchanges',
+      'Hold essential infrastructure (toll highways, power grids, fiber)',
+      'SEBI mandates distributing >= 90% Net Distributable Cash Flows (NDCF)',
+      '1 unit minimum trading lot size on NSE/BSE (standardized July 2021)',
+      'Regular cash flows from highway tolls or availability tariffs',
     ],
     risks: [
-      'Regulatory and policy risk',
-      'Project execution risk',
-      'Interest rate sensitivity',
+      'Concession lifespan expiration (BOT assets amortize toward zero)',
+      'Highway traffic volume fluctuations and fuel economic cycles',
+      'Interest rate sensitivity on project finance bank loans',
     ],
-    suitedFor: 'Conservative investors seeking stable, inflation-linked income from essential infrastructure.',
+    suitedFor: 'Investors seeking regular cash distributions who understand concession lifespans and project debt risks.',
+    explorerHref: '/invit',
   },
   {
     type: 'bond',
-    title: 'Bonds & Debt',
-    tagline: 'Fixed income with defined returns',
+    title: 'Bonds & Fixed Income',
+    tagline: 'Contractual debt providing periodic coupons and par redemption',
     icon: <FileText className="w-5 h-5" />,
     color: '#10B981',
     bgColor: 'rgba(16,185,129,0.1)',
     features: [
-      'Loan to government or corporations',
-      'Fixed coupon (interest) paid periodically',
-      'Principal returned at maturity',
-      'Government bonds (G-Secs) are near risk-free',
+      'Contractual loan to Central Government, State, or Corporation',
+      'Predetermined coupon interest paid periodically on nominal face value',
+      'Principal face value returned at maturity date',
+      'Central G-Secs carry sovereign default safety (backed by RBI/Govt)',
     ],
     risks: [
-      'Credit risk for corporate bonds',
-      'Interest rate risk (inverse price relationship)',
-      'Inflation can erode real returns',
+      'Corporate credit default risk (varies by credit rating AAA to D)',
+      'Duration & interest rate risk (market price falls when interest rates rise)',
+      'Inflation erosion over fixed long-term coupon payouts',
     ],
-    suitedFor: 'Conservative investors seeking predictable income and capital preservation.',
+    suitedFor: 'Investors seeking defined regular coupon cash flows and priority claim over equity in capital structure.',
+    explorerHref: '/bonds',
   },
 ];
 
@@ -155,11 +162,38 @@ export default function LearnPage() {
     <div className="page-container space-y-6">
       <div>
         <h1 className="text-2xl font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-          Learn
+          Learn & Financial Discovery
         </h1>
         <p className="text-sm mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
-          Understand different investment types available to Indian retail investors
+          Understand different investment types available to Indian retail investors with verified regulatory context
         </p>
+      </div>
+
+      {/* Deep Link Banner to Explorer */}
+      <div
+        className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-l-4 border-l-brand-500"
+        style={{ backgroundColor: 'rgb(var(--surface))' }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-500 flex items-center justify-center flex-shrink-0">
+            <Compass className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-foreground">
+              Looking for Interactive Yield Calculators & Quizzes?
+            </h4>
+            <p className="text-[11px] text-muted">
+              Explore REIT NDCF yields, InvIT concession models, and Bond coupon vs current yield calculators in the dedicated Explorer.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/explore"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-500 text-white shadow-sm hover:opacity-95 transition-opacity self-start sm:self-auto flex-shrink-0"
+        >
+          <span>Open Investment Explorer</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       {/* Hero comparison grid */}
@@ -302,8 +336,27 @@ export default function LearnPage() {
               >
                 <Scale className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: card.color }} />
                 <p style={{ color: 'rgb(var(--foreground))' }}>
-                  <strong>Best suited for:</strong> {card.suitedFor}
+                  <strong>Educational suitability context:</strong> {card.suitedFor}
                 </p>
+              </div>
+
+              {/* Explorer Deep Link */}
+              <div
+                className="px-5 py-3 border-t text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                style={{ borderColor: 'rgb(var(--border))', backgroundColor: 'rgb(var(--surface))' }}
+              >
+                <div className="flex items-center gap-2 text-muted">
+                  <Compass className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                  <span>Launch interactive yield calculators, cash distribution simulators, and knowledge checks</span>
+                </div>
+                <Link
+                  href={card.explorerHref}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-95 self-start sm:self-auto flex-shrink-0"
+                  style={{ backgroundColor: card.color }}
+                >
+                  <span>Launch {card.title} Explorer</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
               </div>
             </motion.div>
           );
@@ -317,10 +370,14 @@ export default function LearnPage() {
         transition={{ delay: 0.4 }}
         className="card overflow-hidden"
       >
-        <div className="px-5 py-4 border-b" style={{ borderColor: 'rgb(var(--border))' }}>
+        <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'rgb(var(--border))' }}>
           <h2 className="text-sm font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-            Quick Comparison
+            Quick Comparison Across Asset Classes
           </h2>
+          <Link href="/explore" className="text-xs text-brand-500 hover:underline inline-flex items-center gap-1">
+            <span>Detailed 10-Dimension Matrix</span>
+            <ArrowRight className="w-3 h-3" />
+          </Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -335,12 +392,12 @@ export default function LearnPage() {
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'rgb(var(--border))' }}>
               {[
-                ['Risk Level', 'High', 'Medium', 'Low-Medium', 'Low'],
-                ['Regular Income', '✕ Dividends', '✓ Mandatory', '✓ Distributions', '✓ Coupon'],
-                ['Capital Growth', '✓ High', '✕ Moderate', '✕ Low', '✕ Minimal'],
-                ['Liquidity', 'High', 'Medium', 'Medium', 'Low-Medium'],
-                ['Min Investment', 'One share', '~₹10,000', '~₹10,000', '~₹1,000'],
-                ['Tax on Returns', 'LTCG/STCG', 'LTCG/STCG + TDS on dividends', 'LTCG/STCG + TDS', 'Interest taxed as income'],
+                ['Risk Level', 'High (Market Cycles)', 'Moderate (Interest/Vacancy)', 'Moderate (Concession Lifespan)', 'Low-Moderate (Credit/Duration)'],
+                ['Regular Income', '✕ Discretionary Dividends', '✓ Mandatory >=90% NDCF', '✓ Mandatory >=90% NDCF', '✓ Contractual Fixed Coupon'],
+                ['Capital Growth', '✓ High (Enterprise value)', '✓ Moderate (Property NAV)', '✕ Amortizing (Concession expiry)', '✕ None (Par redemption)'],
+                ['Liquidity', 'Very High on NSE/BSE', 'Moderate (1 unit lot)', 'Moderate to Low (1 unit lot)', 'Low-Moderate on debt segment'],
+                ['Min Lot Size (SEBI)', '1 share', '1 unit (SEBI 2021)', '1 unit (SEBI 2021)', '1 bond lot / G-Sec lot'],
+                ['Tax on Returns', 'LTCG/STCG + Dividends', 'Split: Dividend, Interest, Return of Capital', 'Split: Dividend, Interest, Return of Capital', 'Interest taxed as income; LTCG on listed debt'],
               ].map(([feature, ...vals]) => (
                 <tr key={feature} className="hover:bg-opacity-50"
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgb(var(--surface-raised))'; }}
@@ -358,7 +415,7 @@ export default function LearnPage() {
           </table>
         </div>
         <div className="px-4 py-3 text-xs border-t" style={{ borderColor: 'rgb(var(--border))', color: 'rgb(var(--muted))' }}>
-          ⚠ Tax information is for general guidance only. Consult a tax professional for your specific situation.
+          ⚠ Tax information is for general educational guidance only under Indian regulations. Consult a qualified tax professional for your specific situation.
         </div>
       </motion.div>
     </div>
