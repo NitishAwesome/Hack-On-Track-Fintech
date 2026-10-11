@@ -57,6 +57,7 @@ export async function GET() {
           instrument:instruments(*)
         `)
         .eq('user_id', user.id)
+        .gt('quantity', 0)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -182,7 +183,7 @@ export async function GET() {
   }
 
   // Explicit local development mode (Supabase unconfigured)
-  const rawHoldings = PortfolioStorage.getHoldings();
+  const rawHoldings = PortfolioStorage.getHoldings().filter((h) => Number(h.quantity) > 0);
   const brokers = PortfolioStorage.getBrokerAccounts();
 
   const holdingsWithInst = rawHoldings.map((h) => {

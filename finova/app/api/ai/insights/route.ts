@@ -100,6 +100,7 @@ export async function POST(request: Request) {
           instrument:instruments(*)
         `)
         .eq('user_id', user.id) // Enforce user isolation
+        .gt('quantity', 0)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -213,7 +214,7 @@ export async function POST(request: Request) {
     }
   } else {
     // Local storage mode
-    const rawHoldings = PortfolioStorage.getHoldings();
+    const rawHoldings = PortfolioStorage.getHoldings().filter((h) => Number(h.quantity) > 0);
     const brokers = PortfolioStorage.getBrokerAccounts();
 
     if (rawHoldings.length === 0) {

@@ -69,6 +69,30 @@ UPDATE public.holdings
 SET provenance_status = 'UNKNOWN'
 WHERE opening_quantity IS NULL AND provenance_status = 'VERIFIED';
 
+-- Forward-only constraint migration: Relax CHECK (quantity > 0) to CHECK (quantity >= 0)
+-- Original schema in 20261009000000 enforced CHECK (quantity > 0). Reconciled full liquidations
+-- store quantity = 0 to retain historical cost and opening baseline without constraint violations.
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (
+    SELECT conname
+    FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    JOIN pg_namespace n ON t.relnamespace = n.oid
+    WHERE n.nspname = 'public'
+      AND t.relname = 'holdings'
+      AND c.contype = 'c'
+      AND pg_get_constraintdef(c.oid) LIKE '%quantity > 0%'
+  ) LOOP
+    EXECUTE format('ALTER TABLE public.holdings DROP CONSTRAINT %I', r.conname);
+  END LOOP;
+
+  ALTER TABLE public.holdings DROP CONSTRAINT IF EXISTS holdings_quantity_check;
+  ALTER TABLE public.holdings ADD CONSTRAINT holdings_quantity_check CHECK (quantity >= 0);
+END $$;
+
 
 -- ============================================================
 -- SECTION 2: ROW-LEVEL SECURITY — BLOCK DIRECT TRANSACTION MUTATIONS
@@ -498,14 +522,34 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  -- 5. Validate non-negative quantities and prices
-  IF p_quantity <= 0 THEN
-    RAISE EXCEPTION 'Transaction quantity must be strictly greater than 0'
-      USING ERRCODE = '22003';
+  -- 5. Validate quantities and prices according to transaction type
+  IF v_norm_type IN ('BUY', 'SELL', 'BONUS', 'SPLIT') THEN
+    IF p_quantity <= 0 THEN
+      RAISE EXCEPTION 'Transaction quantity must be strictly greater than 0 for % transactions', v_norm_type
+        USING ERRCODE = '22003';
+    END IF;
+  ELSE
+    -- Non-trading events (DIVIDEND, INTEREST, COUPON, FEE) permit quantity = 0
+    IF p_quantity < 0 THEN
+      RAISE EXCEPTION 'Transaction quantity cannot be negative'
+        USING ERRCODE = '22003';
+    END IF;
   END IF;
 
-  IF p_unit_price < 0 THEN
-    RAISE EXCEPTION 'Unit price cannot be negative'
+  IF v_norm_type IN ('BUY', 'SELL') THEN
+    IF p_unit_price <= 0 THEN
+      RAISE EXCEPTION 'Unit price must be strictly greater than 0 for % transactions', v_norm_type
+        USING ERRCODE = '22003';
+    END IF;
+  ELSE
+    IF p_unit_price < 0 THEN
+      RAISE EXCEPTION 'Unit price cannot be negative'
+        USING ERRCODE = '22003';
+    END IF;
+  END IF;
+
+  IF p_gross_amount < 0 THEN
+    RAISE EXCEPTION 'Gross amount cannot be negative'
       USING ERRCODE = '22003';
   END IF;
 
@@ -717,9 +761,23 @@ AS $$
 DECLARE
   v_user_id UUID := auth.uid();
   v_holding public.holdings%ROWTYPE;
+  v_has_tx BOOLEAN := FALSE;
+  v_reconcile_res JSONB;
 BEGIN
   IF v_user_id IS NULL THEN
-    RAISE EXCEPTION 'Authentication required' USING ERRCODE = '28000';
+    RAISE EXCEPTION 'Authentication required: auth.uid() is null' USING ERRCODE = '28000';
+  END IF;
+
+  IF p_holding_id IS NULL THEN
+    RAISE EXCEPTION 'Holding ID cannot be null' USING ERRCODE = '22004';
+  END IF;
+
+  IF p_opening_quantity IS NULL OR p_opening_buy_price IS NULL THEN
+    RAISE EXCEPTION 'Opening quantity and opening price cannot be null' USING ERRCODE = '22004';
+  END IF;
+
+  IF p_opening_quantity < 0 OR p_opening_buy_price < 0 THEN
+    RAISE EXCEPTION 'Opening quantity and price must be non-negative' USING ERRCODE = '22003';
   END IF;
 
   SELECT * INTO v_holding
@@ -731,21 +789,58 @@ BEGIN
     RAISE EXCEPTION 'Holding % not found or access denied', p_holding_id USING ERRCODE = 'P0002';
   END IF;
 
-  IF p_opening_quantity < 0 OR p_opening_buy_price < 0 THEN
-    RAISE EXCEPTION 'Opening quantity and price must be non-negative' USING ERRCODE = '22003';
+  -- 1. Prevent arbitrary changes to verified holdings with already established provenance
+  IF v_holding.provenance_status = 'VERIFIED' AND v_holding.opening_quantity IS NOT NULL THEN
+    RAISE EXCEPTION 'Holding % is already verified with established provenance. Arbitrary alteration of opening baseline is blocked.',
+      p_holding_id
+      USING ERRCODE = '42501';
   END IF;
 
+  -- 2. Check if active transactions exist
+  SELECT EXISTS (
+    SELECT 1 FROM public.investment_transactions
+    WHERE user_id = v_user_id
+      AND broker_account_id = v_holding.broker_account_id
+      AND instrument_id = v_holding.instrument_id
+  ) INTO v_has_tx;
+
+  -- 3. Prevent modifying active ledger-managed holdings unless explicitly in UNKNOWN legacy provenance state
+  IF v_holding.is_ledger_managed AND v_holding.provenance_status NOT IN ('UNKNOWN', 'UNANCHORED') AND v_holding.opening_quantity IS NOT NULL THEN
+    RAISE EXCEPTION 'Holding % is an active ledger-managed position with verified accounting. Arbitrary provenance modification is blocked.',
+      p_holding_id
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- 4. Apply opening baseline declaration safely
   UPDATE public.holdings
-  SET opening_quantity = p_opening_quantity,
-      opening_buy_price = p_opening_buy_price,
+  SET opening_quantity = round(p_opening_quantity, 6),
+      opening_buy_price = round(p_opening_buy_price, 4),
       provenance_status = 'MANUAL_DECLARED',
       updated_at = NOW()
   WHERE id = p_holding_id
   RETURNING * INTO v_holding;
 
+  -- 5. Reconcile atomically if transactions exist, or update position if manual
+  IF v_has_tx THEN
+    v_reconcile_res := public.reconcile_position_atomic(
+      v_holding.broker_account_id,
+      v_holding.instrument_id
+    );
+    SELECT * INTO v_holding FROM public.holdings WHERE id = p_holding_id;
+  ELSE
+    UPDATE public.holdings
+    SET quantity = round(p_opening_quantity, 6),
+        average_buy_price = round(p_opening_buy_price, 4),
+        is_ledger_managed = FALSE,
+        updated_at = NOW()
+    WHERE id = p_holding_id
+    RETURNING * INTO v_holding;
+  END IF;
+
   RETURN jsonb_build_object(
     'status', 'OPENING_BALANCE_DECLARED',
-    'holding', to_jsonb(v_holding)
+    'holding', to_jsonb(v_holding),
+    'reconciliation', v_reconcile_res
   );
 END;
 $$;

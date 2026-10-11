@@ -78,6 +78,7 @@ async function resolveUserHoldings(): Promise<{
           instrument:instruments(*)
         `)
         .eq('user_id', user.id) // Strict server-side user isolation
+        .gt('quantity', 0)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -203,7 +204,7 @@ async function resolveUserHoldings(): Promise<{
   }
 
   // Local development mode
-  const rawHoldings = PortfolioStorage.getHoldings();
+  const rawHoldings = PortfolioStorage.getHoldings().filter((h) => Number(h.quantity) > 0);
   const brokers = PortfolioStorage.getBrokerAccounts();
 
   const holdingsWithInst = rawHoldings.map((h) => {

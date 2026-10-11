@@ -71,6 +71,7 @@ export async function GET() {
           instrument:instruments(*)
         `)
         .eq('user_id', user.id)
+        .gt('quantity', 0)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -197,7 +198,7 @@ export async function GET() {
   }
 
   // Local Storage fallback
-  const localHoldings = PortfolioStorage.getHoldings();
+  const localHoldings = PortfolioStorage.getHoldings().filter((h) => Number(h.quantity) > 0);
   const localBrokers = PortfolioStorage.getBrokerAccounts();
 
   const brokers: BrokerAccount[] = localBrokers.map((b) => ({

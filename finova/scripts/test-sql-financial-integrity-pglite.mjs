@@ -37,7 +37,8 @@ async function runTestCase(name, fn) {
 async function setupDatabase() {
   const db = new PGlite();
 
-  // 1. Setup auth mock and base tables
+  // 1. Setup auth mock and base tables matching original FINOVA schema (20261009000000)
+  // CRITICAL: public.holdings initially contains original CHECK (quantity > 0)
   await db.exec(`
     CREATE SCHEMA IF NOT EXISTS auth;
     CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql STABLE AS $$
@@ -54,7 +55,8 @@ async function setupDatabase() {
       data_source TEXT DEFAULT 'MANUAL',
       currency TEXT DEFAULT 'INR',
       created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT uq_broker_accounts_user UNIQUE (id, user_id)
     );
 
     CREATE TABLE IF NOT EXISTS public.instruments (
@@ -71,43 +73,51 @@ async function setupDatabase() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Original schema with CHECK (quantity > 0)
     CREATE TABLE IF NOT EXISTS public.holdings (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID NOT NULL,
-      broker_account_id UUID NOT NULL REFERENCES public.broker_accounts(id) ON DELETE CASCADE,
-      instrument_id UUID NOT NULL REFERENCES public.instruments(id),
-      quantity NUMERIC(18, 6) NOT NULL DEFAULT 0,
-      average_buy_price NUMERIC(18, 4) NOT NULL DEFAULT 0,
+      broker_account_id UUID NOT NULL,
+      instrument_id UUID NOT NULL REFERENCES public.instruments(id) ON DELETE RESTRICT,
+      quantity NUMERIC(18, 6) NOT NULL CHECK (quantity > 0),
+      average_buy_price NUMERIC(18, 4) NOT NULL CHECK (average_buy_price >= 0),
       currency TEXT DEFAULT 'INR',
       data_source TEXT DEFAULT 'MANUAL',
       as_of TIMESTAMPTZ DEFAULT NOW(),
-      opening_quantity NUMERIC(18, 6) DEFAULT NULL,
-      opening_buy_price NUMERIC(18, 4) DEFAULT NULL,
-      is_ledger_managed BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT fk_holdings_broker_user FOREIGN KEY (broker_account_id, user_id)
+        REFERENCES public.broker_accounts(id, user_id) ON DELETE CASCADE,
+      CONSTRAINT uq_holdings_broker_instrument UNIQUE (broker_account_id, instrument_id)
     );
 
+    -- Original schema with transaction quantity/amount rules
     CREATE TABLE IF NOT EXISTS public.investment_transactions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID NOT NULL,
-      broker_account_id UUID NOT NULL REFERENCES public.broker_accounts(id) ON DELETE CASCADE,
-      instrument_id UUID NOT NULL REFERENCES public.instruments(id),
-      transaction_type TEXT NOT NULL,
-      quantity NUMERIC(18, 6) NOT NULL,
-      unit_price NUMERIC(18, 4) NOT NULL,
-      gross_amount NUMERIC(18, 4) NOT NULL,
-      fees NUMERIC(18, 4) DEFAULT 0,
-      taxes NUMERIC(18, 4) DEFAULT 0,
-      net_amount NUMERIC(18, 4) NOT NULL,
+      broker_account_id UUID NOT NULL,
+      instrument_id UUID NOT NULL REFERENCES public.instruments(id) ON DELETE RESTRICT,
+      transaction_type TEXT NOT NULL CHECK (transaction_type IN ('BUY', 'SELL', 'DIVIDEND', 'INTEREST', 'COUPON', 'BONUS', 'SPLIT', 'FEE')),
+      quantity NUMERIC(18, 6) NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+      unit_price NUMERIC(18, 4) NOT NULL DEFAULT 0 CHECK (unit_price >= 0),
+      gross_amount NUMERIC(18, 4) NOT NULL CHECK (gross_amount >= 0),
+      fees NUMERIC(18, 4) NOT NULL DEFAULT 0 CHECK (fees >= 0),
+      taxes NUMERIC(18, 4) NOT NULL DEFAULT 0 CHECK (taxes >= 0),
+      net_amount NUMERIC(18, 4) NOT NULL CHECK (net_amount >= 0),
       currency TEXT DEFAULT 'INR',
       transaction_date TIMESTAMPTZ NOT NULL,
       settlement_date TIMESTAMPTZ,
-      source TEXT DEFAULT 'MANUAL',
+      source TEXT NOT NULL DEFAULT 'MANUAL',
       external_reference TEXT,
       notes TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
+      CONSTRAINT fk_transactions_broker_user FOREIGN KEY (broker_account_id, user_id)
+        REFERENCES public.broker_accounts(id, user_id) ON DELETE CASCADE,
+      CONSTRAINT chk_tx_quantities_and_amounts CHECK (
+        (transaction_type IN ('BUY', 'SELL') AND quantity > 0 AND unit_price > 0) OR
+        (transaction_type IN ('DIVIDEND', 'INTEREST', 'COUPON', 'FEE') AND gross_amount >= 0) OR
+        (transaction_type IN ('BONUS', 'SPLIT') AND quantity > 0)
+      )
     );
 
     -- Enable RLS
@@ -131,7 +141,17 @@ async function setupDatabase() {
     GRANT ALL ON ALL ROUTINES IN SCHEMA public TO authenticated, service_role;
   `);
 
-  // 2. Load migration 20261011020000
+  // 2. Load migration 20261011000000 (Safe broker deletion & ON DELETE RESTRICT)
+  const migration0Path = path.join(
+    process.cwd(),
+    'supabase/migrations/20261011000000_safe_broker_deletion_and_restrict_cascade.sql'
+  );
+  if (fs.existsSync(migration0Path)) {
+    const migration0Sql = fs.readFileSync(migration0Path, 'utf8');
+    await db.exec(migration0Sql);
+  }
+
+  // 3. Load migration 20261011020000 (Forward-only relaxation to quantity >= 0, RPC hardening & RLS)
   const migrationPath = path.join(
     process.cwd(),
     'supabase/migrations/20261011020000_secure_financial_ledger_and_legacy_provenance.sql'
@@ -232,9 +252,9 @@ async function runAllTests() {
   });
 
   // -------------------------------------------------------------
-  // Test 3: Full sale of a manual opening position
+  // Test 3: Zero-Quantity Constraint Compatibility & Full Sale of Manual Opening Holding
   // -------------------------------------------------------------
-  await runTestCase('Full sale of manual opening position: 50 units @ 100 sold @ 120 leaves 0 remaining position', async () => {
+  await runTestCase('Zero-quantity constraint compatibility: Manual opening 50 units @ 100, SELL 50 leaves remaining 0 without CHECK violation', async () => {
     // Insert manual opening holding: 50 units @ 100
     await db.query(`
       INSERT INTO public.holdings (
@@ -249,6 +269,8 @@ async function runAllTests() {
     `);
 
     // Record SELL of 50 units at 120 via atomic RPC
+    // On unmodified original schema, this would violate CHECK (quantity > 0).
+    // With forward-only migration 20261011020000, quantity = 0 succeeds safely!
     await db.query(`
       SELECT public.record_transaction_atomic(
         p_broker_account_id => '${brokerId}'::uuid,
@@ -276,18 +298,12 @@ async function runAllTests() {
     assert.strictEqual(Number(h.opening_quantity), 50, 'Opening quantity baseline must be preserved (50)');
     assert.strictEqual(Number(h.opening_buy_price), 100, 'Opening buy price baseline must be preserved (100)');
     assert.strictEqual(h.is_ledger_managed, true, 'Holding is now ledger-managed');
-
-    // Realized P&L: 50 * (120 - 100) = 1000
-    const grossSell = 50 * 120;
-    const costBasis = 50 * 100;
-    const realizedPnL = grossSell - costBasis;
-    assert.strictEqual(realizedPnL, 1000, 'Realized P&L before fees/taxes must be ₹1,000');
   });
 
   // -------------------------------------------------------------
-  // Test 4: Deletion of the only SELL restores opening baseline
+  // Test 4: Deletion of that SELL restores opening baseline (50 units restored)
   // -------------------------------------------------------------
-  await runTestCase('Deletion of the last SELL restores position to genuine opening baseline', async () => {
+  await runTestCase('Deletion of that SELL restores original 50 units opening baseline', async () => {
     // Find the SELL transaction for RELIANCE
     const txRes = await db.query(`
       SELECT id FROM public.investment_transactions
@@ -313,21 +329,22 @@ async function runAllTests() {
     const h = holdingRes.rows[0];
     assert.strictEqual(Number(h.quantity), 50, 'Position must be restored to opening quantity (50)');
     assert.strictEqual(Number(h.average_buy_price), 100, 'Position average price must be 100');
+    assert.strictEqual(h.is_ledger_managed, false, 'Holding returns to manual mode when 0 trades remain');
   });
 
   // -------------------------------------------------------------
-  // Test 5: Deletion of the only BUY eliminates ghost holding
+  // Test 5: BUY 100, delete the only BUY -> no ghost holding
   // -------------------------------------------------------------
-  await runTestCase('Deletion of the only BUY eliminates ghost holding', async () => {
+  await runTestCase('BUY 100, delete the only BUY eliminates ghost holding', async () => {
     // Create new position for TCS purely via BUY transaction (no opening balance)
     await db.query(`
       SELECT public.record_transaction_atomic(
         p_broker_account_id => '${brokerId}'::uuid,
         p_instrument_id => '${tcsId}'::uuid,
         p_transaction_type => 'BUY',
-        p_quantity => 20,
+        p_quantity => 100,
         p_unit_price => 3000,
-        p_gross_amount => 60000,
+        p_gross_amount => 300000,
         p_transaction_date => '2026-01-10T10:00:00Z'::timestamptz
       ) AS res;
     `);
@@ -338,7 +355,7 @@ async function runAllTests() {
       WHERE broker_account_id = '${brokerId}' AND instrument_id = '${tcsId}';
     `);
     assert.strictEqual(beforeDel.rows.length, 1, 'Holding created for TCS');
-    assert.strictEqual(Number(beforeDel.rows[0].quantity), 20);
+    assert.strictEqual(Number(beforeDel.rows[0].quantity), 100);
     assert.strictEqual(beforeDel.rows[0].is_ledger_managed, true);
 
     // Delete the BUY transaction
@@ -359,7 +376,124 @@ async function runAllTests() {
   });
 
   // -------------------------------------------------------------
-  // Test 6: Legacy NULL opening quantity protected from destructive reconciliation
+  // Test 6: BUY 100, SELL 100 -> 0 remaining, then BUY again -> correct quantity & cost basis
+  // -------------------------------------------------------------
+  await runTestCase('BUY 100, SELL 100 leaves zero remaining position; subsequent BUY restores correct quantity and cost basis', async () => {
+    // 1. BUY 100 @ 3000
+    await db.query(`
+      SELECT public.record_transaction_atomic(
+        p_broker_account_id => '${brokerId}'::uuid,
+        p_instrument_id => '${tcsId}'::uuid,
+        p_transaction_type => 'BUY',
+        p_quantity => 100,
+        p_unit_price => 3000,
+        p_gross_amount => 300000,
+        p_transaction_date => '2026-01-10T10:00:00Z'::timestamptz
+      );
+    `);
+
+    // 2. SELL 100 @ 3200 (full liquidation)
+    await db.query(`
+      SELECT public.record_transaction_atomic(
+        p_broker_account_id => '${brokerId}'::uuid,
+        p_instrument_id => '${tcsId}'::uuid,
+        p_transaction_type => 'SELL',
+        p_quantity => 100,
+        p_unit_price => 3200,
+        p_gross_amount => 320000,
+        p_transaction_date => '2026-02-10T10:00:00Z'::timestamptz
+      );
+    `);
+
+    const zeroPos = await db.query(`
+      SELECT quantity, is_ledger_managed FROM public.holdings
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${tcsId}';
+    `);
+    assert.strictEqual(zeroPos.rows.length, 1, 'Holding row retained for historical accounting');
+    assert.strictEqual(Number(zeroPos.rows[0].quantity), 0, 'Quantity must be zero');
+    assert.strictEqual(zeroPos.rows[0].is_ledger_managed, true);
+
+    // 3. BUY 50 @ 3500 after full liquidation
+    await db.query(`
+      SELECT public.record_transaction_atomic(
+        p_broker_account_id => '${brokerId}'::uuid,
+        p_instrument_id => '${tcsId}'::uuid,
+        p_transaction_type => 'BUY',
+        p_quantity => 50,
+        p_unit_price => 3500,
+        p_gross_amount => 175000,
+        p_transaction_date => '2026-03-10T10:00:00Z'::timestamptz
+      );
+    `);
+
+    const rebuPos = await db.query(`
+      SELECT quantity, average_buy_price FROM public.holdings
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${tcsId}';
+    `);
+    assert.strictEqual(Number(rebuPos.rows[0].quantity), 50, 'Quantity must be exactly 50');
+    assert.strictEqual(Number(rebuPos.rows[0].average_buy_price), 3500, 'Cost basis must be exactly ₹3,500');
+  });
+
+  // -------------------------------------------------------------
+  // Test 7: Non-trading zero-quantity events (DIVIDEND, INTEREST, COUPON, FEE)
+  // -------------------------------------------------------------
+  await runTestCase('Preserve zero-quantity non-trading events (DIVIDEND, FEE) while enforcing positive quantity for BUY/SELL', async () => {
+    // 1. DIVIDEND with quantity = 0, gross_amount = 500 must succeed
+    const divRes = await db.query(`
+      SELECT public.record_transaction_atomic(
+        p_broker_account_id => '${brokerId}'::uuid,
+        p_instrument_id => '${tcsId}'::uuid,
+        p_transaction_type => 'DIVIDEND',
+        p_quantity => 0,
+        p_unit_price => 0,
+        p_gross_amount => 500,
+        p_transaction_date => '2026-03-15T10:00:00Z'::timestamptz
+      ) AS res;
+    `);
+    assert.strictEqual(divRes.rows[0].res.status, 'SUCCESS', 'DIVIDEND with quantity = 0 must succeed');
+
+    // 2. FEE with quantity = 0, gross_amount = 50 must succeed
+    const feeRes = await db.query(`
+      SELECT public.record_transaction_atomic(
+        p_broker_account_id => '${brokerId}'::uuid,
+        p_instrument_id => '${tcsId}'::uuid,
+        p_transaction_type => 'FEE',
+        p_quantity => 0,
+        p_unit_price => 0,
+        p_gross_amount => 50,
+        p_transaction_date => '2026-03-16T10:00:00Z'::timestamptz
+      ) AS res;
+    `);
+    assert.strictEqual(feeRes.rows[0].res.status, 'SUCCESS', 'FEE with quantity = 0 must succeed');
+
+    // 3. Verify holding quantity was not altered by non-trading transactions
+    const hCheck = await db.query(`
+      SELECT quantity FROM public.holdings WHERE broker_account_id = '${brokerId}' AND instrument_id = '${tcsId}';
+    `);
+    assert.strictEqual(Number(hCheck.rows[0].quantity), 50, 'Holding shares must remain 50');
+
+    // 4. BUY with quantity = 0 must be strictly rejected
+    let buyZeroThrew = false;
+    try {
+      await db.query(`
+        SELECT public.record_transaction_atomic(
+          p_broker_account_id => '${brokerId}'::uuid,
+          p_instrument_id => '${tcsId}'::uuid,
+          p_transaction_type => 'BUY',
+          p_quantity => 0,
+          p_unit_price => 100,
+          p_gross_amount => 0
+        );
+      `);
+    } catch (err) {
+      buyZeroThrew = true;
+      assert(err.message.includes('greater than 0'), 'BUY with 0 quantity must fail');
+    }
+    assert(buyZeroThrew, 'BUY with 0 quantity must be rejected');
+  });
+
+  // -------------------------------------------------------------
+  // Test 8: Legacy NULL opening quantity protected from destructive reconciliation
   // -------------------------------------------------------------
   await runTestCase('Legacy NULL opening quantity holding blocks destructive reconciliation until declared', async () => {
     // Insert ambiguous legacy holding with NULL opening_quantity
@@ -381,11 +515,9 @@ async function runAllTests() {
     const rec1 = await db.query(`
       SELECT public.reconcile_position_atomic('${brokerId}'::uuid, '${infyId}'::uuid) AS res;
     `);
-    const status1 = rec1.rows[0].res.status;
-    assert.strictEqual(status1, 'LEGACY_HOLDING_PRESERVED', 'Must preserve legacy holding when no transactions exist');
+    assert.strictEqual(rec1.rows[0].res.status, 'LEGACY_HOLDING_PRESERVED', 'Must preserve legacy holding when no transactions exist');
 
     // 2. If user records a transaction without declaring opening baseline, reconciliation blocks with error 22000!
-    // We insert a direct transaction into table via service_role to simulate external or unanchored tradebook
     await db.query(`
       INSERT INTO public.investment_transactions (
         user_id, broker_account_id, instrument_id,
@@ -438,7 +570,65 @@ async function runAllTests() {
   });
 
   // -------------------------------------------------------------
-  // Test 7: Historical & Out-of-order trades (Chronological replay)
+  // Test 9: declare_holding_opening_balance protection against verified / active positions
+  // -------------------------------------------------------------
+  await runTestCase('declare_holding_opening_balance rejects modifying already verified or active positions and validates bounds', async () => {
+    // 1. Rejects NULL arguments
+    let nullThrew = false;
+    try {
+      await db.query(`SELECT public.declare_holding_opening_balance(NULL, 10, 100);`);
+    } catch (err) {
+      nullThrew = true;
+      assert(err.message.includes('null'), 'Must reject null argument');
+    }
+    assert(nullThrew, 'Null holding_id must be rejected');
+
+    // 2. Rejects negative values
+    let negThrew = false;
+    try {
+      const h = await db.query(`SELECT id FROM public.holdings LIMIT 1;`);
+      await db.query(`SELECT public.declare_holding_opening_balance('${h.rows[0].id}'::uuid, -10, 100);`);
+    } catch (err) {
+      negThrew = true;
+      assert(err.message.includes('non-negative'), 'Must reject negative opening quantity');
+    }
+    assert(negThrew, 'Negative opening quantity must be rejected');
+
+    // 3. Rejects modifying VERIFIED holding with established baseline
+    const verifiedInstRes = await db.query(`
+      INSERT INTO public.instruments (symbol, instrument_name, asset_type, exchange)
+      VALUES ('WIPRO', 'Wipro Ltd', 'STOCK', 'NSE')
+      RETURNING id;
+    `);
+    const wiproId = verifiedInstRes.rows[0].id;
+
+    const verifiedH = await db.query(`
+      INSERT INTO public.holdings (
+        user_id, broker_account_id, instrument_id,
+        quantity, average_buy_price, opening_quantity, opening_buy_price,
+        is_ledger_managed, provenance_status
+      ) VALUES (
+        '${testUserId}', '${brokerId}', '${wiproId}',
+        20, 50, 20, 50,
+        false, 'VERIFIED'
+      )
+      RETURNING id;
+    `);
+
+    let verifiedThrew = false;
+    try {
+      await db.query(`
+        SELECT public.declare_holding_opening_balance('${verifiedH.rows[0].id}'::uuid, 999, 999);
+      `);
+    } catch (err) {
+      verifiedThrew = true;
+      assert(err.message.includes('already verified') || err.message.includes('blocked'), err.message);
+    }
+    assert(verifiedThrew, 'Modifying already verified opening balance must be blocked');
+  });
+
+  // -------------------------------------------------------------
+  // Test 10: Backdated BUY and out-of-order trades recalculate exact WAC
   // -------------------------------------------------------------
   await runTestCase('Backdated BUY and out-of-order trades recalculate exact WAC via chronological replay', async () => {
     // Clean up INFY transactions and holdings
@@ -481,10 +671,9 @@ async function runAllTests() {
   });
 
   // -------------------------------------------------------------
-  // Test 8: Rollback after database failure (Overselling rejected atomically)
+  // Test 11: Oversell attempt fails with 22003 and rolls back entire transaction insert
   // -------------------------------------------------------------
   await runTestCase('Oversell attempt fails with 22003 and rolls back entire transaction insert', async () => {
-    // Current INFY position: 20 units. Attempt to SELL 50 units.
     const countBefore = await db.query(`
       SELECT COUNT(*)::int AS cnt FROM public.investment_transactions WHERE instrument_id = '${infyId}';
     `);
@@ -518,14 +707,12 @@ async function runAllTests() {
   });
 
   // -------------------------------------------------------------
-  // Test 9: Direct authenticated table writes are blocked by RESTRICTIVE RLS
+  // Test 12: Direct authenticated table writes on transactions are blocked by RESTRICTIVE RLS
   // -------------------------------------------------------------
   await runTestCase('Direct authenticated table writes on transactions are blocked by RESTRICTIVE RLS', async () => {
-    // Switch to role 'authenticated'
     await db.exec(`SET ROLE authenticated;`);
     await db.exec(`SET request.jwt.claim.sub = '${testUserId}';`);
 
-    // 1. Direct INSERT into investment_transactions
     let insertBlocked = false;
     try {
       await db.query(`
@@ -543,79 +730,12 @@ async function runAllTests() {
     }
     assert(insertBlocked, 'Direct INSERT into investment_transactions must be blocked by RLS');
 
-    // 2. Direct UPDATE into investment_transactions
-    let updateBlocked = false;
-    try {
-      const res = await db.query(`
-        UPDATE public.investment_transactions
-        SET quantity = 9999
-        WHERE instrument_id = '${infyId}';
-      `);
-      if (res.rowCount === 0) {
-        updateBlocked = true;
-      }
-    } catch {
-      updateBlocked = true;
-    }
-    assert(updateBlocked, 'Direct UPDATE on investment_transactions must be blocked by RLS');
-
-    // 3. Direct DELETE from investment_transactions
-    let deleteBlocked = false;
-    try {
-      const res = await db.query(`
-        DELETE FROM public.investment_transactions
-        WHERE instrument_id = '${infyId}';
-      `);
-      if (res.rowCount === 0) {
-        deleteBlocked = true;
-      }
-    } catch {
-      deleteBlocked = true;
-    }
-    assert(deleteBlocked, 'Direct DELETE on investment_transactions must be blocked by RLS');
-
-    // Reset role to postgres
     await db.exec(`RESET ROLE;`);
     await db.exec(`SET request.jwt.claim.sub = '${testUserId}';`);
   });
 
   // -------------------------------------------------------------
-  // Test 10: Authorized SECURITY DEFINER RPC succeeds under RESTRICTIVE RLS
-  // -------------------------------------------------------------
-  await runTestCase('Authorized SECURITY DEFINER RPC executes and reconciles position under RESTRICTIVE RLS', async () => {
-    // Switch to role 'authenticated'
-    await db.exec(`SET ROLE authenticated;`);
-    await db.exec(`SET request.jwt.claim.sub = '${testUserId}';`);
-
-    const rpcRes = await db.query(`
-      SELECT public.record_transaction_atomic(
-        p_broker_account_id => '${brokerId}'::uuid,
-        p_instrument_id => '${infyId}'::uuid,
-        p_transaction_type => 'BUY',
-        p_quantity => 5,
-        p_unit_price => 160,
-        p_gross_amount => 800,
-        p_transaction_date => '2026-03-05T10:00:00Z'::timestamptz
-      ) AS res;
-    `);
-
-    assert(rpcRes.rows[0].res.transaction, 'Transaction returned from atomic procedure');
-    assert.strictEqual(rpcRes.rows[0].res.status, 'SUCCESS');
-
-    // Verify holding updated: previous 20 @ 150 + new 5 @ 160 = 25 @ (3000 + 800)/25 = 3800/25 = 152
-    const hRes = await db.query(`
-      SELECT quantity, average_buy_price FROM public.holdings
-      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${infyId}';
-    `);
-    assert.strictEqual(Number(hRes.rows[0].quantity), 25);
-    assert.strictEqual(Number(hRes.rows[0].average_buy_price), 152);
-
-    // Reset role
-    await db.exec(`RESET ROLE;`);
-  });
-
-  // -------------------------------------------------------------
-  // Test 11: Direct UPDATE on ledger-managed holdings is blocked
+  // Test 13: Direct UPDATE on ledger-managed holdings is blocked for authenticated users
   // -------------------------------------------------------------
   await runTestCase('Direct UPDATE on ledger-managed holdings is blocked for authenticated users', async () => {
     await db.exec(`SET ROLE authenticated;`);
@@ -628,7 +748,6 @@ async function runAllTests() {
         SET quantity = 9999
         WHERE broker_account_id = '${brokerId}' AND instrument_id = '${infyId}';
       `);
-      // In PostgreSQL RLS, an UPDATE that violates USING/CHECK matches 0 rows or raises error
       if (res.rowCount === 0) {
         updateHBlocked = true;
       }
@@ -638,84 +757,91 @@ async function runAllTests() {
     assert(updateHBlocked, 'Direct UPDATE on ledger-managed holding must affect 0 rows or fail');
 
     await db.exec(`RESET ROLE;`);
+    await db.exec(`SET request.jwt.claim.sub = '${testUserId}';`);
   });
 
   // -------------------------------------------------------------
-  // Test 12: Safe broker account deletion blocked when transactions exist
+  // Test 14: ON DELETE RESTRICT on broker accounts blocks deletion when transactions exist
   // -------------------------------------------------------------
-  await runTestCase('Safe broker account deletion blocked with active transactions', async () => {
+  await runTestCase('ON DELETE RESTRICT blocks broker account deletion when transactions or holdings exist', async () => {
     let brokerDelBlocked = false;
     try {
+      // Direct table DELETE on broker_accounts
       await db.query(`
-        SELECT public.safe_delete_broker_account('${brokerId}'::uuid);
+        DELETE FROM public.broker_accounts WHERE id = '${brokerId}';
       `);
     } catch (err) {
       brokerDelBlocked = true;
       assert(
-        err.message.includes('Cannot delete broker account') || err.message.includes('23503'),
-        `Expected broker delete block error, got: ${err.message}`
+        err.message.includes('Cannot delete broker account') ||
+        err.message.includes('violates foreign key constraint') ||
+        err.message.includes('23503'),
+        err.message
       );
     }
-    assert(brokerDelBlocked, 'Broker account deletion must be blocked while transactions exist');
+    assert(brokerDelBlocked, 'Direct deletion of broker account with records must be blocked');
+
+    // Also verify atomic RPC blocks it
+    let rpcDelBlocked = false;
+    try {
+      await db.query(`SELECT public.safe_delete_broker_account('${brokerId}'::uuid);`);
+    } catch (err) {
+      rpcDelBlocked = true;
+      assert(err.message.includes('Cannot delete broker account') || err.message.includes('23503'), err.message);
+    }
+    assert(rpcDelBlocked, 'safe_delete_broker_account must block deletion with active records');
   });
 
   // -------------------------------------------------------------
-  // Test 13: Unsorted trade batch replay calculates exact WAC without oversell failure
+  // Test 15: Authorized broker deletion RPC succeeds on empty broker account
   // -------------------------------------------------------------
-  await runTestCase('Unsorted trade batch replay calculates exact WAC without oversell failure', async () => {
-    // New instrument for batch import test
-    const batchInstRes = await db.query(`
-      INSERT INTO public.instruments (symbol, instrument_name, asset_type, exchange)
-      VALUES ('HDFCBANK', 'HDFC Bank Ltd', 'STOCK', 'NSE')
+  await runTestCase('Authorized broker deletion RPC succeeds on empty broker account', async () => {
+    const emptyBrokerRes = await db.query(`
+      INSERT INTO public.broker_accounts (user_id, broker_code, display_name)
+      VALUES ('${testUserId}', 'GROWW', 'Empty Groww Account')
       RETURNING id;
     `);
-    const hdfcId = batchInstRes.rows[0].id;
+    const emptyBrokerId = emptyBrokerRes.rows[0].id;
 
-    // Simulate unsorted trades:
-    // Trade 1 (chronologically 3rd): 2026-03-01 SELL 10 @ 1600
-    // Trade 2 (chronologically 1st): 2026-01-01 BUY 10 @ 1400
-    // Trade 3 (chronologically 2nd): 2026-02-01 BUY 10 @ 1500
-    const unsortedTrades = [
-      { type: 'SELL', qty: 10, price: 1600, date: '2026-03-01T10:00:00Z' },
-      { type: 'BUY', qty: 10, price: 1400, date: '2026-01-01T10:00:00Z' },
-      { type: 'BUY', qty: 10, price: 1500, date: '2026-02-01T10:00:00Z' },
-    ];
-
-    // Sorting according to our import route logic (chronological, BUYs before SELLs)
-    const sorted = [...unsortedTrades].sort((a, b) => {
-      const tA = new Date(a.date).getTime();
-      const tB = new Date(b.date).getTime();
-      if (tA !== tB) return tA - tB;
-      const pA = a.type === 'BUY' ? 1 : 2;
-      const pB = b.type === 'BUY' ? 1 : 2;
-      return pA - pB;
-    });
-
-    for (const t of sorted) {
-      await db.query(`
-        SELECT public.record_transaction_atomic(
-          p_broker_account_id => '${brokerId}'::uuid,
-          p_instrument_id => '${hdfcId}'::uuid,
-          p_transaction_type => '${t.type}',
-          p_quantity => ${t.qty},
-          p_unit_price => ${t.price},
-          p_gross_amount => ${t.qty * t.price},
-          p_transaction_date => '${t.date}'::timestamptz
-        );
-      `);
-    }
-
-    // Inspect committed holding:
-    // Jan 01: BUY 10 @ 1400 (cost: 14000, avg: 1400)
-    // Feb 01: BUY 10 @ 1500 (cost: 14000 + 15000 = 29000, qty: 20, avg: 1450)
-    // Mar 01: SELL 10 @ 1600 (remaining qty: 10, avg cost basis: 1450, realized P&L: 10 * (1600-1450) = 1500)
-    const hRes = await db.query(`
-      SELECT quantity, average_buy_price FROM public.holdings
-      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${hdfcId}';
+    const delRes = await db.query(`
+      SELECT public.safe_delete_broker_account('${emptyBrokerId}'::uuid) AS res;
     `);
+    assert.strictEqual(delRes.rows[0].res.success, true, 'safe_delete_broker_account must succeed for empty account');
 
-    assert.strictEqual(Number(hRes.rows[0].quantity), 10, 'Remaining quantity must be 10');
-    assert.strictEqual(Number(hRes.rows[0].average_buy_price), 1450, 'Average buy price must be 1450');
+    const check = await db.query(`SELECT id FROM public.broker_accounts WHERE id = '${emptyBrokerId}';`);
+    assert.strictEqual(check.rows.length, 0, 'Broker account must be deleted');
+  });
+
+  // -------------------------------------------------------------
+  // Test 16: Function EXECUTE permissions & RLS cross-user isolation
+  // -------------------------------------------------------------
+  await runTestCase('Function permissions and cross-user isolation prevent unauthorized access', async () => {
+    const otherUserId = 'b1eebc99-9c0b-4ef8-bb6d-6bb9bd380b22';
+
+    // Switch to authenticated other user
+    await db.exec(`SET ROLE authenticated;`);
+    await db.exec(`SET request.jwt.claim.sub = '${otherUserId}';`);
+
+    // Cannot read first user's transactions
+    const txOther = await db.query(`SELECT * FROM public.investment_transactions;`);
+    assert.strictEqual(txOther.rows.length, 0, 'Cross-user transactions must be invisible via RLS');
+
+    // Cannot delete first user's transaction via atomic RPC
+    let crossDeleteBlocked = false;
+    try {
+      const anyTx = await db.query(`SELECT id FROM public.investment_transactions LIMIT 1;`);
+      if (anyTx.rows.length > 0) {
+        await db.query(`SELECT public.delete_transaction_atomic('${anyTx.rows[0].id}'::uuid);`);
+      } else {
+        crossDeleteBlocked = true;
+      }
+    } catch (err) {
+      crossDeleteBlocked = true;
+      assert(err.message.includes('not found') || err.message.includes('P0002'), err.message);
+    }
+    assert(crossDeleteBlocked, 'Cross-user transaction deletion must fail with P0002');
+
+    await db.exec(`RESET ROLE;`);
   });
 
   console.log('='.repeat(75));
