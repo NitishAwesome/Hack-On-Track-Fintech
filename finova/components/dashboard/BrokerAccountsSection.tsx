@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Building2, Plus, AlertCircle, ShieldCheck } from 'lucide-react';
 import type { BrokerAccountRow } from '@/types/database';
+import { getBrokerConnectionStatusBadge } from '@/lib/utils/brokerConnection';
 
 interface BrokerAccountsSectionProps {
   brokers: BrokerAccountRow[];
@@ -148,17 +149,18 @@ export function BrokerAccountsSection({
                     </div>
 
                     {/* Honest connection status disclosure */}
-                    <span
-                      className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded tracking-wide uppercase flex-shrink-0"
-                      style={{
-                        backgroundColor: 'rgba(107, 114, 128, 0.1)',
-                        color: 'rgb(var(--muted))',
-                        border: '1px solid rgb(var(--border))',
-                      }}
-                      title="Tracked via manual holdings or CSV imports. No active broker OAuth credentials required."
-                    >
-                      MANUAL
-                    </span>
+                    {(() => {
+                      const badgeInfo = getBrokerConnectionStatusBadge(account.connection_status, account.data_source);
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide uppercase flex-shrink-0 border ${badgeInfo.badgeClass}`}
+                          title={badgeInfo.description}
+                        >
+                          <span className="w-1 h-1 rounded-full" style={{ backgroundColor: badgeInfo.dotColor }} />
+                          {badgeInfo.label}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <div className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[10px] text-muted">

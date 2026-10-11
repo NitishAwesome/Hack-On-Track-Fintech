@@ -166,15 +166,6 @@ export class AuthService {
       };
     }
 
-    // Verify agreements exist upon login; record if missing
-    if (data.user) {
-      try {
-        await this.ensureAgreementsRecorded(data.user.id);
-      } catch {
-        // Non-blocking for login flow
-      }
-    }
-
     return {
       success: true,
       error: null,
@@ -252,15 +243,24 @@ export class AuthService {
   /**
    * Audit log agreement acceptances in user_agreements table.
    */
+  /**
+   * Audit log agreement acceptances in user_agreements table.
+   * Records authentic timestamps and specified agreement types without
+   * overwriting or altering previous historical entries.
+   */
   public static async recordAgreements(
     userId: string,
-    source: 'registration' | 'onboarding' = 'registration'
-  ) {
+    source: 'registration' | 'onboarding' | 'settings_reconsent' | 'profile_explicit_consent' = 'registration',
+    typesToRecord?: AgreementType[]
+  ): Promise<{ success: boolean; error: string | null; count?: number }> {
     const supabase = createClient();
     const timestamp = new Date().toISOString();
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : null;
 
-    const agreementTypes: AgreementType[] = ['terms_of_service', 'privacy_policy', 'risk_disclosure'];
+    const agreementTypes: AgreementType[] =
+      typesToRecord && typesToRecord.length > 0
+        ? typesToRecord
+        : ['terms_of_service', 'privacy_policy', 'risk_disclosure'];
 
     const records = agreementTypes.map((type) => ({
       user_id: userId,
@@ -274,23 +274,31 @@ export class AuthService {
     const { error } = await supabase.from('user_agreements').insert(records);
     if (error) {
       console.warn('Agreement recording warning (table may be pending migration):', error.message);
+      return { success: false, error: error.message };
     }
+    return { success: true, error: null, count: records.length };
   }
 
   /**
-   * Ensures that verified users have required agreements on record.
+   * Inspects agreement records for a user without auto-generating unreviewed records.
    */
-  public static async ensureAgreementsRecorded(userId: string) {
+  public static async checkMissingAgreements(
+    userId: string
+  ): Promise<{ missing: AgreementType[]; hasAll: boolean }> {
     const supabase = createClient();
     const { data } = await supabase
       .from('user_agreements')
-      .select('agreement_type')
-      .eq('user_id', userId)
-      .limit(1);
+      .select('agreement_type, agreement_version, accepted_at')
+      .eq('user_id', userId);
 
-    if (!data || data.length === 0) {
-      await this.recordAgreements(userId, 'onboarding');
-    }
+    const recorded = new Set((data || []).map((r) => r.agreement_type));
+    const allRequired: AgreementType[] = ['terms_of_service', 'privacy_policy', 'risk_disclosure'];
+    const missing = allRequired.filter((type) => !recorded.has(type));
+
+    return {
+      missing,
+      hasAll: missing.length === 0,
+    };
   }
 
   /**

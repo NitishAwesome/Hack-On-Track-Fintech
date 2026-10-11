@@ -104,7 +104,8 @@ export class BrokerAccountService {
   }
 
   /**
-   * Delete a broker account and cascade associated positions.
+   * Delete a broker account ONLY if it contains no active holdings or transactions.
+   * Enforces financial ledger safety.
    */
   public static async deleteBrokerAccount(
     id: string,
@@ -112,16 +113,65 @@ export class BrokerAccountService {
   ): Promise<{
     success: boolean;
     error: string | null;
+    holdingsCount?: number;
+    transactionsCount?: number;
   }> {
     const supabase = client || createClient();
-    const { error } = await supabase
-      .from('broker_accounts')
-      .delete()
-      .eq('id', id);
 
-    if (error) {
-      return { success: false, error: error.message };
+    // Check holdings
+    const { count: hCount, error: hErr } = await supabase
+      .from('holdings')
+      .select('id', { count: 'exact', head: true })
+      .eq('broker_account_id', id);
+
+    if (hErr || hCount === null || hCount === undefined) {
+      return {
+        success: false,
+        error: hErr ? hErr.message : 'Unable to verify holdings records (uncertain count result).',
+      };
     }
+
+    // Check transactions
+    const { count: txCount, error: txErr } = await supabase
+      .from('investment_transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('broker_account_id', id);
+
+    if (txErr || txCount === null || txCount === undefined) {
+      return {
+        success: false,
+        error: txErr ? txErr.message : 'Unable to verify transaction records (uncertain count result).',
+      };
+    }
+
+    if (hCount > 0 || txCount > 0) {
+      return {
+        success: false,
+        error: `Cannot delete account with active records (${hCount} holdings, ${txCount} transactions).`,
+        holdingsCount: hCount,
+        transactionsCount: txCount,
+      };
+    }
+
+    // Atomic stored procedure
+    const { error: rpcErr } = await supabase.rpc('safe_delete_broker_account', {
+      p_broker_account_id: id,
+    });
+
+    if (rpcErr) {
+      if (
+        rpcErr.code === 'PGRST202' ||
+        rpcErr.message?.toLowerCase().includes('could not find the function')
+      ) {
+        return {
+          success: false,
+          error:
+            'Permanent broker account deletion is disabled to prevent cascading data loss. An atomic database safety migration (ON DELETE RESTRICT) must be applied first.',
+        };
+      }
+      return { success: false, error: rpcErr.message };
+    }
+
     return { success: true, error: null };
   }
 }

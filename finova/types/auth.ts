@@ -16,7 +16,7 @@ export interface UserAgreement {
   agreement_type: AgreementType;
   agreement_version: string;
   accepted_at?: string;
-  acceptance_source: 'registration' | 'onboarding' | 'settings_reconsent';
+  acceptance_source: 'registration' | 'onboarding' | 'settings_reconsent' | 'profile_explicit_consent';
   ip_address?: string | null;
   user_agent?: string | null;
 }

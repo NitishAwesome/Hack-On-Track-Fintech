@@ -619,13 +619,22 @@ export class PortfolioStorage {
     return state.broker_accounts[idx];
   }
 
-  public static deleteBrokerAccount(id: string): boolean {
+  public static deleteBrokerAccount(id: string, force = false): boolean {
     const state = this.getState();
+    const hasHoldings = state.holdings.some((h) => h.broker_account_id === id);
+    const hasTransactions = state.transactions.some((t) => t.broker_account_id === id);
+
+    if (!force && (hasHoldings || hasTransactions)) {
+      // Safeguard: block deletion of non-empty account
+      return false;
+    }
+
     const beforeCount = state.broker_accounts.length;
     state.broker_accounts = state.broker_accounts.filter((b) => b.id !== id);
-    // Cascade delete associated holdings to maintain relational integrity
-    state.holdings = state.holdings.filter((h) => h.broker_account_id !== id);
-    state.transactions = state.transactions.filter((t) => t.broker_account_id !== id);
+    if (force) {
+      state.holdings = state.holdings.filter((h) => h.broker_account_id !== id);
+      state.transactions = state.transactions.filter((t) => t.broker_account_id !== id);
+    }
     this.saveState(state);
     return state.broker_accounts.length < beforeCount;
   }

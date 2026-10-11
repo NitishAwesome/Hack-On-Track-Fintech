@@ -18,7 +18,14 @@ export type BrokerCode =
   | 'OTHER'
   | (string & {});
 
-export type AccountType = 'broker' | 'depository' | 'manual';
+export type AccountType =
+  | 'broker'
+  | 'depository'
+  | 'manual'
+  | 'demat'
+  | 'trading'
+  | 'mf'
+  | 'other';
 
 export type BrokerConnectionStatus =
   | 'MANUAL'
