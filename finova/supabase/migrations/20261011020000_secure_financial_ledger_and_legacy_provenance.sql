@@ -32,6 +32,11 @@
 -- ============================================================
 -- SECTION 1: SCHEMA COLUMNS & PROVENANCE METADATA
 -- ============================================================
+
+-- Drop legacy duplicate foreign keys to prevent PostgREST PGRST201 relationship ambiguity
+ALTER TABLE public.holdings DROP CONSTRAINT IF EXISTS fk_holdings_broker_ownership;
+ALTER TABLE public.investment_transactions DROP CONSTRAINT IF EXISTS fk_transactions_broker_ownership;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
