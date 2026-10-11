@@ -24,8 +24,8 @@ export const DEMO_BROKERS: BrokerAccount[] = [
   {
     id: 'demo-broker-3',
     user_id: 'demo-user',
-    broker_name: 'CDSL',
-    account_label: 'Sovereign Depository',
+    broker_name: 'ICICI Direct',
+    account_label: 'ICICI Direct / Demat (CDSL)',
     account_type: 'demat',
     color_hex: '#8B5CF6',
     is_active: true,
@@ -167,4 +167,36 @@ export const DEMO_HOLDINGS: Holding[] = [
     updated_at: new Date().toISOString(),
     broker_account: DEMO_BROKERS[1],
   },
+  {
+    id: 'demo-h-8',
+    user_id: 'demo-user',
+    broker_account_id: 'demo-broker-2',
+    symbol: 'RELIANCE',
+    isin: 'INE002A01018',
+    name: 'Reliance Industries Ltd',
+    asset_class: 'equity',
+    exchange: 'NSE',
+    quantity: 15,
+    avg_buy_price: 2520,
+    current_price: 2985,
+    sector: 'Energy',
+    industry: 'Oil & Gas Refining & Marketing',
+    price_updated_at: new Date().toISOString(),
+    created_at: new Date('2023-09-15').toISOString(),
+    updated_at: new Date().toISOString(),
+    broker_account: DEMO_BROKERS[1],
+  },
 ];
+
+export function getDemoPortfolioSummary() {
+  const totalInvested = DEMO_HOLDINGS.reduce((sum, h) => sum + h.quantity * h.avg_buy_price, 0);
+  const totalCurrent = DEMO_HOLDINGS.reduce((sum, h) => sum + h.quantity * (h.current_price || h.avg_buy_price), 0);
+  const pnl = totalCurrent - totalInvested;
+  const pnlPct = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
+  return {
+    totalInvested,
+    totalCurrent,
+    pnl,
+    pnlPct,
+  };
+}

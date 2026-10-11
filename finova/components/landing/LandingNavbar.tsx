@@ -97,6 +97,13 @@ export function LandingNavbar() {
           ) : (
             <>
               <Link
+                href="/demo"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/25 hover:bg-amber-500/20 transition-colors"
+              >
+                <span>Demo</span>
+              </Link>
+
+              <Link
                 href="/login"
                 className="px-3.5 py-1.5 text-xs font-semibold text-muted hover:text-foreground transition-colors rounded-lg"
               >

@@ -13,6 +13,7 @@ import {
   ArrowRight,
   ShieldAlert,
   CheckCircle2,
+  Sparkles,
 } from 'lucide-react';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
 import { AuthService } from '@/lib/services/authService';
@@ -242,6 +243,15 @@ export default function LoginPage() {
         <span className="text-[11px] font-medium text-muted uppercase tracking-widest">or</span>
         <div className="flex-1 h-px bg-border" />
       </div>
+
+      {/* 1-Click Demo Evaluation Button */}
+      <Link
+        href="/demo"
+        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-xs sm:text-sm font-semibold text-amber-500 transition-all hover:scale-[1.01] active:scale-[0.99] shadow-xs text-center"
+      >
+        <Sparkles className="w-4 h-4 text-amber-500 flex-shrink-0" />
+        <span>Explore Demo Portfolio (No Login Required)</span>
+      </Link>
 
       {/* Google Sign In */}
       <button
