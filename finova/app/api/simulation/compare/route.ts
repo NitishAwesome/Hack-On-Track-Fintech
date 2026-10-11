@@ -247,8 +247,6 @@ export async function POST(request: Request) {
       if (hasApiKey) {
         try {
           const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
           const prompt = `You are the FINOVA Financial Decision Intelligence Assistant.
 Analyze this hypothetical portfolio allocation simulation for an Indian retail investor:
 - Baseline Valuation: ₹${simulationResult.baselineSummary.marketValuedCapital.toLocaleString('en-IN')}
@@ -263,8 +261,29 @@ Rules:
 3. Highlight interest-rate and equity drawdown considerations.
 4. Do NOT promise returns or predict future stock prices.`;
 
-          const aiRes = await model.generateContent(prompt);
-          aiExplanation = aiRes.response.text();
+          const candidateModels = [
+            process.env.GEMINI_MODEL,
+            'gemini-flash-lite-latest',
+            'gemini-flash-latest',
+            'gemini-3.8-flash',
+            'gemini-2.5-flash-lite',
+            'gemini-2.5-flash',
+            'gemini-1.5-flash',
+          ].filter(Boolean) as string[];
+
+          for (const mName of candidateModels) {
+            try {
+              const model = genAI.getGenerativeModel({ model: mName });
+              const aiRes = await model.generateContent(prompt);
+              const resText = aiRes.response.text();
+              if (resText && resText.trim().length > 0) {
+                aiExplanation = resText.trim();
+                break;
+              }
+            } catch {
+              // Try next model
+            }
+          }
         } catch (aiErr) {
           console.warn('[API /api/simulation/compare] Gemini error, using deterministic takeaway:', aiErr);
         }

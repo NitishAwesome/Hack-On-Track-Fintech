@@ -23,6 +23,7 @@ export async function GET(request: Request) {
     const specificSymbol = searchParams.get('symbol')?.toUpperCase()?.trim();
     const customQuery = searchParams.get('q')?.trim();
     const forceRefresh = searchParams.get('refresh') === 'true';
+    const pageToken = searchParams.get('page')?.trim() || undefined;
 
     // 1. Resolve authenticated user portfolio context server-side
     const portfolio = await resolveServerPortfolioContext();
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
       query: customQuery,
       symbols: specificSymbol ? [specificSymbol] : portfolioSymbols,
       forceRefresh,
+      page: pageToken,
     });
 
     // Handle provider error states cleanly without fabricating news
@@ -154,6 +156,7 @@ export async function GET(request: Request) {
       articles: filteredArticles,
       provider_status: fetchResult.providerStatus,
       message: fetchResult.message,
+      next_page: fetchResult.nextPage || null,
       meta: {
         total_fetched: fetchResult.articles.length,
         direct_matches_count: directCount,
@@ -162,6 +165,7 @@ export async function GET(request: Request) {
         provider: 'newsdata',
         last_updated: new Date().toISOString(),
         portfolio_symbols_count: portfolioSymbols.length,
+        next_page: fetchResult.nextPage || null,
       },
     };
 

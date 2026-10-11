@@ -1,10 +1,10 @@
 'use client';
 
 // ============================================================
-// FINOVA — News & Market Page (Prompt 12)
+// FINOVA — News & Market Page
 // /news route
 //
-// Real Financial News, Portfolio-Aware Personalization,
+// Modern Editorial Financial News Feed, Portfolio-Aware Personalization,
 // and Grounded AI News Intelligence
 // ============================================================
 
@@ -14,26 +14,73 @@ import { motion } from 'framer-motion';
 import {
   Newspaper,
   Sparkles,
-  ExternalLink,
   Search,
   RefreshCw,
-  TrendingUp,
-  Building2,
   AlertCircle,
-  HelpCircle,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
+import { NewsCard } from '@/components/news/NewsCard';
 import { NewsExplanationModal } from '@/components/news/NewsExplanationModal';
-import { SkeletonCard } from '@/components/shared/Skeletons';
 import type { PersonalizedNewsArticle, NewsApiResponse } from '@/types/news';
+
+function NewsSkeletonCard({ isFeatured }: { isFeatured?: boolean }) {
+  if (isFeatured) {
+    return (
+      <div
+        className="rounded-2xl border p-0 overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-0 animate-pulse"
+        style={{
+          backgroundColor: 'rgb(var(--surface))',
+          borderColor: 'rgb(var(--border))',
+        }}
+      >
+        <div className="lg:col-span-6 aspect-[16/10] lg:aspect-auto lg:min-h-[360px] bg-muted/15" />
+        <div className="lg:col-span-6 p-6 sm:p-7 space-y-4 flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="h-4 bg-muted/20 rounded w-1/4" />
+            <div className="h-7 bg-muted/20 rounded w-4/5" />
+            <div className="h-4 bg-muted/15 rounded w-full" />
+            <div className="h-4 bg-muted/15 rounded w-2/3" />
+          </div>
+          <div className="h-10 bg-muted/10 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-2xl border p-0 overflow-hidden flex flex-col justify-between animate-pulse"
+      style={{
+        backgroundColor: 'rgb(var(--surface))',
+        borderColor: 'rgb(var(--border))',
+      }}
+    >
+      <div>
+        <div className="aspect-[16/9] w-full bg-muted/15" />
+        <div className="p-4 sm:p-5 space-y-3">
+          <div className="h-3.5 bg-muted/20 rounded w-1/3" />
+          <div className="h-5 bg-muted/20 rounded w-full" />
+          <div className="h-3.5 bg-muted/15 rounded w-4/5" />
+        </div>
+      </div>
+      <div
+        className="p-4 border-t flex justify-between"
+        style={{ borderColor: 'rgb(var(--border))' }}
+      >
+        <div className="h-7 bg-muted/15 rounded w-28" />
+        <div className="h-7 bg-muted/15 rounded w-20" />
+      </div>
+    </div>
+  );
+}
 
 function NewsAndMarketContent() {
   const searchParams = useSearchParams();
   const initialSymbol = searchParams.get('symbol') || '';
 
   const [articles, setArticles] = useState<PersonalizedNewsArticle[]>([]);
+  const [nextPage, setNextPage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [providerStatus, setProviderStatus] = useState<string>('ACTIVE');
   const [providerMessage, setProviderMessage] = useState<string | null>(null);
@@ -57,6 +104,7 @@ function NewsAndMarketContent() {
       const data: NewsApiResponse = await res.json();
 
       setArticles(data.articles || []);
+      setNextPage(data.next_page || data.meta?.next_page || null);
       setProviderStatus(data.provider_status || 'ACTIVE');
       setProviderMessage(data.message || null);
       setIsCached(Boolean(data.meta?.cached));
@@ -78,6 +126,7 @@ function NewsAndMarketContent() {
         const data: NewsApiResponse = await res.json();
         if (active) {
           setArticles(data.articles || []);
+          setNextPage(data.next_page || data.meta?.next_page || null);
           setProviderStatus(data.provider_status || 'ACTIVE');
           setProviderMessage(data.message || null);
           setIsCached(Boolean(data.meta?.cached));
@@ -118,6 +167,37 @@ function NewsAndMarketContent() {
       ...prev,
       [articleId]: !prev[articleId],
     }));
+  };
+
+  const handleLoadMore = async () => {
+    if (!nextPage || loadingMore) return;
+    setLoadingMore(true);
+
+    try {
+      const url = new URL('/api/news', window.location.origin);
+      url.searchParams.set('page', nextPage);
+      if (searchQuery.trim()) url.searchParams.set('q', searchQuery.trim());
+
+      const res = await fetch(url.toString());
+      const data: NewsApiResponse = await res.json();
+
+      if (data.articles && data.articles.length > 0) {
+        setArticles((prev) => {
+          const seenLinks = new Set(prev.map((a) => a.link.toLowerCase().replace(/\/+$/, '')));
+          const seenIds = new Set(prev.map((a) => a.article_id));
+          const newArticles = data.articles.filter(
+            (a) => !seenIds.has(a.article_id) && !seenLinks.has(a.link.toLowerCase().replace(/\/+$/, ''))
+          );
+          return [...prev, ...newArticles];
+        });
+      }
+
+      setNextPage(data.next_page || data.meta?.next_page || null);
+    } catch (err) {
+      console.warn('[News] Load more failed:', err);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   // Filtered articles
@@ -164,14 +244,18 @@ function NewsAndMarketContent() {
     [articles]
   );
 
+  const isDefaultView = selectedCategory === 'all' && !searchQuery.trim();
+  const featuredArticle = isDefaultView && filteredArticles.length > 0 ? filteredArticles[0] : null;
+  const regularArticles = isDefaultView && filteredArticles.length > 0 ? filteredArticles.slice(1) : filteredArticles;
+
   return (
     <div className="page-container space-y-6">
-      {/* Header */}
+      {/* Editorial Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'rgb(var(--foreground))' }}>
-              News & Market Intelligence
+              NEWS & MARKET
             </h1>
             <span
               className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5"
@@ -196,9 +280,9 @@ function NewsAndMarketContent() {
             >
               <span className={`w-1.5 h-1.5 rounded-full bg-current ${providerStatus === 'ACTIVE' && !isCached ? 'animate-pulse' : ''}`} />
               {providerStatus === 'ACTIVE' && !isCached
-                ? 'Latest Financial News'
+                ? 'Latest Financial Feed'
                 : providerStatus === 'ACTIVE' && isCached
-                ? 'Showing Previously Fetched Articles'
+                ? 'Showing Cached Feed'
                 : providerStatus === 'RATE_LIMITED'
                 ? articles.length > 0
                   ? 'Daily Quota Reached · Cached Feed'
@@ -211,14 +295,14 @@ function NewsAndMarketContent() {
             </span>
           </div>
           <p className="text-sm mt-1" style={{ color: 'rgb(var(--muted))' }}>
-            Real verified Indian financial news, ranked and explained against your tracked investments
+            Market updates and financial news relevant to your investments.
           </p>
         </div>
 
         <button
           onClick={() => fetchNews(true)}
           disabled={refreshing}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all hover:bg-surface-raised self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all hover:bg-surface-raised self-start sm:self-auto cursor-pointer"
           style={{
             backgroundColor: 'rgb(var(--surface))',
             borderColor: 'rgb(var(--border))',
@@ -243,10 +327,10 @@ function NewsAndMarketContent() {
           <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-500 mt-0.5" />
           <div className="space-y-1">
             <p className="font-semibold" style={{ color: 'rgb(var(--warning))' }}>
-              NewsData.io Provider Not Configured
+              NewsData.io Provider Notice
             </p>
             <p style={{ color: 'rgb(var(--muted))' }}>
-              {providerMessage || 'To receive live streaming Indian financial news, add your NEWSDATA_API_KEY to your server environment. FINOVA strictly refuses to fabricate fake news headlines or mock publisher articles in production.'}
+              {providerMessage || 'Live Indian financial headlines require NEWSDATA_API_KEY in your server environment.'}
             </p>
           </div>
         </div>
@@ -268,13 +352,13 @@ function NewsAndMarketContent() {
               Daily News Quota Reached
             </p>
             <p className="text-[11px]" style={{ color: 'rgb(var(--muted))' }}>
-              Displaying previously fetched verified financial headlines. Live requests will resume when the external provider quota resets.
+              Displaying previously fetched verified financial headlines. Live requests will resume when the quota resets.
             </p>
           </div>
         </div>
       )}
 
-      {/* Overview Metric Bar */}
+      {/* Market Summary Area */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div
           className="p-4 rounded-xl border"
@@ -320,7 +404,7 @@ function NewsAndMarketContent() {
           }}
         >
           <span className="text-[11px] font-medium" style={{ color: 'rgb(var(--muted))' }}>
-            Total Verified Articles
+            Verified Articles
           </span>
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-xl font-bold" style={{ color: 'rgb(var(--foreground))' }}>
@@ -340,12 +424,12 @@ function NewsAndMarketContent() {
           }}
         >
           <span className="text-[11px] font-medium" style={{ color: 'rgb(var(--muted))' }}>
-            AI Grounding Engine
+            Intelligence Layer
           </span>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-sm font-bold text-brand flex items-center gap-1">
+            <span className="text-sm font-bold text-brand flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" />
-              Gemini 1.5
+              AI Smart Insights
             </span>
           </div>
         </div>
@@ -363,15 +447,15 @@ function NewsAndMarketContent() {
         <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 text-xs">
           {[
             { id: 'all', label: 'All News' },
-            { id: 'portfolio', label: 'My Portfolio News' },
+            { id: 'portfolio', label: 'For Your Portfolio' },
             { id: 'direct', label: 'Direct Matches' },
             { id: 'sector', label: 'Sector News' },
-            { id: 'market', label: 'Indian Markets' },
+            { id: 'market', label: 'Market News' },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setSelectedCategory(tab.id)}
-              className="px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-150"
+              className="px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-150 cursor-pointer"
               style={{
                 backgroundColor:
                   selectedCategory === tab.id ? 'rgb(var(--brand-500))' : 'transparent',
@@ -390,7 +474,7 @@ function NewsAndMarketContent() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search headline, company, ticker..."
+            placeholder="Search headline, ticker, sector..."
             className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs border bg-transparent focus:outline-none focus:ring-1 focus:ring-brand"
             style={{
               borderColor: 'rgb(var(--border))',
@@ -400,7 +484,7 @@ function NewsAndMarketContent() {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted hover:text-foreground"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted hover:text-foreground cursor-pointer"
             >
               Clear
             </button>
@@ -408,238 +492,118 @@ function NewsAndMarketContent() {
         </div>
       </div>
 
-      {/* News Feed Grid */}
+      {/* News Editorial Content Area */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <SkeletonCard key={i} lines={5} />
-          ))}
+        <div className="space-y-5">
+          <NewsSkeletonCard isFeatured={true} />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <NewsSkeletonCard key={i} />
+            ))}
+          </div>
         </div>
       ) : filteredArticles.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredArticles.map((article, index) => {
-            const isExpanded = Boolean(expandedReasons[article.article_id]);
+        <div className="space-y-6">
+          {/* Featured Hero Story (when on default All tab without active search) */}
+          {featuredArticle && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <NewsCard
+                article={featuredArticle}
+                isFeatured={true}
+                onExplainAi={setActiveArticleForAi}
+                isExpandedReason={Boolean(expandedReasons[featuredArticle.article_id])}
+                onToggleReason={() => toggleReason(featuredArticle.article_id)}
+              />
+            </motion.div>
+          )}
 
-            return (
-              <motion.div
-                key={article.article_id || index}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.03 }}
-                className="p-5 rounded-2xl border flex flex-col justify-between gap-3.5 group hover:shadow-md transition-all duration-200"
-                style={{
-                  backgroundColor: 'rgb(var(--surface))',
-                  borderColor: 'rgb(var(--border))',
-                }}
+          {/* Section Heading for Remaining News if Featured Story is Present */}
+          {featuredArticle && regularArticles.length > 0 && (
+            <div className="flex items-center justify-between pt-2">
+              <h2
+                className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2"
+                style={{ color: 'rgb(var(--foreground))' }}
               >
-                {/* Top Row: Relevance Badge + Date + External Link */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {article.relevance_category === 'DIRECT_HOLDING' && (
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"
-                        style={{
-                          backgroundColor: 'rgb(var(--brand-500) / 0.12)',
-                          color: 'rgb(var(--brand-500))',
-                        }}
-                      >
-                        <Building2 className="w-3 h-3" />
-                        Direct Holding Match
-                      </span>
-                    )}
-
-                    {article.relevance_category === 'SECTOR_RELEVANCE' && (
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
-                        style={{
-                          backgroundColor: 'rgb(var(--info-bg) / 0.4)',
-                          color: 'rgb(var(--info))',
-                        }}
-                      >
-                        Sector: {article.matched_sector}
-                      </span>
-                    )}
-
-                    {article.relevance_category === 'ASSET_CLASS' && (
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
-                        style={{
-                          backgroundColor: 'rgb(var(--surface-raised))',
-                          color: 'rgb(var(--foreground))',
-                        }}
-                      >
-                        Asset Class Relevance
-                      </span>
-                    )}
-
-                    {article.relevance_category === 'GENERAL_MARKET' && (
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
-                        style={{
-                          backgroundColor: 'rgb(var(--surface-raised))',
-                          color: 'rgb(var(--muted))',
-                        }}
-                      >
-                        Indian Markets
-                      </span>
-                    )}
-
-                    {article.freshness === 'LIVE' && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-red-500/10 text-red-500">
-                        LIVE
-                      </span>
-                    )}
-                  </div>
-
-                  <a
-                    href={article.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-transform hover:scale-105 border group-hover:text-brand"
-                    style={{
-                      backgroundColor: 'rgb(var(--surface-raised))',
-                      borderColor: 'rgb(var(--border))',
-                      color: 'rgb(var(--muted))',
-                    }}
-                    title="Open verified original article"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-
-                {/* Direct Matched Holding Pill if available */}
-                {article.matched_holding && (
-                  <div
-                    className="p-2.5 rounded-xl border flex items-center justify-between text-xs"
-                    style={{
-                      backgroundColor: 'rgb(var(--surface-raised))',
-                      borderColor: 'rgb(var(--border))',
-                    }}
-                  >
-                    <div className="flex items-center gap-1.5 font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-                      <TrendingUp className="w-3.5 h-3.5 text-brand" />
-                      <span>{article.matched_holding.name} ({article.matched_holding.symbol})</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-[11px]" style={{ color: 'rgb(var(--muted))' }}>
-                      {article.matched_holding.weight_pct !== null && (
-                        <span>~{article.matched_holding.weight_pct}% weight</span>
-                      )}
-                      {article.matched_holding.is_cross_broker && (
-                        <span className="text-brand font-medium">· Multi-Broker</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Article Headline */}
-                <div className="space-y-1.5">
-                  <a
-                    href={article.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm sm:text-base font-bold leading-snug hover:underline line-clamp-2"
-                    style={{ color: 'rgb(var(--foreground))' }}
-                  >
-                    {article.title}
-                  </a>
-
-                  {article.description && (
-                    <p className="text-xs line-clamp-2 leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
-                      {article.description}
-                    </p>
-                  )}
-                </div>
-
-                {/* Source & Publication Date */}
-                <div className="flex items-center justify-between pt-1 text-[11px]" style={{ color: 'rgb(var(--muted))' }}>
-                  <span>
-                    {article.source_name} · {new Date(article.pubDate).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </span>
-
-                  <span className="font-semibold text-[10px]">
-                    Relevance: {article.relevance_score}/100
-                  </span>
-                </div>
-
-                {/* Expandable "Why this matters" callout */}
-                <div
-                  className="rounded-xl border overflow-hidden transition-all text-xs"
+                <span>Latest Financial Stories</span>
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full border font-normal"
                   style={{
                     backgroundColor: 'rgb(var(--surface-raised))',
                     borderColor: 'rgb(var(--border))',
+                    color: 'rgb(var(--muted))',
                   }}
                 >
-                  <button
-                    onClick={() => toggleReason(article.article_id)}
-                    className="w-full p-2.5 flex items-center justify-between font-semibold hover:bg-surface-raised/50 transition-colors"
-                    style={{ color: 'rgb(var(--foreground))' }}
-                  >
-                    <span className="flex items-center gap-1.5 text-[11px]">
-                      <HelpCircle className="w-3.5 h-3.5 text-brand" />
-                      Why is this relevant to your portfolio?
-                    </span>
-                    {isExpanded ? (
-                      <ChevronUp className="w-3.5 h-3.5 text-muted" />
-                    ) : (
-                      <ChevronDown className="w-3.5 h-3.5 text-muted" />
-                    )}
-                  </button>
+                  {regularArticles.length} stories
+                </span>
+              </h2>
+            </div>
+          )}
 
-                  {isExpanded && (
-                    <div
-                      className="p-3 pt-0 border-t text-[11px] leading-relaxed space-y-2"
-                      style={{
-                        borderColor: 'rgb(var(--border))',
-                        color: 'rgb(var(--muted))',
-                      }}
-                    >
-                      <p>{article.explanation}</p>
-                      {article.investigation_prompts && article.investigation_prompts.length > 0 && (
-                        <div className="pt-1">
-                          <span className="font-semibold text-foreground text-[10px] uppercase tracking-wider block mb-1">
-                            Investigation prompt:
-                          </span>
-                          <p className="italic text-[10px]">
-                            {article.investigation_prompts[0]}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+          {/* Grid Layout for News Cards */}
+          {regularArticles.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {regularArticles.map((article, index) => (
+                <motion.div
+                  key={article.article_id || index}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                >
+                  <NewsCard
+                    article={article}
+                    isFeatured={false}
+                    onExplainAi={setActiveArticleForAi}
+                    isExpandedReason={Boolean(expandedReasons[article.article_id])}
+                    onToggleReason={() => toggleReason(article.article_id)}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          )}
 
-                {/* Explain with AI Button */}
-                <div className="pt-1 flex items-center justify-between">
-                  <button
-                    onClick={() => setActiveArticleForAi(article)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all hover:bg-surface-raised text-brand"
-                    style={{
-                      borderColor: 'rgb(var(--border))',
-                      backgroundColor: 'rgb(var(--surface))',
-                    }}
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Explain with Gemini</span>
-                  </button>
+          {/* Load More News Action Bar */}
+          <div className="flex flex-col items-center justify-center pt-6 pb-4 gap-2">
+            {nextPage ? (
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-semibold border transition-all hover:bg-surface-raised shadow-xs cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: 'rgb(var(--surface))',
+                  borderColor: 'rgb(var(--border))',
+                  color: 'rgb(var(--foreground))',
+                }}
+              >
+                {loadingMore ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand" />
+                    <span>Loading More Stories...</span>
+                  </>
+                ) : (
+                  <>
+                    <Newspaper className="w-3.5 h-3.5 text-brand" />
+                    <span>Load More News</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <div
+                className="text-xs flex items-center justify-center gap-1.5 py-2 font-medium"
+                style={{ color: 'rgb(var(--muted))' }}
+              >
+                <span>✓</span>
+                <span>All latest verified market stories loaded</span>
+              </div>
+            )}
 
-                  <a
-                    href={article.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] font-semibold text-muted hover:text-foreground flex items-center gap-1"
-                  >
-                    <span>Read full story</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </motion.div>
-            );
-          })}
+            <span className="text-[11px]" style={{ color: 'rgb(var(--muted))' }}>
+              Showing {filteredArticles.length} verified financial stories from NewsData.io
+            </span>
+          </div>
         </div>
       ) : (
         /* Empty State */
@@ -657,7 +621,7 @@ function NewsAndMarketContent() {
           <p className="text-xs max-w-md leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
             {searchQuery
               ? `No articles matched your search query "${searchQuery}". Try searching for another ticker or reset your filters.`
-              : 'No articles currently match this category filter. Switch to "All News" or "Indian Markets" to view broader market coverage.'}
+              : 'No articles currently match this category filter. Switch to "All News" or "Market News" to view broader market coverage.'}
           </p>
           {(searchQuery || selectedCategory !== 'all') && (
             <button
@@ -665,7 +629,7 @@ function NewsAndMarketContent() {
                 setSearchQuery('');
                 setSelectedCategory('all');
               }}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm mt-2 transition-all hover:opacity-95"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm mt-2 transition-all hover:opacity-95 cursor-pointer"
               style={{
                 background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
               }}
@@ -676,7 +640,7 @@ function NewsAndMarketContent() {
         </div>
       )}
 
-      {/* Grounded Gemini News Explainer Modal */}
+      {/* Grounded News Explainer Modal (Zero technical Gemini model details exposed) */}
       {activeArticleForAi && (
         <NewsExplanationModal
           key={activeArticleForAi.article_id}
@@ -693,7 +657,7 @@ export default function NewsAndMarketPage() {
     <Suspense
       fallback={
         <div className="page-container p-8 space-y-4">
-          <SkeletonCard lines={6} />
+          <NewsSkeletonCard isFeatured={true} />
         </div>
       }
     >

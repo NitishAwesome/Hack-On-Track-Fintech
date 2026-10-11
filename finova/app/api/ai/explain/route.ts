@@ -135,8 +135,10 @@ export async function POST(request: Request) {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
         const candidateModels = [
           process.env.GEMINI_MODEL,
-          'gemini-3.8-flash',
           'gemini-flash-lite-latest',
+          'gemini-flash-latest',
+          'gemini-3.8-flash',
+          'gemini-2.5-flash-lite',
           'gemini-2.5-flash',
           'gemini-1.5-flash',
         ].filter(Boolean) as string[];

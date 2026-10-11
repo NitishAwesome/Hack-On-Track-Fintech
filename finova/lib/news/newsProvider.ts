@@ -20,6 +20,7 @@ import type {
 interface CacheEntry {
   articles: NormalizedNewsArticle[];
   timestamp: number;
+  nextPage?: string | null;
 }
 
 // In-memory cache for public news queries to respect NewsData rate limits
@@ -160,6 +161,7 @@ export interface FetchNewsResult {
   providerStatus: NewsProviderStatus;
   isCached: boolean;
   message?: string;
+  nextPage?: string | null;
 }
 
 /**
@@ -170,8 +172,12 @@ export async function fetchIndianFinancialNews(options?: {
   query?: string;
   symbols?: string[];
   forceRefresh?: boolean;
+  page?: string;
 }): Promise<FetchNewsResult> {
-  const apiKey = process.env.NEWSDATA_API_KEY;
+  const apiKey =
+    process.env.NEWSDATA_API_KEY ||
+    process.env.NEWS_API_KEY ||
+    process.env.NEWSAPI_KEY;
 
   // Check if API key is configured
   if (!apiKey || apiKey.includes('your_') || apiKey.includes('placeholder') || apiKey.trim() === '') {
@@ -192,7 +198,7 @@ export async function fetchIndianFinancialNews(options?: {
     queryText = `(${topSymbols}) India stock market`;
   }
 
-  const cacheKey = `newsdata:${queryText.toLowerCase().trim()}`;
+  const cacheKey = `newsdata:${queryText.toLowerCase().trim()}${options?.page ? `:${options.page}` : ''}`;
 
   // Check cache
   if (!options?.forceRefresh) {
@@ -202,6 +208,7 @@ export async function fetchIndianFinancialNews(options?: {
         articles: cached.articles,
         providerStatus: 'ACTIVE',
         isCached: true,
+        nextPage: cached.nextPage,
       };
     }
   }
@@ -214,6 +221,9 @@ export async function fetchIndianFinancialNews(options?: {
     url.searchParams.set('language', 'en');
     url.searchParams.set('category', 'business');
     url.searchParams.set('size', '10');
+    if (options?.page) {
+      url.searchParams.set('page', options.page);
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
@@ -312,11 +322,16 @@ export async function fetchIndianFinancialNews(options?: {
     }
 
     const finalArticles = deduplicateArticles(normalized);
+    const nextPage =
+      typeof data.nextPage === 'string' || typeof data.nextPage === 'number'
+        ? String(data.nextPage)
+        : null;
 
     // Update cache
     newsCache.set(cacheKey, {
       articles: finalArticles,
       timestamp: Date.now(),
+      nextPage,
     });
 
     return {
@@ -324,6 +339,7 @@ export async function fetchIndianFinancialNews(options?: {
       providerStatus: finalArticles.length > 0 ? 'ACTIVE' : 'EMPTY',
       isCached: false,
       message: finalArticles.length === 0 ? 'No matching news articles found for query.' : undefined,
+      nextPage,
     };
   } catch (err: unknown) {
     const isAbort = err instanceof Error && err.name === 'AbortError';

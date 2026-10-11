@@ -101,6 +101,7 @@ export interface NewsApiResponse {
   articles: PersonalizedNewsArticle[];
   provider_status: NewsProviderStatus;
   message?: string;
+  next_page?: string | null;
   meta: {
     total_fetched: number;
     direct_matches_count: number;
@@ -109,6 +110,7 @@ export interface NewsApiResponse {
     provider: string;
     last_updated: string;
     portfolio_symbols_count: number;
+    next_page?: string | null;
   };
 }
 

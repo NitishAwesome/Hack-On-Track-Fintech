@@ -202,7 +202,7 @@ export function NewsExplanationModal({ article, onClose }: NewsExplanationModalP
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-                  {source === 'gemini' ? 'Gemini AI Synthesis' : 'Deterministic Relevance Breakdown'}
+                  {source === 'gemini' ? 'AI Smart Synthesis' : 'Deterministic Relevance Breakdown'}
                 </span>
                 {loading && (
                   <div className="flex items-center gap-1.5 text-xs text-brand">

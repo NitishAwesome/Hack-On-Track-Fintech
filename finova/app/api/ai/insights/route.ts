@@ -426,9 +426,34 @@ No specific stock names. Educational tone.`,
   if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes('your_')) {
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
+      const candidateModels = [
+        process.env.GEMINI_MODEL,
+        'gemini-flash-lite-latest',
+        'gemini-flash-latest',
+        'gemini-3.8-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-1.5-flash',
+      ].filter(Boolean) as string[];
+
+      let text = '';
+      for (const mName of candidateModels) {
+        try {
+          const model = genAI.getGenerativeModel({ model: mName });
+          const result = await model.generateContent(prompt);
+          const candidateText = result.response.text();
+          if (candidateText && candidateText.trim().length > 0) {
+            text = candidateText.trim();
+            break;
+          }
+        } catch {
+          // Try next model
+        }
+      }
+
+      if (!text) {
+        throw new Error('All candidate Gemini models failed to generate content.');
+      }
 
       if (userId) {
         try {
