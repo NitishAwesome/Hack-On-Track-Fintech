@@ -123,6 +123,8 @@ export function buildPortfolioSummary(
       last_updated: new Date().toISOString(),
       has_unquoted_assets: false,
       unquoted_count: 0,
+      has_stale_assets: false,
+      stale_count: 0,
       priced_count: 0,
       is_valuation_complete: true,
       quote_coverage_pct: 100,
@@ -139,10 +141,17 @@ export function buildPortfolioSummary(
   const unquotedHoldings = holdings.filter(
     (h) => h.current_price === null || typeof h.current_price !== 'number' || h.current_value === null
   );
+  const staleHoldings = holdings.filter(
+    (h) => h.price_status === 'STALE'
+  );
+
   const has_unquoted_assets = unquotedHoldings.length > 0;
-  const is_valuation_complete = unquotedHoldings.length === 0;
+  const has_stale_assets = staleHoldings.length > 0;
+  // Valuation is strictly complete ONLY if all assets have prices and NONE are stale fallbacks
+  const is_valuation_complete = unquotedHoldings.length === 0 && staleHoldings.length === 0;
   const priced_count = pricedHoldings.length;
   const unquoted_count = unquotedHoldings.length;
+  const stale_count = staleHoldings.length;
   const quote_coverage_pct = roundPercent((priced_count / holdings.length) * 100);
 
   const pricedInvested = roundCurrency(
@@ -163,9 +172,9 @@ export function buildPortfolioSummary(
     );
     priced_current_value = pricedCurrent;
 
-    // Do NOT present a partial value as a complete portfolio total.
+    // Do NOT present a partial or stale value as a complete portfolio total.
     // If complete, total_current_value equals pricedCurrent.
-    // If incomplete, total_current_value is null, and callers use priced_current_value.
+    // If incomplete (unquoted or stale), total_current_value is null, and callers use priced_current_value.
     total_current_value = is_valuation_complete ? pricedCurrent : null;
 
     total_absolute_return = roundCurrency(pricedCurrent - pricedInvested);
@@ -199,6 +208,8 @@ export function buildPortfolioSummary(
     last_updated: new Date().toISOString(),
     has_unquoted_assets,
     unquoted_count,
+    has_stale_assets,
+    stale_count,
     priced_count,
     is_valuation_complete,
     quote_coverage_pct,

@@ -71,7 +71,8 @@ export class TransactionService {
   }
 
   /**
-   * Record a single investment transaction.
+   * Record a single investment transaction using atomic RPC.
+   * Enforces WAC recalculation, overselling prevention, and complete rollback safety.
    */
   public static async recordTransaction(
     input: TransactionInsert,
@@ -80,23 +81,38 @@ export class TransactionService {
     data: InvestmentTransactionRow | null;
     error: string | null;
   }> {
-    const supabase = client || createClient();
-    const { data, error } = await supabase
-      .from('investment_transactions')
-      .insert(input)
-      .select()
-      .single();
+    const res = await this.recordTransactionAtomic(
+      {
+        broker_account_id: input.broker_account_id,
+        instrument_id: input.instrument_id,
+        transaction_type: input.transaction_type,
+        quantity: input.quantity,
+        unit_price: input.unit_price,
+        gross_amount: input.gross_amount ?? (input.quantity * input.unit_price),
+        fees: input.fees,
+        taxes: input.taxes,
+        net_amount: input.net_amount,
+        transaction_date: input.transaction_date,
+        settlement_date: input.settlement_date,
+        source: input.source,
+        external_reference: input.external_reference,
+        notes: input.notes,
+        reconcile_holding: true,
+        allow_oversell: false,
+      },
+      client
+    );
 
-    if (error) {
-      return { data: null, error: error.message };
+    if (res.error) {
+      return { data: null, error: res.error };
     }
 
-    return { data: data as InvestmentTransactionRow, error: null };
+    return { data: res.data?.transaction || null, error: null };
   }
 
   /**
-   * Bulk insert transactions (used during CSV tradebook imports).
-   * Automatically ignores duplicates if external_reference is supplied and matched.
+   * Bulk insert transactions sequentially via atomic RPC.
+   * Ensures every transaction synchronizes positions without direct table bypass.
    */
   public static async bulkRecordTransactions(
     inputs: TransactionInsert[],
@@ -110,28 +126,26 @@ export class TransactionService {
       return { data: [], count: 0, error: null };
     }
 
-    const supabase = client || createClient();
-    const { data, error } = await supabase
-      .from('investment_transactions')
-      .upsert(inputs, {
-        onConflict: 'broker_account_id,external_reference',
-        ignoreDuplicates: true,
-      })
-      .select();
-
-    if (error) {
-      return { data: null, count: 0, error: error.message };
+    const results: InvestmentTransactionRow[] = [];
+    for (const input of inputs) {
+      const res = await this.recordTransaction(input, client);
+      if (res.error) {
+        return { data: results, count: results.length, error: res.error };
+      }
+      if (res.data) {
+        results.push(res.data);
+      }
     }
 
     return {
-      data: (data as InvestmentTransactionRow[]) || [],
-      count: data?.length || 0,
+      data: results,
+      count: results.length,
       error: null,
     };
   }
 
   /**
-   * Update an investment transaction.
+   * Update an investment transaction using atomic RPC and position recalculation.
    */
   public static async updateTransaction(
     id: string,
@@ -141,19 +155,29 @@ export class TransactionService {
     data: InvestmentTransactionRow | null;
     error: string | null;
   }> {
-    const supabase = client || createClient();
-    const { data, error } = await supabase
-      .from('investment_transactions')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+    const res = await this.updateTransactionAtomic(
+      id,
+      {
+        quantity: updates.quantity,
+        unit_price: updates.unit_price,
+        gross_amount: updates.gross_amount,
+        fees: updates.fees,
+        taxes: updates.taxes,
+        net_amount: updates.net_amount,
+        transaction_date: updates.transaction_date,
+        settlement_date: updates.settlement_date,
+        external_reference: updates.external_reference,
+        notes: updates.notes,
+        reconcile_holding: true,
+      },
+      client
+    );
 
-    if (error) {
-      return { data: null, error: error.message };
+    if (res.error) {
+      return { data: null, error: res.error };
     }
 
-    return { data: data as InvestmentTransactionRow, error: null };
+    return { data: res.data?.transaction || null, error: null };
   }
 
   /**
@@ -259,7 +283,7 @@ export class TransactionService {
   }
 
   /**
-   * Delete an investment transaction (simple delete).
+   * Delete an investment transaction using atomic RPC with synchronous position reconciliation.
    */
   public static async deleteTransaction(
     id: string,
@@ -268,16 +292,10 @@ export class TransactionService {
     success: boolean;
     error: string | null;
   }> {
-    const supabase = client || createClient();
-    const { error } = await supabase
-      .from('investment_transactions')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      return { success: false, error: error.message };
+    const res = await this.deleteTransactionAtomic(id, true, client);
+    if (res.error) {
+      return { success: false, error: res.error };
     }
-
     return { success: true, error: null };
   }
 

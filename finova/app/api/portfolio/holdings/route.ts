@@ -260,11 +260,11 @@ export async function POST(request: Request) {
   const quantity = Number(body.quantity);
   const avgBuyPrice = Number(body.avg_buy_price ?? body.average_buy_price);
 
-  if (!quantity || isNaN(quantity) || quantity <= 0) {
+  if (!Number.isFinite(quantity) || quantity <= 0) {
     return NextResponse.json({ error: 'Quantity must be a positive number greater than zero.' }, { status: 400 });
   }
 
-  if (isNaN(avgBuyPrice) || avgBuyPrice < 0) {
+  if (!Number.isFinite(avgBuyPrice) || avgBuyPrice < 0) {
     return NextResponse.json({ error: 'Average purchase price cannot be negative.' }, { status: 400 });
   }
 
@@ -362,7 +362,35 @@ export async function POST(request: Request) {
         instrumentId = newInst.id;
       }
 
-      // 3. Upsert holding with composite uniqueness constraint (broker_account_id, instrument_id)
+      // 3. LEDGER INTEGRITY CHECK: Reject direct holding creation if a ledger-managed position exists
+      const { data: existingHolding } = await supabase
+        .from('holdings')
+        .select('id, is_ledger_managed')
+        .eq('broker_account_id', brokerAccountId)
+        .eq('instrument_id', instrumentId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingHolding) {
+        const { count: txCount } = await supabase
+          .from('investment_transactions')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('broker_account_id', brokerAccountId)
+          .eq('instrument_id', instrumentId);
+
+        if (existingHolding.is_ledger_managed || (txCount !== null && txCount > 0)) {
+          return NextResponse.json(
+            {
+              error: 'A ledger-managed position already exists for this instrument and broker account. Record BUY/SELL transactions in your tradebook to adjust this position.',
+              code: 'LEDGER_MANAGED_HOLDING',
+            },
+            { status: 400 }
+          );
+        }
+      }
+
+      // 4. Upsert holding with composite uniqueness constraint (broker_account_id, instrument_id)
       const { data: holdingRow, error: holdingErr } = await supabase
         .from('holdings')
         .upsert(
@@ -450,6 +478,25 @@ export async function POST(request: Request) {
     isin
   );
 
+  const existingHoldings = PortfolioStorage.getHoldings();
+  const existingHolding = existingHoldings.find(
+    (h) => h.broker_account_id === brokerAccountId && h.instrument_id === instrument.id
+  );
+  if (existingHolding) {
+    const txCount = PortfolioStorage.getState().transactions.filter(
+      (tx) => tx.broker_account_id === brokerAccountId && tx.instrument_id === instrument.id
+    ).length;
+    if (existingHolding.is_ledger_managed || txCount > 0) {
+      return NextResponse.json(
+        {
+          error: 'A ledger-managed position already exists for this instrument and broker account. Record BUY/SELL transactions in your tradebook to adjust this position.',
+          code: 'LEDGER_MANAGED_HOLDING',
+        },
+        { status: 400 }
+      );
+    }
+  }
+
   const newHolding = PortfolioStorage.addHolding({
     user_id: 'current_user',
     broker_account_id: brokerAccountId,
@@ -520,11 +567,11 @@ export async function PUT(request: Request) {
   const numQty = quantity !== undefined ? Number(quantity) : undefined;
   const numPrice = (avg_buy_price ?? average_buy_price) !== undefined ? Number(avg_buy_price ?? average_buy_price) : undefined;
 
-  if (numQty !== undefined && (isNaN(numQty) || numQty <= 0)) {
-    return NextResponse.json({ error: 'Quantity must be greater than zero.' }, { status: 400 });
+  if (numQty !== undefined && (!Number.isFinite(numQty) || numQty <= 0)) {
+    return NextResponse.json({ error: 'Quantity must be a positive number greater than zero.' }, { status: 400 });
   }
 
-  if (numPrice !== undefined && (isNaN(numPrice) || numPrice < 0)) {
+  if (numPrice !== undefined && (!Number.isFinite(numPrice) || numPrice < 0)) {
     return NextResponse.json({ error: 'Average purchase price cannot be negative.' }, { status: 400 });
   }
 
@@ -540,6 +587,35 @@ export async function PUT(request: Request) {
         return NextResponse.json(
           { error: 'Authentication required. Please sign in to update a holding.' },
           { status: 401 }
+        );
+      }
+
+      // LEDGER PROTECTION CHECK: Verify holding and ensure it is not managed by transactions
+      const { data: existingHolding, error: fetchErr } = await supabase
+        .from('holdings')
+        .select('id, user_id, broker_account_id, instrument_id, is_ledger_managed')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (fetchErr || !existingHolding) {
+        return NextResponse.json({ error: 'Holding not found or access denied.' }, { status: 404 });
+      }
+
+      const { count: txCount } = await supabase
+        .from('investment_transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('broker_account_id', existingHolding.broker_account_id)
+        .eq('instrument_id', existingHolding.instrument_id);
+
+      if (existingHolding.is_ledger_managed || (txCount !== null && txCount > 0)) {
+        return NextResponse.json(
+          {
+            error: 'This holding is managed by the transaction ledger. Direct position edits are disabled to maintain accounting consistency. Please edit or add transactions in your tradebook.',
+            code: 'LEDGER_MANAGED_HOLDING',
+          },
+          { status: 400 }
         );
       }
 
@@ -658,6 +734,25 @@ export async function PUT(request: Request) {
   }
 
   // Explicit local development mode
+  const existingHolding = PortfolioStorage.getHoldings().find((h) => h.id === id);
+  if (!existingHolding) {
+    return NextResponse.json({ error: 'Holding not found' }, { status: 404 });
+  }
+
+  const localTxCount = PortfolioStorage.getState().transactions.filter(
+    (tx) => tx.broker_account_id === existingHolding.broker_account_id && tx.instrument_id === existingHolding.instrument_id
+  ).length;
+
+  if (existingHolding.is_ledger_managed || localTxCount > 0) {
+    return NextResponse.json(
+      {
+        error: 'This holding is managed by the transaction ledger. Direct position edits are disabled to maintain accounting consistency. Please edit or add transactions in your tradebook.',
+        code: 'LEDGER_MANAGED_HOLDING',
+      },
+      { status: 400 }
+    );
+  }
+
   const updated = PortfolioStorage.updateHolding(id, {
     quantity: numQty,
     average_buy_price: numPrice,
@@ -736,6 +831,35 @@ export async function DELETE(request: Request) {
         );
       }
 
+      // Check holding existence and ledger-managed status
+      const { data: existingHolding, error: fetchErr } = await supabase
+        .from('holdings')
+        .select('id, user_id, broker_account_id, instrument_id, is_ledger_managed')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (fetchErr || !existingHolding) {
+        return NextResponse.json({ error: 'Holding not found or access denied.' }, { status: 404 });
+      }
+
+      const { count: txCount } = await supabase
+        .from('investment_transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('broker_account_id', existingHolding.broker_account_id)
+        .eq('instrument_id', existingHolding.instrument_id);
+
+      if (existingHolding.is_ledger_managed || (txCount !== null && txCount > 0)) {
+        return NextResponse.json(
+          {
+            error: 'This holding is managed by the transaction ledger and cannot be deleted directly. Delete or reconcile the underlying transactions in your tradebook.',
+            code: 'LEDGER_MANAGED_HOLDING',
+          },
+          { status: 400 }
+        );
+      }
+
       const { error } = await supabase
         .from('holdings')
         .delete()
@@ -761,6 +885,25 @@ export async function DELETE(request: Request) {
   }
 
   // Explicit local development mode
+  const existingHolding = PortfolioStorage.getHoldings().find((h) => h.id === id);
+  if (!existingHolding) {
+    return NextResponse.json({ error: 'Holding not found.' }, { status: 404 });
+  }
+
+  const localTxCount = PortfolioStorage.getState().transactions.filter(
+    (tx) => tx.broker_account_id === existingHolding.broker_account_id && tx.instrument_id === existingHolding.instrument_id
+  ).length;
+
+  if (existingHolding.is_ledger_managed || localTxCount > 0) {
+    return NextResponse.json(
+      {
+        error: 'This holding is managed by the transaction ledger and cannot be deleted directly. Delete or reconcile the underlying transactions in your tradebook.',
+        code: 'LEDGER_MANAGED_HOLDING',
+      },
+      { status: 400 }
+    );
+  }
+
   const deleted = PortfolioStorage.deleteHolding(id);
   return NextResponse.json({ success: deleted, isDemo: true, storageMode: 'local' });
 }

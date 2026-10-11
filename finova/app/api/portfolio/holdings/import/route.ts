@@ -124,13 +124,13 @@ export async function POST(request: Request) {
         }
 
         const qty = Number(row.quantity);
-        if (isNaN(qty) || qty <= 0) {
+        if (!Number.isFinite(qty) || qty <= 0) {
           errors.push(`Row ${i + 1} (${symbol}): Quantity must be positive`);
           continue;
         }
 
         const avgPrice = Number(row.avg_buy_price);
-        if (isNaN(avgPrice) || avgPrice < 0) {
+        if (!Number.isFinite(avgPrice) || avgPrice < 0) {
           errors.push(`Row ${i + 1} (${symbol}): Purchase price cannot be negative`);
           continue;
         }
@@ -190,7 +190,7 @@ export async function POST(request: Request) {
         // Check for existing holding position
         const { data: existingHolding, error: holdingCheckErr } = await supabase
           .from('holdings')
-          .select('id, quantity, average_buy_price')
+          .select('id, quantity, average_buy_price, is_ledger_managed')
           .eq('broker_account_id', accountId)
           .eq('instrument_id', instrumentId)
           .eq('user_id', user.id)
@@ -202,6 +202,20 @@ export async function POST(request: Request) {
         }
 
         if (existingHolding) {
+          // LEDGER PROTECTION: Check whether position is managed by the trade ledger
+          const { count: txCount } = await supabase
+            .from('investment_transactions')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('broker_account_id', accountId)
+            .eq('instrument_id', instrumentId);
+
+          if (existingHolding.is_ledger_managed || (txCount !== null && txCount > 0)) {
+            errors.push(`Row ${i + 1} (${symbol}): Cannot modify ledger-managed holding via snapshot import. Record trades in the trade ledger instead.`);
+            skippedCount++;
+            continue;
+          }
+
           if (duplicateMode === 'skip') {
             skippedCount++;
             continue;
@@ -226,6 +240,19 @@ export async function POST(request: Request) {
           } else if (duplicateMode === 'update') {
             const existingQty = Number(existingHolding.quantity);
             const existingPrice = Number(existingHolding.average_buy_price);
+
+            // Idempotency guard: If re-importing the same snapshot, skip without double counting
+            if (existingQty === qty && Math.abs(existingPrice - avgPrice) < 0.001) {
+              skippedCount++;
+              continue;
+            }
+
+            // Additive mode requires explicit user confirmation to avoid silent position inflation
+            if (!body.allow_additive_accumulation) {
+              errors.push(`Row ${i + 1} (${symbol}): Additive update requires explicit allow_additive_accumulation flag to prevent duplicate counting. Use duplicate_mode=replace to overwrite snapshot values.`);
+              continue;
+            }
+
             const totalQty = existingQty + qty;
             const weightedAvgPrice = (existingQty * existingPrice + qty * avgPrice) / totalQty;
 
@@ -318,13 +345,13 @@ export async function POST(request: Request) {
       }
 
       const qty = Number(row.quantity);
-      if (isNaN(qty) || qty <= 0) {
+      if (!Number.isFinite(qty) || qty <= 0) {
         errors.push(`Row ${i + 1} (${symbol}): Quantity must be positive`);
         continue;
       }
 
       const avgPrice = Number(row.avg_buy_price);
-      if (isNaN(avgPrice) || avgPrice < 0) {
+      if (!Number.isFinite(avgPrice) || avgPrice < 0) {
         errors.push(`Row ${i + 1} (${symbol}): Purchase price cannot be negative`);
         continue;
       }
@@ -355,6 +382,16 @@ export async function POST(request: Request) {
       );
 
       if (existing) {
+        const localTxCount = PortfolioStorage.getState().transactions.filter(
+          (tx) => tx.broker_account_id === accountId && tx.instrument_id === instrument.id
+        ).length;
+
+        if (existing.is_ledger_managed || localTxCount > 0) {
+          errors.push(`Row ${i + 1} (${symbol}): Cannot modify ledger-managed holding via snapshot import. Record trades in the trade ledger instead.`);
+          skippedCount++;
+          continue;
+        }
+
         if (duplicateMode === 'skip') {
           skippedCount++;
           continue;
@@ -367,6 +404,20 @@ export async function POST(request: Request) {
           importedCount++;
           continue;
         } else if (duplicateMode === 'update') {
+          const existingQty = existing.quantity;
+          const existingPrice = existing.average_buy_price;
+
+          // Idempotency guard: If re-importing identical snapshot row, skip without double counting
+          if (existingQty === qty && Math.abs(existingPrice - avgPrice) < 0.001) {
+            skippedCount++;
+            continue;
+          }
+
+          if (!body.allow_additive_accumulation) {
+            errors.push(`Row ${i + 1} (${symbol}): Additive update requires explicit allow_additive_accumulation flag to prevent duplicate counting. Use duplicate_mode=replace to overwrite snapshot values.`);
+            continue;
+          }
+
           const totalQty = existing.quantity + qty;
           const weightedAvgPrice = (existing.quantity * existing.average_buy_price + qty * avgPrice) / totalQty;
           PortfolioStorage.updateHolding(existing.id, {

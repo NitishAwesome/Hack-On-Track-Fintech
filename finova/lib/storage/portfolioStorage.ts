@@ -1175,13 +1175,23 @@ export class PortfolioStorage {
 
     // If NO transactions exist for this holding:
     if (txs.length === 0) {
-      // If it is a manual opening position, preserve it untouched!
-      if (existing && !existing.is_ledger_managed) {
-        return; // OPENING_BALANCE_PRESERVED
-      }
-      // If it was created purely by transactions that were all deleted, remove it
-      if (existingIdx !== -1) {
-        state.holdings.splice(existingIdx, 1);
+      if (existing) {
+        const openingQty = existing.opening_quantity ?? 0;
+        const openingPrice = existing.opening_buy_price ?? 0;
+
+        if (openingQty > 0) {
+          // Genuine manual opening baseline exists: restore to opening state
+          state.holdings[existingIdx] = {
+            ...existing,
+            quantity: openingQty,
+            average_buy_price: openingPrice,
+            is_ledger_managed: false,
+            updated_at: new Date().toISOString(),
+          };
+        } else {
+          // Holding was created purely by transactions that were all deleted: eliminate ghost holding
+          state.holdings.splice(existingIdx, 1);
+        }
       }
       return;
     }

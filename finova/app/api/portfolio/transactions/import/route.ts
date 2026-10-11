@@ -6,7 +6,6 @@ import { roundCurrency, roundQuantity } from '@/lib/calculations/portfolio';
 import { parseAndNormalizeCsvDate } from '@/lib/utils/csvDateParser';
 import type {
   InvestmentTransactionRow,
-  TransactionInsert,
   TransactionType,
   AssetCategory,
 } from '@/types/database';
@@ -97,10 +96,25 @@ export async function POST(request: Request) {
         }
 
         const txType = (row.transaction_type || row.trade_type || 'BUY').toUpperCase() as TransactionType;
-        const qty = roundQuantity(Number(row.quantity) || 0);
-        const price = roundCurrency(Number(row.unit_price ?? row.price) || 0);
-        const fees = roundCurrency(Number(row.fees) || 0);
-        const taxes = roundCurrency(Number(row.taxes) || 0);
+        const rawQty = Number(row.quantity);
+        const rawPrice = Number(row.unit_price ?? row.price);
+        const rawFees = Number(row.fees ?? 0);
+        const rawTaxes = Number(row.taxes ?? 0);
+
+        if (!Number.isFinite(rawQty) || rawQty <= 0) {
+          errors.push({ row: rowNum, error: `Invalid quantity: must be a positive finite number.` });
+          continue;
+        }
+
+        if (!Number.isFinite(rawPrice) || rawPrice < 0) {
+          errors.push({ row: rowNum, error: `Invalid price: cannot be negative.` });
+          continue;
+        }
+
+        const qty = roundQuantity(rawQty);
+        const price = roundCurrency(rawPrice);
+        const fees = roundCurrency(Number.isFinite(rawFees) && rawFees >= 0 ? rawFees : 0);
+        const taxes = roundCurrency(Number.isFinite(rawTaxes) && rawTaxes >= 0 ? rawTaxes : 0);
         const grossAmount = roundCurrency(
           Number(row.gross_amount) > 0 ? Number(row.gross_amount) : qty * price
         );
@@ -169,190 +183,62 @@ export async function POST(request: Request) {
         }
 
         // Execute atomic trade recording and position reconciliation
-        if (reconcileHoldings) {
-          let atomicSuccess = false;
-          try {
-            const { data: rpcRes, error: rpcErr } = await supabase.rpc('record_transaction_atomic', {
-              p_broker_account_id: brokerId,
-              p_instrument_id: instrumentId,
-              p_transaction_type: txType,
-              p_quantity: qty,
-              p_unit_price: price,
-              p_gross_amount: grossAmount,
-              p_fees: fees,
-              p_taxes: taxes,
-              p_stt_taxes: taxes,
-              p_net_amount: netAmount,
-              p_transaction_date: new Date(dateStr).toISOString(),
-              p_settlement_date: row.settlement_date ? new Date(row.settlement_date).toISOString() : null,
-              p_source: 'CSV',
-              p_external_reference: externalRef,
-              p_notes: row.notes || 'Imported via CSV tradebook',
-              p_reconcile_holding: true,
-              p_allow_oversell: false,
-            });
+        try {
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc('record_transaction_atomic', {
+            p_broker_account_id: brokerId,
+            p_instrument_id: instrumentId,
+            p_transaction_type: txType,
+            p_quantity: qty,
+            p_unit_price: price,
+            p_gross_amount: grossAmount,
+            p_fees: fees,
+            p_taxes: taxes,
+            p_stt_taxes: taxes,
+            p_net_amount: netAmount,
+            p_transaction_date: new Date(dateStr).toISOString(),
+            p_settlement_date: row.settlement_date ? new Date(row.settlement_date).toISOString() : null,
+            p_source: 'CSV',
+            p_external_reference: externalRef,
+            p_notes: row.notes || 'Imported via CSV tradebook',
+            p_reconcile_holding: reconcileHoldings,
+            p_allow_oversell: false,
+          });
 
-            if (!rpcErr && rpcRes) {
-              importedTransactions.push(rpcRes.transaction as InvestmentTransactionRow);
-              existingRefSet.add(dedupKey);
-              atomicSuccess = true;
-            } else if (rpcErr) {
-              const errMsg = rpcErr.message || '';
-              if (errMsg.includes('already exists') || rpcErr.code === '23505') {
-                duplicates.push({ external_reference: externalRef, symbol, date: dateStr });
-                atomicSuccess = true;
-              } else if (errMsg.includes('Insufficient quantity to sell') || rpcErr.code === '22003') {
-                errors.push({ row: rowNum, error: errMsg });
-                atomicSuccess = true;
-              }
-            }
-          } catch {
-            // RPC exception - will fall through to resilient fallback if not resolved
-          }
-
-          if (atomicSuccess) continue;
-        }
-
-        // Resilient insertion mode (for reconcileHoldings = false or RPC fallback)
-        // If SELL and reconciling, verify available quantity first
-        if (reconcileHoldings && txType === 'SELL') {
-          const { data: holdCheck } = await supabase
-            .from('holdings')
-            .select('quantity')
-            .eq('user_id', user.id)
-            .eq('broker_account_id', brokerId)
-            .eq('instrument_id', instrumentId)
-            .maybeSingle();
-
-          const avail = Number(holdCheck?.quantity) || 0;
-          if (qty > avail) {
-            errors.push({
-              row: rowNum,
-              error: `Insufficient quantity to sell: requested ${qty} units, but position only holds ${avail} units.`,
-            });
-            continue;
-          }
-        }
-
-        const insertPayload: TransactionInsert = {
-          user_id: user.id,
-          broker_account_id: brokerId,
-          instrument_id: instrumentId,
-          transaction_type: txType,
-          quantity: qty,
-          unit_price: price,
-          gross_amount: grossAmount,
-          fees,
-          taxes,
-          net_amount: netAmount,
-          currency: 'INR',
-          transaction_date: new Date(dateStr).toISOString(),
-          settlement_date: row.settlement_date ? new Date(row.settlement_date).toISOString() : null,
-          source: 'CSV',
-          external_reference: externalRef,
-          notes: row.notes || 'Imported via CSV tradebook',
-        };
-
-        const { data: inserted, error: insertErr } = await supabase
-          .from('investment_transactions')
-          .insert(insertPayload)
-          .select()
-          .single();
-
-        if (insertErr) {
-          if (insertErr.code === '23505') {
-            duplicates.push({ external_reference: externalRef, symbol, date: dateStr });
-          } else {
-            errors.push({ row: rowNum, error: `Insert error: ${insertErr.message}` });
-          }
-          continue;
-        }
-
-        // Reconcile holding in fallback mode
-        if (reconcileHoldings && ['BUY', 'SELL', 'BONUS', 'SPLIT'].includes(txType)) {
-          try {
-            const { data: holding } = await supabase
-              .from('holdings')
-              .select('*')
-              .eq('user_id', user.id)
-              .eq('broker_account_id', brokerId)
-              .eq('instrument_id', instrumentId)
-              .maybeSingle();
-
-            const now = new Date().toISOString();
-            if (txType === 'BUY') {
-              if (holding) {
-                const prevQty = Number(holding.quantity);
-                const prevAvg = Number(holding.average_buy_price);
-                const newTotalQty = prevQty + qty;
-                const newAvgPrice = (prevQty * prevAvg + qty * price) / newTotalQty;
-                await supabase
-                  .from('holdings')
-                  .update({
-                    quantity: roundQuantity(newTotalQty),
-                    average_buy_price: roundCurrency(newAvgPrice),
-                    is_ledger_managed: true,
-                    updated_at: now,
-                  })
-                  .eq('id', holding.id);
-              } else {
-                await supabase.from('holdings').insert({
-                  user_id: user.id,
-                  broker_account_id: brokerId,
-                  instrument_id: instrumentId,
-                  quantity: qty,
-                  average_buy_price: price,
-                  currency: 'INR',
-                  data_source: 'CSV',
-                  as_of: dateStr,
-                  opening_quantity: 0,
-                  opening_buy_price: 0,
-                  is_ledger_managed: true,
-                });
-              }
-            } else if (txType === 'SELL' && holding) {
-              const remQty = Math.max(0, Number(holding.quantity) - qty);
-              if (remQty <= 0) {
-                await supabase.from('holdings').delete().eq('id', holding.id);
-              } else {
-                await supabase
-                  .from('holdings')
-                  .update({
-                    quantity: roundQuantity(remQty),
-                    is_ledger_managed: true,
-                    updated_at: now,
-                  })
-                  .eq('id', holding.id);
-              }
-            } else if ((txType === 'BONUS' || txType === 'SPLIT') && holding) {
-              const prevQty = Number(holding.quantity);
-              const prevAvg = Number(holding.average_buy_price);
-              const newTotalQty = prevQty + qty;
-              const newAvgPrice = (prevQty * prevAvg) / newTotalQty;
-              await supabase
-                .from('holdings')
-                .update({
-                  quantity: roundQuantity(newTotalQty),
-                  average_buy_price: roundCurrency(newAvgPrice),
-                  is_ledger_managed: true,
-                  updated_at: now,
-                })
-                .eq('id', holding.id);
-            }
-
-            importedTransactions.push(inserted);
+          if (!rpcErr && rpcRes) {
+            importedTransactions.push(rpcRes.transaction as InvestmentTransactionRow);
             existingRefSet.add(dedupKey);
-          } catch (holdErr) {
-            // Rollback inserted transaction
-            await supabase.from('investment_transactions').delete().eq('id', inserted.id);
-            errors.push({
-              row: rowNum,
-              error: `Position reconciliation failed: ${holdErr instanceof Error ? holdErr.message : String(holdErr)}`,
-            });
+          } else if (rpcErr) {
+            const errMsg = rpcErr.message || '';
+            const isMissingRpc =
+              errMsg.includes('schema cache') ||
+              errMsg.includes('Could not find the function') ||
+              errMsg.includes('does not exist') ||
+              rpcErr.code === 'PGRST202';
+
+            if (isMissingRpc) {
+              return NextResponse.json(
+                {
+                  error: 'Financial import is temporarily unavailable because the secure transaction service is not configured. No records were imported.',
+                  code: 'ATOMIC_MIGRATION_REQUIRED',
+                },
+                { status: 503 }
+              );
+            }
+
+            if (errMsg.includes('already exists') || rpcErr.code === '23505') {
+              duplicates.push({ external_reference: externalRef, symbol, date: dateStr });
+            } else if (errMsg.includes('Insufficient quantity to sell') || rpcErr.code === '22003') {
+              errors.push({ row: rowNum, error: `Oversell rejected for ${symbol}: ${errMsg}` });
+            } else {
+              errors.push({ row: rowNum, error: `Atomic record failed for ${symbol}: ${errMsg}` });
+            }
           }
-        } else {
-          importedTransactions.push(inserted);
-          existingRefSet.add(dedupKey);
+        } catch (rpcCatch) {
+          console.error('[API import POST] RPC execution exception:', rpcCatch);
+          errors.push({
+            row: rowNum,
+            error: `Transaction execution exception for ${symbol}: ${rpcCatch instanceof Error ? rpcCatch.message : String(rpcCatch)}`,
+          });
         }
       }
 

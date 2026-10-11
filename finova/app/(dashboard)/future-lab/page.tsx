@@ -252,14 +252,15 @@ export default function PortfolioFutureLabPage() {
       const mfItem = xrayData.asset_class_breakdown.find((a: { asset_class: string }) => a.asset_class === 'mf');
       const sgbItem = xrayData.asset_class_breakdown.find((a: { asset_class: string }) => a.asset_class === 'sgb');
       const reitItem = xrayData.asset_class_breakdown.find((a: { asset_class: string }) => a.asset_class === 'reit');
+      const invitItem = xrayData.asset_class_breakdown.find((a: { asset_class: string }) => a.asset_class === 'invit');
 
       setTargetPercentages({
-        equity: Math.round(eqItem?.percentage_of_valued || 60),
-        bond: Math.round(bondItem?.percentage_of_valued || 20),
-        mf: Math.round(mfItem?.percentage_of_valued || 10),
-        sgb: Math.round(sgbItem?.percentage_of_valued || 5),
-        reit: Math.round(reitItem?.percentage_of_valued || 5),
-        invit: 0,
+        equity: Math.round(eqItem?.percentage_of_valued ?? 0),
+        bond: Math.round(bondItem?.percentage_of_valued ?? 0),
+        mf: Math.round(mfItem?.percentage_of_valued ?? 0),
+        sgb: Math.round(sgbItem?.percentage_of_valued ?? 0),
+        reit: Math.round(reitItem?.percentage_of_valued ?? 0),
+        invit: Math.round(invitItem?.percentage_of_valued ?? 0),
       });
     }
     simulateMutation.reset();

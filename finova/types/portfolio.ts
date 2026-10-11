@@ -86,6 +86,7 @@ export interface Holding {
   updated_at: string;
   sector?: string | null;
   industry?: string | null;
+  is_ledger_managed?: boolean;
   // Joined
   broker_account?: BrokerAccount;
 }
@@ -140,6 +141,8 @@ export interface PortfolioSummary {
   last_updated: string;
   has_unquoted_assets?: boolean;
   unquoted_count?: number;
+  has_stale_assets?: boolean;
+  stale_count?: number;
   priced_count?: number;
   is_valuation_complete?: boolean;
   quote_coverage_pct?: number;

@@ -6,7 +6,6 @@ import { calculateRealizedPnL } from '@/lib/calculations/realizedPnL';
 import { roundCurrency, roundQuantity } from '@/lib/calculations/portfolio';
 import type {
   InvestmentTransactionRow,
-  TransactionInsert,
   TransactionType,
   AssetCategory,
 } from '@/types/database';
@@ -215,10 +214,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Valid transaction date is required.' }, { status: 400 });
     }
 
-    const quantity = roundQuantity(Number(body.quantity) || 0);
-    const unitPrice = roundCurrency(Number(body.unit_price) || 0);
-    const fees = roundCurrency(Number(body.fees) || 0);
-    const taxes = roundCurrency(Number(body.taxes) || 0);
+    const rawQty = Number(body.quantity);
+    const rawPrice = Number(body.unit_price);
+    const rawFees = Number(body.fees ?? 0);
+    const rawTaxes = Number(body.taxes ?? 0);
+
+    if (!Number.isFinite(rawQty) || !Number.isFinite(rawPrice) || !Number.isFinite(rawFees) || !Number.isFinite(rawTaxes)) {
+      return NextResponse.json({ error: 'Quantity, price, fees, and taxes must be valid finite numbers.' }, { status: 400 });
+    }
+
+    const quantity = roundQuantity(rawQty);
+    const unitPrice = roundCurrency(rawPrice);
+    const fees = roundCurrency(rawFees);
+    const taxes = roundCurrency(rawTaxes);
 
     if (['BUY', 'SELL'].includes(txType)) {
       if (quantity <= 0) {
@@ -430,149 +438,35 @@ export async function POST(request: Request) {
             errMsg.includes('does not exist') ||
             rpcErr.code === 'PGRST202';
 
-          if (!isMissingRpc) {
-            console.error('[API transactions POST] RPC Error:', errMsg);
-            return NextResponse.json({ error: `Atomic transaction failed: ${errMsg}` }, { status: 500 });
+          if (isMissingRpc) {
+            console.error('[API transactions POST] Missing atomic RPC:', errMsg);
+            return NextResponse.json(
+              {
+                error: 'Financial update is temporarily unavailable because the secure transaction service is not configured. Your existing records have not been changed.',
+                code: 'ATOMIC_MIGRATION_REQUIRED',
+              },
+              { status: 503 }
+            );
           }
-          console.warn(
-            '[API transactions POST] RPC function pending migration or schema cache reload, falling back to resilient server transaction:',
-            errMsg
-          );
+
+          console.error('[API transactions POST] RPC Error:', errMsg);
+          return NextResponse.json({ error: `Atomic transaction failed: ${errMsg}` }, { status: 500 });
         }
+
+        return NextResponse.json(
+          { error: 'Unexpected response from atomic transaction procedure. No records modified.' },
+          { status: 500 }
+        );
       } catch (rpcCatch) {
-        console.warn('[API transactions POST] RPC execution exception, falling back to resilient server transaction:', rpcCatch);
+        console.error('[API transactions POST] RPC execution exception:', rpcCatch);
+        return NextResponse.json(
+          {
+            error: 'Atomic transaction failed due to an unexpected database error. No records were modified.',
+            code: 'TRANSACTION_EXECUTION_FAILED',
+          },
+          { status: 500 }
+        );
       }
-
-      // Resilient server-side execution with rollback compensation
-      const txPayload: TransactionInsert = {
-        user_id: user.id,
-        broker_account_id: brokerAccountId,
-        instrument_id: instrumentId,
-        transaction_type: txType,
-        quantity,
-        unit_price: unitPrice,
-        gross_amount: grossAmount,
-        fees,
-        taxes,
-        net_amount: netAmount,
-        currency: 'INR',
-        transaction_date: new Date(txDate).toISOString(),
-        settlement_date: settlementDate,
-        source: 'MANUAL',
-        external_reference: externalRef,
-        notes,
-      };
-
-      const { data: newTx, error: txErr } = await supabase
-        .from('investment_transactions')
-        .insert(txPayload)
-        .select(`
-          *,
-          broker_account:broker_accounts(*),
-          instrument:instruments(*)
-        `)
-        .single();
-
-      if (txErr) {
-        return NextResponse.json({ error: `Failed to record transaction: ${txErr.message}` }, { status: 500 });
-      }
-
-      // Reconcile holding position using WAC
-      if (body.reconcile_holding !== false && ['BUY', 'SELL', 'BONUS', 'SPLIT'].includes(txType)) {
-        try {
-          const { data: holding, error: holdFetchErr } = await supabase
-            .from('holdings')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('broker_account_id', brokerAccountId)
-            .eq('instrument_id', instrumentId)
-            .maybeSingle();
-
-          if (holdFetchErr) {
-            throw new Error(`Failed to query holding: ${holdFetchErr.message}`);
-          }
-
-          const now = new Date().toISOString();
-          if (txType === 'BUY') {
-            if (holding) {
-              const prevQty = Number(holding.quantity);
-              const prevAvg = Number(holding.average_buy_price);
-              const newTotalQty = prevQty + quantity;
-              const newAvgPrice = (prevQty * prevAvg + quantity * unitPrice) / newTotalQty;
-              const { error: updErr } = await supabase
-                .from('holdings')
-                .update({
-                  quantity: roundQuantity(newTotalQty),
-                  average_buy_price: roundCurrency(newAvgPrice),
-                  is_ledger_managed: true,
-                  updated_at: now,
-                })
-                .eq('id', holding.id);
-              if (updErr) throw updErr;
-            } else {
-              const { error: insErr } = await supabase.from('holdings').insert({
-                user_id: user.id,
-                broker_account_id: brokerAccountId,
-                instrument_id: instrumentId,
-                quantity,
-                average_buy_price: unitPrice,
-                currency: 'INR',
-                data_source: 'MANUAL',
-                as_of: txDate,
-                opening_quantity: 0,
-                opening_buy_price: 0,
-                is_ledger_managed: true,
-              });
-              if (insErr) throw insErr;
-            }
-          } else if (txType === 'SELL' && holding) {
-            const remQty = Math.max(0, Number(holding.quantity) - quantity);
-            if (remQty <= 0) {
-              const { error: delErr } = await supabase.from('holdings').delete().eq('id', holding.id);
-              if (delErr) throw delErr;
-            } else {
-              const { error: updErr } = await supabase
-                .from('holdings')
-                .update({
-                  quantity: roundQuantity(remQty),
-                  is_ledger_managed: true,
-                  updated_at: now,
-                })
-                .eq('id', holding.id);
-              if (updErr) throw updErr;
-            }
-          } else if ((txType === 'BONUS' || txType === 'SPLIT') && holding) {
-            const prevQty = Number(holding.quantity);
-            const prevAvg = Number(holding.average_buy_price);
-            const newTotalQty = prevQty + quantity;
-            const newAvgPrice = (prevQty * prevAvg) / newTotalQty;
-            const { error: updErr } = await supabase
-              .from('holdings')
-              .update({
-                quantity: roundQuantity(newTotalQty),
-                average_buy_price: roundCurrency(newAvgPrice),
-                is_ledger_managed: true,
-                updated_at: now,
-              })
-              .eq('id', holding.id);
-            if (updErr) throw updErr;
-          }
-        } catch (holdErr) {
-          // Rollback compensation: Remove inserted transaction to prevent orphan ledger records!
-          console.error('[API transactions POST] Holding update failed, rolling back transaction:', holdErr);
-          await supabase.from('investment_transactions').delete().eq('id', newTx.id);
-          return NextResponse.json(
-            { error: `Holding update failed; transaction was rolled back to maintain ledger consistency: ${holdErr instanceof Error ? holdErr.message : String(holdErr)}` },
-            { status: 500 }
-          );
-        }
-      }
-
-      return NextResponse.json({
-        transaction: newTx,
-        message: 'Transaction successfully recorded and portfolio updated.',
-        storageMode: 'cloud',
-      });
     }
 
     // Local development mode
@@ -715,118 +609,44 @@ export async function PUT(request: Request) {
           if (msg.includes('Unsafe transaction') || rpcErr.code === '22003') {
             return NextResponse.json({ error: msg }, { status: 400 });
           }
-          if (!msg.includes('function') || !msg.includes('does not exist')) {
-            return NextResponse.json({ error: msg }, { status: 500 });
+          if (msg.includes('not found') || rpcErr.code === 'P0002') {
+            return NextResponse.json({ error: 'Transaction not found or access denied.' }, { status: 404 });
           }
-        }
-      } catch (rpcCatch) {
-        console.warn('[API transactions PUT] RPC exception, falling back:', rpcCatch);
-      }
+          const isMissingRpc =
+            msg.includes('schema cache') ||
+            msg.includes('Could not find the function') ||
+            msg.includes('does not exist') ||
+            rpcErr.code === 'PGRST202';
 
-      // Fallback: update transaction and reconcile position
-      const { data: oldTx, error: oldTxErr } = await supabase
-        .from('investment_transactions')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .single();
-
-      if (oldTxErr || !oldTx) {
-        return NextResponse.json({ error: 'Transaction not found or access denied.' }, { status: 404 });
-      }
-
-      // Verify safe edit by replaying transactions chronologically
-      const { data: allTxs } = await supabase
-        .from('investment_transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('broker_account_id', oldTx.broker_account_id)
-        .eq('instrument_id', oldTx.instrument_id)
-        .order('transaction_date', { ascending: true })
-        .order('created_at', { ascending: true });
-
-      const txList = (allTxs || []).map((t) => (t.id === id ? { ...t, ...updates } : t));
-      let testQty = 0;
-      for (const t of txList) {
-        const type = t.transaction_type.toUpperCase();
-        if (['BUY', 'BONUS', 'SPLIT'].includes(type)) testQty += Number(t.quantity);
-        if (type === 'SELL') {
-          if (Number(t.quantity) > testQty) {
+          if (isMissingRpc) {
+            console.error('[API transactions PUT] Missing atomic RPC:', msg);
             return NextResponse.json(
-              { error: `Unsafe transaction edit: would result in negative position of ${testQty - Number(t.quantity)} units on ${t.transaction_date}.` },
-              { status: 400 }
+              {
+                error: 'Financial update is temporarily unavailable because the secure transaction service is not configured. Your existing records have not been changed.',
+                code: 'ATOMIC_MIGRATION_REQUIRED',
+              },
+              { status: 503 }
             );
           }
-          testQty -= Number(t.quantity);
+
+          console.error('[API transactions PUT] RPC Error:', msg);
+          return NextResponse.json({ error: `Atomic update failed: ${msg}` }, { status: 500 });
         }
+
+        return NextResponse.json(
+          { error: 'Unexpected response from atomic update procedure. No records modified.' },
+          { status: 500 }
+        );
+      } catch (rpcCatch) {
+        console.error('[API transactions PUT] RPC execution exception:', rpcCatch);
+        return NextResponse.json(
+          {
+            error: 'Atomic update failed due to an unexpected database error. No records were modified.',
+            code: 'TRANSACTION_UPDATE_FAILED',
+          },
+          { status: 500 }
+        );
       }
-
-      const { data: updated, error } = await supabase
-        .from('investment_transactions')
-        .update(updates)
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .select(`
-          *,
-          broker_account:broker_accounts(*),
-          instrument:instruments(*)
-        `)
-        .single();
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-
-      // Reconcile holding position in cloud mode
-      const { data: holding } = await supabase
-        .from('holdings')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('broker_account_id', oldTx.broker_account_id)
-        .eq('instrument_id', oldTx.instrument_id)
-        .maybeSingle();
-
-      const baseQty = (holding && holding.opening_quantity != null) ? Number(holding.opening_quantity) : 0;
-      const basePrice = (holding && holding.opening_buy_price != null) ? Number(holding.opening_buy_price) : 0;
-      let replayQty = baseQty;
-      let replayCost = baseQty * basePrice;
-      let replayAvg = basePrice;
-
-      for (const t of txList) {
-        const type = t.transaction_type.toUpperCase();
-        if (type === 'BUY') {
-          const newQ = replayQty + Number(t.quantity);
-          replayCost += Number(t.quantity) * Number(t.unit_price);
-          replayAvg = newQ > 0 ? replayCost / newQ : 0;
-          replayQty = newQ;
-        } else if (type === 'SELL') {
-          replayQty = Math.max(0, replayQty - Number(t.quantity));
-          replayCost = replayQty * replayAvg;
-        } else if (['BONUS', 'SPLIT'].includes(type)) {
-          replayQty += Number(t.quantity);
-          replayAvg = replayQty > 0 ? replayCost / replayQty : 0;
-        }
-      }
-
-      const now = new Date().toISOString();
-      if (replayQty > 0) {
-        if (holding) {
-          await supabase.from('holdings').update({
-            quantity: roundQuantity(replayQty),
-            average_buy_price: roundCurrency(replayAvg),
-            is_ledger_managed: true,
-            updated_at: now,
-          }).eq('id', holding.id);
-        }
-      } else if (holding) {
-        await supabase.from('holdings').delete().eq('id', holding.id);
-      }
-
-      return NextResponse.json({
-        transaction: updated,
-        message: 'Transaction updated successfully and position reconciled.',
-        storageMode: 'cloud',
-      });
     }
 
     // Local mode
@@ -903,113 +723,44 @@ export async function DELETE(request: Request) {
               { status: 400 }
             );
           }
-          if (!msg.includes('function') || !msg.includes('does not exist')) {
-            return NextResponse.json({ error: msg }, { status: 500 });
+          if (msg.includes('not found') || rpcErr.code === 'P0002') {
+            return NextResponse.json({ error: 'Transaction not found or access denied.' }, { status: 404 });
           }
-        }
-      } catch (rpcCatch) {
-        console.warn('[API transactions DELETE] RPC exception, falling back:', rpcCatch);
-      }
+          const isMissingRpc =
+            msg.includes('schema cache') ||
+            msg.includes('Could not find the function') ||
+            msg.includes('does not exist') ||
+            rpcErr.code === 'PGRST202';
 
-      // Fallback: check dependency before delete
-      const { data: targetTx, error: fetchErr } = await supabase
-        .from('investment_transactions')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .single();
-
-      if (fetchErr || !targetTx) {
-        return NextResponse.json({ error: 'Transaction not found or access denied.' }, { status: 404 });
-      }
-
-      // Fetch remaining transactions to ensure no oversell occurs
-      const { data: remainingTxs } = await supabase
-        .from('investment_transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('broker_account_id', targetTx.broker_account_id)
-        .eq('instrument_id', targetTx.instrument_id)
-        .neq('id', id)
-        .order('transaction_date', { ascending: true })
-        .order('created_at', { ascending: true });
-
-      const txList = remainingTxs || [];
-      let testQty = 0;
-      for (const t of txList) {
-        const type = t.transaction_type.toUpperCase();
-        if (['BUY', 'BONUS', 'SPLIT'].includes(type)) testQty += Number(t.quantity);
-        if (type === 'SELL') {
-          if (Number(t.quantity) > testQty) {
+          if (isMissingRpc) {
+            console.error('[API transactions DELETE] Missing atomic RPC:', msg);
             return NextResponse.json(
-              { error: `Cannot delete transaction: subsequent sales depend on these shares (would result in negative position of ${testQty - Number(t.quantity)} units).` },
-              { status: 400 }
+              {
+                error: 'Financial update is temporarily unavailable because the secure transaction service is not configured. Your existing records have not been changed.',
+                code: 'ATOMIC_MIGRATION_REQUIRED',
+              },
+              { status: 503 }
             );
           }
-          testQty -= Number(t.quantity);
+
+          console.error('[API transactions DELETE] RPC Error:', msg);
+          return NextResponse.json({ error: `Atomic deletion failed: ${msg}` }, { status: 500 });
         }
+
+        return NextResponse.json(
+          { error: 'Unexpected response from atomic delete procedure. No records modified.' },
+          { status: 500 }
+        );
+      } catch (rpcCatch) {
+        console.error('[API transactions DELETE] RPC exception:', rpcCatch);
+        return NextResponse.json(
+          {
+            error: 'Atomic deletion failed due to an unexpected database error. No records were modified.',
+            code: 'TRANSACTION_DELETE_FAILED',
+          },
+          { status: 500 }
+        );
       }
-
-      const { error } = await supabase
-        .from('investment_transactions')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-
-      // Reconcile holding
-      const { data: holding } = await supabase
-        .from('holdings')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('broker_account_id', targetTx.broker_account_id)
-        .eq('instrument_id', targetTx.instrument_id)
-        .maybeSingle();
-
-      const baseQty = (holding && holding.opening_quantity != null) ? Number(holding.opening_quantity) : 0;
-      const basePrice = (holding && holding.opening_buy_price != null) ? Number(holding.opening_buy_price) : 0;
-      let replayQty = baseQty;
-      let replayCost = baseQty * basePrice;
-      let replayAvg = basePrice;
-
-      for (const t of txList) {
-        const type = t.transaction_type.toUpperCase();
-        if (type === 'BUY') {
-          const newQ = replayQty + Number(t.quantity);
-          replayCost += Number(t.quantity) * Number(t.unit_price);
-          replayAvg = newQ > 0 ? replayCost / newQ : 0;
-          replayQty = newQ;
-        } else if (type === 'SELL') {
-          replayQty = Math.max(0, replayQty - Number(t.quantity));
-          replayCost = replayQty * replayAvg;
-        } else if (['BONUS', 'SPLIT'].includes(type)) {
-          replayQty += Number(t.quantity);
-          replayAvg = replayQty > 0 ? replayCost / replayQty : 0;
-        }
-      }
-
-      const now = new Date().toISOString();
-      if (replayQty > 0) {
-        if (holding) {
-          await supabase.from('holdings').update({
-            quantity: roundQuantity(replayQty),
-            average_buy_price: roundCurrency(replayAvg),
-            is_ledger_managed: true,
-            updated_at: now,
-          }).eq('id', holding.id);
-        }
-      } else if (holding) {
-        await supabase.from('holdings').delete().eq('id', holding.id);
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: 'Transaction deleted successfully and position reconciled.',
-        storageMode: 'cloud',
-      });
     }
 
     // Local mode
