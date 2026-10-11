@@ -97,8 +97,6 @@ export class TransactionService {
         source: input.source,
         external_reference: input.external_reference,
         notes: input.notes,
-        reconcile_holding: true,
-        allow_oversell: false,
       },
       client
     );
@@ -168,7 +166,6 @@ export class TransactionService {
         settlement_date: updates.settlement_date,
         external_reference: updates.external_reference,
         notes: updates.notes,
-        reconcile_holding: true,
       },
       client
     );
@@ -200,8 +197,6 @@ export class TransactionService {
       source?: string;
       external_reference?: string | null;
       notes?: string | null;
-      reconcile_holding?: boolean;
-      allow_oversell?: boolean;
     },
     client?: SupabaseClient
   ): Promise<{
@@ -225,8 +220,6 @@ export class TransactionService {
       p_source: input.source || 'MANUAL',
       p_external_reference: input.external_reference || null,
       p_notes: input.notes || null,
-      p_reconcile_holding: input.reconcile_holding !== false,
-      p_allow_oversell: Boolean(input.allow_oversell),
     });
 
     if (error) {
@@ -252,7 +245,6 @@ export class TransactionService {
       settlement_date?: string | null;
       external_reference?: string | null;
       notes?: string | null;
-      reconcile_holding?: boolean;
     },
     client?: SupabaseClient
   ): Promise<{
@@ -272,7 +264,6 @@ export class TransactionService {
       p_settlement_date: updates.settlement_date,
       p_external_reference: updates.external_reference,
       p_notes: updates.notes,
-      p_reconcile_holding: updates.reconcile_holding !== false,
     });
 
     if (error) {
@@ -292,7 +283,7 @@ export class TransactionService {
     success: boolean;
     error: string | null;
   }> {
-    const res = await this.deleteTransactionAtomic(id, true, client);
+    const res = await this.deleteTransactionAtomic(id, client);
     if (res.error) {
       return { success: false, error: res.error };
     }
@@ -305,7 +296,6 @@ export class TransactionService {
    */
   public static async deleteTransactionAtomic(
     id: string,
-    reconcileHolding: boolean = true,
     client?: SupabaseClient
   ): Promise<{
     data: { deleted_id: string; reconciliation?: unknown; status: string } | null;
@@ -314,7 +304,6 @@ export class TransactionService {
     const supabase = client || createClient();
     const { data, error } = await supabase.rpc('delete_transaction_atomic', {
       p_transaction_id: id,
-      p_reconcile_holding: reconcileHolding,
     });
 
     if (error) {

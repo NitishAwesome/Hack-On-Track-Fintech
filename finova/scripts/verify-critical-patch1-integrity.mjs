@@ -557,25 +557,26 @@ runTest('SECURITY DEFINER Functions Have Hardened search_path & Revoked Public A
   // Revoke public executions
   assert(sql.includes('REVOKE ALL ON FUNCTION public.safe_delete_broker_account(UUID) FROM PUBLIC'), 'Must revoke safe_delete_broker_account from PUBLIC');
   assert(sql.includes('REVOKE ALL ON FUNCTION public.reconcile_position_atomic(UUID, UUID) FROM PUBLIC'), 'Must revoke reconcile_position_atomic from PUBLIC');
-  assert(sql.includes('REVOKE ALL ON FUNCTION public.delete_transaction_atomic(UUID, BOOLEAN) FROM PUBLIC'), 'Must revoke delete_transaction_atomic from PUBLIC');
+  assert(sql.includes('REVOKE ALL ON FUNCTION public.delete_transaction_atomic(UUID) FROM PUBLIC'), 'Must revoke delete_transaction_atomic from PUBLIC');
+  assert(sql.includes('REVOKE ALL ON FUNCTION public.update_transaction_atomic'), 'Must revoke update_transaction_atomic from PUBLIC');
   assert(sql.includes('REVOKE ALL ON FUNCTION public.record_transaction_atomic'), 'Must revoke record_transaction_atomic from PUBLIC');
+  assert(sql.includes('REVOKE ALL ON FUNCTION public.declare_holding_opening_balance'), 'Must revoke declare_holding_opening_balance from PUBLIC');
 });
 
 // -------------------------------------------------------------
-// Case Q: Legacy Provenance Backfill Logic in Migration
+// Case Q: Legacy Provenance Preservation Logic in Migration
 // -------------------------------------------------------------
-runTest('Migration Backfills Legacy Manual Holdings without Data Loss', () => {
+runTest('Migration Preserves Legacy Holdings without Fabricating Opening Balances', () => {
   const migrationPath = path.join(
     process.cwd(),
     'supabase/migrations/20261011020000_secure_financial_ledger_and_legacy_provenance.sql'
   );
   const sql = fs.readFileSync(migrationPath, 'utf8');
 
-  assert(sql.includes('h.opening_quantity IS NULL'), 'Must check opening_quantity IS NULL');
-  assert(sql.includes('NOT EXISTS ('), 'Must check absence of transactions for manual holding backfill');
-  assert(sql.includes('opening_quantity = h.quantity'), 'Must backfill opening_quantity from current quantity');
-  assert(sql.includes('is_ledger_managed = FALSE'), 'Must mark unmanaged manual holdings as FALSE');
-  assert(sql.includes('LEGACY_MANUAL_HOLDING_ANCHORED'), 'Reconcile position must anchor unanchored legacy holdings');
+  assert(sql.includes('opening_quantity IS NULL'), 'Must check opening_quantity IS NULL');
+  assert(sql.includes("provenance_status = 'UNKNOWN'"), 'Must flag ambiguous holdings as UNKNOWN provenance');
+  assert(sql.includes('Cannot perform destructive reconciliation on legacy holding'), 'Must block destructive reconciliation on unanchored legacy positions');
+  assert(sql.includes('declare_holding_opening_balance'), 'Must provide safe declare_holding_opening_balance RPC');
 });
 
 // -------------------------------------------------------------

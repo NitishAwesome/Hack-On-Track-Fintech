@@ -2,23 +2,26 @@
 -- FINOVA — Migration: Secure Financial Ledger, RLS Bypass Guard & Legacy Provenance Protection
 -- File: supabase/migrations/20261011020000_secure_financial_ledger_and_legacy_provenance.sql
 --
--- PURPOSE & ARCHITECTURE:
--- 1. Direct Mutation Bypass Prevention:
---    - Closes direct PostgREST table INSERT, UPDATE, DELETE bypass on public.investment_transactions.
---      All ledger entries MUST be created, updated, or deleted through atomic SECURITY DEFINER RPCs.
---    - Closes direct mutation bypass on public.holdings for ledger-managed positions.
---      Manual holdings CRUD and authorized CSV imports are preserved for non-ledger positions
---      (is_ledger_managed = FALSE and 0 transactions).
--- 2. Legacy Opening Balance Provenance Protection:
---    - Safe backfill for historical holdings where opening_quantity IS NULL.
---    - Blocks destructive position liquidation during reconciliation when provenance is ambiguous.
---    - Eliminates ghost holdings only when positions were definitively created by transactions.
--- 3. Security Definer RPC Hardening:
---    - Ensures search_path = public, pg_temp across all financial procedures.
---    - Explicitly revokes unintended PUBLIC access and grants EXECUTE strictly to authenticated/service_role.
--- 4. Safe Forward-Only Design:
---    - Does NOT touch or modify the owner's manual "Block direct broker deletion" policy on broker_accounts.
---    - Safely idempotent: can be executed multiple times without error.
+-- PURPOSE & ARCHITECTURE (CRITICAL PATCH 1.2):
+-- 1. Eliminate Financial Integrity Bypass Parameters:
+--    - Drops legacy signatures of record_transaction_atomic, update_transaction_atomic,
+--      and delete_transaction_atomic that accepted p_reconcile_holding or p_allow_oversell.
+--    - Unconditionally enforces portfolio position reconciliation and overselling rejection
+--      at the database engine level.
+-- 2. Full-Sale Accounting & Chronological Replay:
+--    - When all units are sold, position is zero (never resurrected merely because opening_quantity > 0).
+--    - Opening balance is strictly an accounting baseline, not a minimum quantity.
+--    - record_transaction_atomic delegates to chronological replay, ensuring backdated and out-of-order
+--      trades produce exact WAC without race conditions or order-dependent cost drift.
+-- 3. Legacy Provenance Protection:
+--    - Flag historical holdings with NULL opening_quantity as provenance_status = 'UNKNOWN'.
+--    - Never automatically backfill unverifiable historical balances.
+--    - Block destructive reconciliation when original position cannot be established reliably.
+-- 4. Direct Financial-Table Mutation Bypass Guard:
+--    - Enforces RESTRICTIVE policies on public.investment_transactions blocking direct INSERT/UPDATE/DELETE.
+--    - Preserves manual holdings CRUD and snapshot imports strictly for non-ledger positions.
+-- 5. Preserves Owner's Manual Safeguard:
+--    - Does NOT drop or alter the owner's active "Block direct broker deletion" policy on broker_accounts.
 --
 -- MANUAL EXECUTION INSTRUCTIONS:
 -- Run this SQL in the Supabase SQL Editor:
@@ -27,9 +30,8 @@
 
 
 -- ============================================================
--- SECTION 1: LEGACY HOLDINGS PROVENANCE BACKFILL
+-- SECTION 1: SCHEMA COLUMNS & PROVENANCE METADATA
 -- ============================================================
--- Ensure columns exist (idempotent guard)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -52,60 +54,26 @@ BEGIN
   ) THEN
     ALTER TABLE public.holdings ADD COLUMN is_ledger_managed BOOLEAN NOT NULL DEFAULT FALSE;
   END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'holdings' AND column_name = 'provenance_status'
+  ) THEN
+    ALTER TABLE public.holdings ADD COLUMN provenance_status TEXT NOT NULL DEFAULT 'VERIFIED';
+  END IF;
 END $$;
 
--- 1. Backfill legacy manual holdings:
--- If opening_quantity IS NULL and NO transactions exist, this holding is 100% manual.
--- Set opening_quantity and opening_buy_price from existing holding row and mark is_ledger_managed = FALSE.
-UPDATE public.holdings h
-SET opening_quantity = h.quantity,
-    opening_buy_price = h.average_buy_price,
-    is_ledger_managed = FALSE,
-    updated_at = NOW()
-WHERE h.opening_quantity IS NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM public.investment_transactions t
-    WHERE t.user_id = h.user_id
-      AND t.broker_account_id = h.broker_account_id
-      AND t.instrument_id = h.instrument_id
-  );
-
--- 2. Backfill legacy ledger holdings:
--- If opening_quantity IS NULL and transactions DO exist, and the net transaction quantity
--- matches the holding quantity, this position was created exclusively by transactions.
--- Anchor baseline at 0 with is_ledger_managed = TRUE.
-WITH tx_summary AS (
-  SELECT
-    user_id,
-    broker_account_id,
-    instrument_id,
-    SUM(
-      CASE
-        WHEN transaction_type IN ('BUY', 'BONUS', 'SPLIT') THEN quantity
-        WHEN transaction_type = 'SELL' THEN -quantity
-        ELSE 0
-      END
-    ) AS net_tx_qty
-  FROM public.investment_transactions
-  GROUP BY user_id, broker_account_id, instrument_id
-)
-UPDATE public.holdings h
-SET opening_quantity = 0,
-    opening_buy_price = 0,
-    is_ledger_managed = TRUE,
-    updated_at = NOW()
-FROM tx_summary s
-WHERE h.user_id = s.user_id
-  AND h.broker_account_id = s.broker_account_id
-  AND h.instrument_id = s.instrument_id
-  AND h.opening_quantity IS NULL
-  AND round(h.quantity, 6) = round(s.net_tx_qty, 6);
+-- Flag ambiguous historical holdings with NULL opening quantity as UNKNOWN provenance.
+-- We do NOT guess or automatically fabricate opening balances.
+UPDATE public.holdings
+SET provenance_status = 'UNKNOWN'
+WHERE opening_quantity IS NULL AND provenance_status = 'VERIFIED';
 
 
 -- ============================================================
 -- SECTION 2: ROW-LEVEL SECURITY — BLOCK DIRECT TRANSACTION MUTATIONS
 -- ============================================================
--- Drop permissive write policies on investment_transactions to prevent ledger bypass via PostgREST
+-- Drop permissive write policies on investment_transactions
 DROP POLICY IF EXISTS "Users insert own transactions" ON public.investment_transactions;
 DROP POLICY IF EXISTS "Users update own transactions" ON public.investment_transactions;
 DROP POLICY IF EXISTS "Users delete own transactions" ON public.investment_transactions;
@@ -120,7 +88,7 @@ CREATE POLICY "Users view own transactions"
   TO authenticated
   USING (auth.uid() = user_id);
 
--- Enforce database-level block on direct table mutations for authenticated users.
+-- Enforce strict database-level RESTRICTIVE block on direct table mutations for authenticated users.
 -- All transaction inserts, updates, and deletes MUST proceed through atomic RPCs.
 CREATE POLICY "Block direct transaction insert"
   ON public.investment_transactions
@@ -274,40 +242,29 @@ BEGIN
       v_base_qty := v_holding.opening_quantity;
       v_base_price := COALESCE(v_holding.opening_buy_price, 0);
     ELSE
-      -- Legacy holding where opening_quantity was not previously anchored
+      -- Legacy holding where opening_quantity was not established
       v_is_legacy_unanchored := TRUE;
     END IF;
   END IF;
 
-  -- Replay all transactions chronologically
-  FOR v_tx IN (
-    SELECT *
-    FROM public.investment_transactions
+  -- Check if transactions exist
+  SELECT EXISTS (
+    SELECT 1 FROM public.investment_transactions
     WHERE user_id = v_user_id
       AND broker_account_id = p_broker_account_id
       AND instrument_id = p_instrument_id
-    ORDER BY transaction_date ASC, created_at ASC
-  ) LOOP
-    v_has_tx := TRUE;
-  END LOOP;
+  ) INTO v_has_tx;
 
   -- CASE 1: If NO transactions exist for this security:
   IF NOT v_has_tx THEN
     IF v_holding.id IS NOT NULL THEN
       IF v_is_legacy_unanchored THEN
-        -- Legacy holding with no transactions: 100% manual. Never delete!
-        -- Anchor its baseline from its current quantity & buy price.
-        UPDATE public.holdings
-        SET opening_quantity = v_holding.quantity,
-            opening_buy_price = v_holding.average_buy_price,
-            is_ledger_managed = FALSE,
-            updated_at = NOW()
-        WHERE id = v_holding.id
-        RETURNING * INTO v_holding;
-
+        -- Legacy holding with no transactions: preserve safely, do not eliminate!
         RETURN jsonb_build_object(
-          'status', 'LEGACY_MANUAL_HOLDING_ANCHORED',
-          'holding', to_jsonb(v_holding)
+          'status', 'LEGACY_HOLDING_PRESERVED',
+          'holding', to_jsonb(v_holding),
+          'quantity', v_holding.quantity,
+          'average_buy_price', v_holding.average_buy_price
         );
       ELSIF v_base_qty > 0 THEN
         -- Genuine manual opening holding exists: restore to opening baseline
@@ -321,59 +278,46 @@ BEGIN
 
         RETURN jsonb_build_object(
           'status', 'OPENING_BALANCE_RESTORED',
-          'holding', to_jsonb(v_holding)
+          'holding', to_jsonb(v_holding),
+          'quantity', v_base_qty,
+          'average_buy_price', v_base_price
         );
       ELSE
-        -- Position was created exclusively by ledger and now has 0 trades: eliminate ghost holding
+        -- Position was created purely by ledger trades and now all trades are deleted:
+        -- Eliminate ghost holding
         IF v_holding.is_ledger_managed THEN
           DELETE FROM public.holdings WHERE id = v_holding.id;
           RETURN jsonb_build_object(
             'status', 'GHOST_HOLDING_ELIMINATED',
-            'holding', NULL
+            'holding', NULL,
+            'quantity', 0,
+            'average_buy_price', 0
           );
         ELSE
-          -- Provenance is not ledger-managed; preserve holding safely
           RETURN jsonb_build_object(
             'status', 'MANUAL_HOLDING_PRESERVED',
-            'holding', to_jsonb(v_holding)
+            'holding', to_jsonb(v_holding),
+            'quantity', v_holding.quantity,
+            'average_buy_price', v_holding.average_buy_price
           );
         END IF;
       END IF;
     ELSE
       RETURN jsonb_build_object(
         'status', 'NO_HOLDING_NO_TRANSACTIONS',
-        'holding', NULL
+        'holding', NULL,
+        'quantity', 0,
+        'average_buy_price', 0
       );
     END IF;
   END IF;
 
   -- CASE 2: Transactions exist:
-  -- If legacy holding has unknown opening baseline, verify whether net trades account for it
+  -- If legacy holding has unknown opening baseline, block destructive reconciliation
   IF v_is_legacy_unanchored THEN
-    -- Check net transaction quantity
-    SELECT
-      SUM(CASE WHEN transaction_type IN ('BUY', 'BONUS', 'SPLIT') THEN quantity WHEN transaction_type = 'SELL' THEN -quantity ELSE 0 END)
-    INTO v_base_qty
-    FROM public.investment_transactions
-    WHERE user_id = v_user_id
-      AND broker_account_id = p_broker_account_id
-      AND instrument_id = p_instrument_id;
-
-    IF round(v_holding.quantity, 6) = round(COALESCE(v_base_qty, 0), 6) THEN
-      -- Exact match: holding was created by transactions. Baseline is 0.
-      v_base_qty := 0;
-      v_base_price := 0;
-    ELSIF v_holding.quantity > COALESCE(v_base_qty, 0) THEN
-      -- Holding has more units than transactions: legacy manual position + trades.
-      -- Baseline is the difference.
-      v_base_qty := v_holding.quantity - v_base_qty;
-      v_base_price := v_holding.average_buy_price;
-    ELSE
-      -- Ambiguous provenance: block destructive reconciliation
-      RAISE EXCEPTION 'Cannot reconcile holding for instrument %: opening position is not established and recorded trades do not match current balance. Destructive reconciliation blocked.',
-        p_instrument_id
-        USING ERRCODE = '22000';
-    END IF;
+    RAISE EXCEPTION 'Cannot perform destructive reconciliation on legacy holding for instrument %: opening position provenance is unverified (opening_quantity is NULL). Please declare verified opening balance before reconciling.',
+      p_instrument_id
+      USING ERRCODE = '22000';
   END IF;
 
   v_running_qty := v_base_qty;
@@ -409,8 +353,9 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- Persist recalculated holding position
+  -- Persist recalculated holding position:
   IF v_running_qty > 0 THEN
+    -- Position remains open
     IF v_holding.id IS NOT NULL THEN
       UPDATE public.holdings
       SET quantity = v_running_qty,
@@ -450,23 +395,19 @@ BEGIN
       RETURNING * INTO v_holding;
     END IF;
   ELSE
-    -- Position completely liquidated:
+    -- Position completely liquidated (v_running_qty = 0)
+    -- In full-sale accounting: remaining position is exactly zero!
+    -- Never restore sold opening units merely because opening_quantity > 0!
     IF v_holding.id IS NOT NULL THEN
-      IF v_base_qty > 0 THEN
-        -- Restore to opening balance if user had a manual opening baseline
-        UPDATE public.holdings
-        SET quantity = v_base_qty,
-            average_buy_price = v_base_price,
-            opening_quantity = v_base_qty,
-            opening_buy_price = v_base_price,
-            is_ledger_managed = FALSE,
-            updated_at = NOW()
-        WHERE id = v_holding.id
-        RETURNING * INTO v_holding;
-      ELSIF v_holding.is_ledger_managed THEN
-        DELETE FROM public.holdings WHERE id = v_holding.id;
-        v_holding := NULL;
-      END IF;
+      UPDATE public.holdings
+      SET quantity = 0,
+          average_buy_price = v_current_avg,
+          opening_quantity = v_base_qty,
+          opening_buy_price = v_base_price,
+          is_ledger_managed = TRUE,
+          updated_at = NOW()
+      WHERE id = v_holding.id
+      RETURNING * INTO v_holding;
     END IF;
   END IF;
 
@@ -486,8 +427,12 @@ $$;
 
 
 -- ============================================================
--- SECTION 5: CANONICAL RECORD_TRANSACTION_ATOMIC FUNCTION
+-- SECTION 5: RECORD_TRANSACTION_ATOMIC (NO BYPASS PARAMETERS)
 -- ============================================================
+-- Drop old signatures to ensure PostgREST cannot route calls with bypass parameters
+DROP FUNCTION IF EXISTS public.record_transaction_atomic(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN);
+DROP FUNCTION IF EXISTS public.record_transaction_atomic(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, NUMERIC);
+
 CREATE OR REPLACE FUNCTION public.record_transaction_atomic(
   p_broker_account_id UUID,
   p_instrument_id UUID,
@@ -503,8 +448,6 @@ CREATE OR REPLACE FUNCTION public.record_transaction_atomic(
   p_source TEXT DEFAULT 'MANUAL',
   p_external_reference TEXT DEFAULT NULL,
   p_notes TEXT DEFAULT NULL,
-  p_reconcile_holding BOOLEAN DEFAULT TRUE,
-  p_allow_oversell BOOLEAN DEFAULT FALSE,
   p_stt_taxes NUMERIC DEFAULT NULL
 )
 RETURNS JSONB
@@ -516,16 +459,11 @@ DECLARE
   v_user_id UUID;
   v_broker_id UUID;
   v_inst_id UUID;
-  v_holding public.holdings%ROWTYPE;
   v_new_tx public.investment_transactions%ROWTYPE;
   v_effective_taxes NUMERIC;
   v_net_amount NUMERIC;
-  v_current_qty NUMERIC := 0;
-  v_new_qty NUMERIC;
-  v_new_avg NUMERIC;
-  v_rem_qty NUMERIC;
   v_norm_type TEXT;
-  v_result JSONB;
+  v_reconcile_res JSONB;
 BEGIN
   -- 1. Enforce authenticated user identity
   v_user_id := auth.uid();
@@ -571,30 +509,7 @@ BEGIN
       USING ERRCODE = '22003';
   END IF;
 
-  -- 6. Lock holding row FOR UPDATE to eliminate race conditions
-  SELECT * INTO v_holding
-  FROM public.holdings
-  WHERE broker_account_id = p_broker_account_id
-    AND instrument_id = p_instrument_id
-    AND user_id = v_user_id
-  FOR UPDATE;
-
-  IF v_holding.id IS NOT NULL THEN
-    v_current_qty := v_holding.quantity;
-  ELSE
-    v_current_qty := 0;
-  END IF;
-
-  -- 7. Oversell check on SELL
-  IF v_norm_type = 'SELL' AND NOT p_allow_oversell THEN
-    IF p_quantity > v_current_qty THEN
-      RAISE EXCEPTION 'Insufficient quantity to sell: requested %, available % units',
-        p_quantity, v_current_qty
-        USING ERRCODE = '22003';
-    END IF;
-  END IF;
-
-  -- 8. Calculate effective taxes and net amount
+  -- 6. Calculate effective taxes and net amount
   v_effective_taxes := COALESCE(NULLIF(p_stt_taxes, 0), p_taxes, 0);
 
   IF p_net_amount IS NOT NULL THEN
@@ -609,7 +524,7 @@ BEGIN
     END IF;
   END IF;
 
-  -- 9. Insert transaction into ledger
+  -- 7. Insert transaction into ledger
   INSERT INTO public.investment_transactions (
     user_id,
     broker_account_id,
@@ -647,108 +562,31 @@ BEGIN
   )
   RETURNING * INTO v_new_tx;
 
-  -- 10. Reconcile holding atomically using Weighted-Average Cost (WAC)
-  IF p_reconcile_holding AND v_norm_type IN ('BUY', 'SELL', 'BONUS', 'SPLIT') THEN
-    IF v_norm_type = 'BUY' THEN
-      IF v_holding.id IS NOT NULL THEN
-        v_new_qty := round(v_holding.quantity + p_quantity, 6);
-        v_new_avg := round(((v_holding.quantity * v_holding.average_buy_price) + (p_quantity * p_unit_price)) / v_new_qty, 4);
-
-        UPDATE public.holdings
-        SET quantity = v_new_qty,
-            average_buy_price = v_new_avg,
-            opening_quantity = COALESCE(opening_quantity, v_holding.quantity),
-            opening_buy_price = COALESCE(opening_buy_price, v_holding.average_buy_price),
-            is_ledger_managed = TRUE,
-            updated_at = NOW()
-        WHERE id = v_holding.id
-        RETURNING * INTO v_holding;
-      ELSE
-        INSERT INTO public.holdings (
-          user_id,
-          broker_account_id,
-          instrument_id,
-          quantity,
-          average_buy_price,
-          currency,
-          data_source,
-          as_of,
-          opening_quantity,
-          opening_buy_price,
-          is_ledger_managed
-        ) VALUES (
-          v_user_id,
-          p_broker_account_id,
-          p_instrument_id,
-          round(p_quantity, 6),
-          round(p_unit_price, 4),
-          'INR',
-          COALESCE(p_source, 'MANUAL'),
-          p_transaction_date,
-          0,
-          0,
-          TRUE
-        )
-        RETURNING * INTO v_holding;
-      END IF;
-
-    ELSIF v_norm_type = 'SELL' THEN
-      IF v_holding.id IS NOT NULL THEN
-        v_rem_qty := round(GREATEST(0, v_holding.quantity - p_quantity), 6);
-        IF v_rem_qty <= 0 THEN
-          IF COALESCE(v_holding.opening_quantity, 0) > 0 THEN
-            -- Restore opening baseline if user had manual opening balance
-            UPDATE public.holdings
-            SET quantity = v_holding.opening_quantity,
-                average_buy_price = COALESCE(v_holding.opening_buy_price, 0),
-                is_ledger_managed = FALSE,
-                updated_at = NOW()
-            WHERE id = v_holding.id
-            RETURNING * INTO v_holding;
-          ELSE
-            DELETE FROM public.holdings WHERE id = v_holding.id;
-            v_holding := NULL;
-          END IF;
-        ELSE
-          UPDATE public.holdings
-          SET quantity = v_rem_qty,
-              is_ledger_managed = TRUE,
-              updated_at = NOW()
-          WHERE id = v_holding.id
-          RETURNING * INTO v_holding;
-        END IF;
-      END IF;
-
-    ELSIF v_norm_type IN ('BONUS', 'SPLIT') THEN
-      IF v_holding.id IS NOT NULL THEN
-        v_new_qty := round(v_holding.quantity + p_quantity, 6);
-        v_new_avg := round((v_holding.quantity * v_holding.average_buy_price) / v_new_qty, 4);
-
-        UPDATE public.holdings
-        SET quantity = v_new_qty,
-            average_buy_price = v_new_avg,
-            is_ledger_managed = TRUE,
-            updated_at = NOW()
-        WHERE id = v_holding.id
-        RETURNING * INTO v_holding;
-      END IF;
-    END IF;
-  END IF;
-
-  v_result := jsonb_build_object(
-    'transaction', to_jsonb(v_new_tx),
-    'holding', CASE WHEN v_holding.id IS NOT NULL THEN to_jsonb(v_holding) ELSE NULL END,
-    'status', 'SUCCESS'
+  -- 8. UNCONDITIONALLY reconcile position chronologically
+  -- Full chronological replay ensures out-of-order and backdated trades calculate exact WAC.
+  -- If this trade would cause overselling in history, reconcile_position_atomic raises 22003,
+  -- which ROLLS BACK the transaction insert automatically!
+  v_reconcile_res := public.reconcile_position_atomic(
+    p_broker_account_id,
+    p_instrument_id
   );
 
-  RETURN v_result;
+  RETURN jsonb_build_object(
+    'transaction', to_jsonb(v_new_tx),
+    'holding', v_reconcile_res->'holding',
+    'status', 'SUCCESS'
+  );
 END;
 $$;
 
 
 -- ============================================================
--- SECTION 6: UPDATE_TRANSACTION_ATOMIC & DELETE_TRANSACTION_ATOMIC
+-- SECTION 6: UPDATE & DELETE ATOMIC (NO BYPASS PARAMETERS)
 -- ============================================================
+-- Drop old overloads
+DROP FUNCTION IF EXISTS public.update_transaction_atomic(UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, BOOLEAN);
+DROP FUNCTION IF EXISTS public.delete_transaction_atomic(UUID, BOOLEAN);
+
 CREATE OR REPLACE FUNCTION public.update_transaction_atomic(
   p_transaction_id UUID,
   p_quantity NUMERIC DEFAULT NULL,
@@ -760,8 +598,7 @@ CREATE OR REPLACE FUNCTION public.update_transaction_atomic(
   p_transaction_date TIMESTAMPTZ DEFAULT NULL,
   p_settlement_date TIMESTAMPTZ DEFAULT NULL,
   p_external_reference TEXT DEFAULT NULL,
-  p_notes TEXT DEFAULT NULL,
-  p_reconcile_holding BOOLEAN DEFAULT TRUE
+  p_notes TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -804,12 +641,11 @@ BEGIN
   WHERE id = p_transaction_id
   RETURNING * INTO v_updated_tx;
 
-  IF p_reconcile_holding THEN
-    v_reconcile_res := public.reconcile_position_atomic(
-      v_existing_tx.broker_account_id,
-      v_existing_tx.instrument_id
-    );
-  END IF;
+  -- Reconcile position unconditionally
+  v_reconcile_res := public.reconcile_position_atomic(
+    v_existing_tx.broker_account_id,
+    v_existing_tx.instrument_id
+  );
 
   RETURN jsonb_build_object(
     'transaction', to_jsonb(v_updated_tx),
@@ -820,8 +656,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.delete_transaction_atomic(
-  p_transaction_id UUID,
-  p_reconcile_holding BOOLEAN DEFAULT TRUE
+  p_transaction_id UUID
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -851,12 +686,11 @@ BEGIN
   DELETE FROM public.investment_transactions
   WHERE id = p_transaction_id;
 
-  IF p_reconcile_holding THEN
-    v_reconcile_res := public.reconcile_position_atomic(
-      v_target_tx.broker_account_id,
-      v_target_tx.instrument_id
-    );
-  END IF;
+  -- Reconcile position unconditionally
+  v_reconcile_res := public.reconcile_position_atomic(
+    v_target_tx.broker_account_id,
+    v_target_tx.instrument_id
+  );
 
   RETURN jsonb_build_object(
     'deleted_id', p_transaction_id,
@@ -868,9 +702,58 @@ $$;
 
 
 -- ============================================================
--- SECTION 7: HARDEN SAFE_DELETE_BROKER_ACCOUNT PERMISSIONS
+-- SECTION 7: SAFE OPENING BALANCE DECLARATION FOR LEGACY HOLDINGS
 -- ============================================================
--- Ensure safe_delete_broker_account search_path is hardened and PUBLIC execution is revoked
+CREATE OR REPLACE FUNCTION public.declare_holding_opening_balance(
+  p_holding_id UUID,
+  p_opening_quantity NUMERIC,
+  p_opening_buy_price NUMERIC
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_holding public.holdings%ROWTYPE;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required' USING ERRCODE = '28000';
+  END IF;
+
+  SELECT * INTO v_holding
+  FROM public.holdings
+  WHERE id = p_holding_id AND user_id = v_user_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Holding % not found or access denied', p_holding_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF p_opening_quantity < 0 OR p_opening_buy_price < 0 THEN
+    RAISE EXCEPTION 'Opening quantity and price must be non-negative' USING ERRCODE = '22003';
+  END IF;
+
+  UPDATE public.holdings
+  SET opening_quantity = p_opening_quantity,
+      opening_buy_price = p_opening_buy_price,
+      provenance_status = 'MANUAL_DECLARED',
+      updated_at = NOW()
+  WHERE id = p_holding_id
+  RETURNING * INTO v_holding;
+
+  RETURN jsonb_build_object(
+    'status', 'OPENING_BALANCE_DECLARED',
+    'holding', to_jsonb(v_holding)
+  );
+END;
+$$;
+
+
+-- ============================================================
+-- SECTION 8: SAFE_DELETE_BROKER_ACCOUNT
+-- ============================================================
 CREATE OR REPLACE FUNCTION public.safe_delete_broker_account(
   p_broker_account_id UUID
 )
@@ -932,7 +815,7 @@ $$;
 
 
 -- ============================================================
--- SECTION 8: STRICT SECURITY DEFINER EXECUTE GRANTS
+-- SECTION 9: STRICT SECURITY DEFINER EXECUTE GRANTS
 -- ============================================================
 -- Revoke unintended execution from PUBLIC (including anonymous)
 REVOKE ALL ON FUNCTION public.safe_delete_broker_account(UUID) FROM PUBLIC;
@@ -943,20 +826,24 @@ REVOKE ALL ON FUNCTION public.reconcile_position_atomic(UUID, UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.reconcile_position_atomic(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.reconcile_position_atomic(UUID, UUID) TO service_role;
 
-REVOKE ALL ON FUNCTION public.delete_transaction_atomic(UUID, BOOLEAN) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.delete_transaction_atomic(UUID, BOOLEAN) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.delete_transaction_atomic(UUID, BOOLEAN) TO service_role;
+REVOKE ALL ON FUNCTION public.delete_transaction_atomic(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.delete_transaction_atomic(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.delete_transaction_atomic(UUID) TO service_role;
 
-REVOKE ALL ON FUNCTION public.update_transaction_atomic(UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, BOOLEAN) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.update_transaction_atomic(UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, BOOLEAN) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.update_transaction_atomic(UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, BOOLEAN) TO service_role;
+REVOKE ALL ON FUNCTION public.update_transaction_atomic(UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.update_transaction_atomic(UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_transaction_atomic(UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT) TO service_role;
 
-REVOKE ALL ON FUNCTION public.record_transaction_atomic(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, NUMERIC) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.record_transaction_atomic(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, NUMERIC) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.record_transaction_atomic(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, NUMERIC) TO service_role;
+REVOKE ALL ON FUNCTION public.record_transaction_atomic(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, NUMERIC) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.record_transaction_atomic(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, NUMERIC) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.record_transaction_atomic(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, NUMERIC) TO service_role;
+
+REVOKE ALL ON FUNCTION public.declare_holding_opening_balance(UUID, NUMERIC, NUMERIC) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.declare_holding_opening_balance(UUID, NUMERIC, NUMERIC) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.declare_holding_opening_balance(UUID, NUMERIC, NUMERIC) TO service_role;
 
 
 -- ============================================================
--- SECTION 9: POSTGREST SCHEMA CACHE RELOAD
+-- SECTION 10: POSTGREST SCHEMA CACHE RELOAD
 -- ============================================================
 NOTIFY pgrst, 'reload schema';

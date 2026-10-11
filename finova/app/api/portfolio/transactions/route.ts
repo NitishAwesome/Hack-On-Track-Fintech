@@ -369,7 +369,7 @@ export async function POST(request: Request) {
           .maybeSingle();
 
         const currentQty = Number(holding?.quantity) || 0;
-        if (quantity > currentQty && !body.allow_oversell) {
+        if (quantity > currentQty) {
           return NextResponse.json(
             {
               error: `Insufficient quantity to sell: requested ${quantity} units, but position only holds ${currentQty} units.`,
@@ -398,8 +398,6 @@ export async function POST(request: Request) {
           p_source: 'MANUAL',
           p_external_reference: externalRef,
           p_notes: notes,
-          p_reconcile_holding: body.reconcile_holding !== false,
-          p_allow_oversell: Boolean(body.allow_oversell),
         });
 
         if (!rpcErr && rpcRes) {
@@ -488,7 +486,7 @@ export async function POST(request: Request) {
         (h) => h.broker_account_id === brokerAccountId && h.instrument_id === instrumentId
       );
       const avail = existing ? existing.quantity : 0;
-      if (quantity > avail && !body.allow_oversell) {
+      if (quantity > avail) {
         return NextResponse.json(
           {
             error: `Insufficient quantity to sell: requested ${quantity} units, but position only holds ${avail} units.`,
@@ -516,7 +514,7 @@ export async function POST(request: Request) {
       source: 'MANUAL',
       external_reference: externalRef,
       notes,
-    }, { reconcileHolding: body.reconcile_holding !== false });
+    }, { reconcileHolding: true });
 
     const inst = PortfolioStorage.getInstrumentById(newTx.instrument_id);
     const broker = PortfolioStorage.getBrokerAccounts().find((b) => b.id === newTx.broker_account_id);
@@ -582,7 +580,6 @@ export async function PUT(request: Request) {
           p_settlement_date: updates.settlement_date,
           p_external_reference: updates.external_reference,
           p_notes: updates.notes,
-          p_reconcile_holding: true,
         });
 
         if (!rpcErr && rpcRes) {
@@ -703,7 +700,6 @@ export async function DELETE(request: Request) {
       try {
         const { data: rpcRes, error: rpcErr } = await supabase.rpc('delete_transaction_atomic', {
           p_transaction_id: id,
-          p_reconcile_holding: true,
         });
 
         if (!rpcErr && rpcRes) {

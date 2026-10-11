@@ -43,7 +43,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const rows = body.transactions;
     const defaultBrokerAccountId = body.broker_account_id;
-    const reconcileHoldings = body.reconcile_holdings !== false;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json(
@@ -55,6 +54,27 @@ export async function POST(request: Request) {
     const importedTransactions: InvestmentTransactionRow[] = [];
     const duplicates: { external_reference: string; symbol: string; date: string }[] = [];
     const errors: { row: number; error: string }[] = [];
+
+    // Sort rows chronologically (oldest first) so backdated and out-of-order CSV rows
+    // replay correctly. For identical timestamps, process BUY/BONUS/SPLIT before SELL.
+    const indexedRows = rows.map((r, idx) => ({ ...r, __rowNum: idx + 1 }));
+    indexedRows.sort((a, b) => {
+      const dateStrA = a.transaction_date || a.trade_date;
+      const dateStrB = b.transaction_date || b.trade_date;
+      const parseA = parseAndNormalizeCsvDate(dateStrA);
+      const parseB = parseAndNormalizeCsvDate(dateStrB);
+      const timeA = parseA.isValid && parseA.normalizedIso ? new Date(parseA.normalizedIso).getTime() : 0;
+      const timeB = parseB.isValid && parseB.normalizedIso ? new Date(parseB.normalizedIso).getTime() : 0;
+      if (timeA !== timeB) return timeA - timeB;
+
+      const typeA = (a.transaction_type || a.trade_type || 'BUY').toUpperCase();
+      const typeB = (b.transaction_type || b.trade_type || 'BUY').toUpperCase();
+      const priorityA = (typeA === 'BUY' || typeA === 'BONUS' || typeA === 'SPLIT') ? 1 : 2;
+      const priorityB = (typeB === 'BUY' || typeB === 'BONUS' || typeB === 'SPLIT') ? 1 : 2;
+      if (priorityA !== priorityB) return priorityA - priorityB;
+
+      return a.__rowNum - b.__rowNum;
+    });
 
     if (isSupabaseConfigured()) {
       const supabase = await createClient();
@@ -79,9 +99,9 @@ export async function POST(request: Request) {
           .map((t) => `${t.broker_account_id}:::${t.external_reference}`)
       );
 
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const rowNum = i + 1;
+      for (let i = 0; i < indexedRows.length; i++) {
+        const row = indexedRows[i];
+        const rowNum = row.__rowNum;
 
         const brokerId = row.broker_account_id || defaultBrokerAccountId;
         if (!brokerId) {
@@ -200,8 +220,6 @@ export async function POST(request: Request) {
             p_source: 'CSV',
             p_external_reference: externalRef,
             p_notes: row.notes || 'Imported via CSV tradebook',
-            p_reconcile_holding: reconcileHoldings,
-            p_allow_oversell: false,
           });
 
           if (!rpcErr && rpcRes) {
@@ -255,9 +273,9 @@ export async function POST(request: Request) {
 
 
     // Local mode (Supabase unconfigured)
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNum = i + 1;
+    for (let i = 0; i < indexedRows.length; i++) {
+      const row = indexedRows[i];
+      const rowNum = row.__rowNum;
 
       const brokerId = row.broker_account_id || defaultBrokerAccountId;
       if (!brokerId) {
@@ -332,7 +350,7 @@ export async function POST(request: Request) {
           source: 'CSV',
           external_reference: externalRef,
           notes: row.notes || 'Imported via CSV tradebook',
-        }, { reconcileHolding: reconcileHoldings });
+        }, { reconcileHolding: true });
 
         importedTransactions.push(newTx);
       } catch (err: unknown) {

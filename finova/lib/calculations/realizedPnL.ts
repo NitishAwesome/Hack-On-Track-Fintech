@@ -72,8 +72,13 @@ export function calculateRealizedPnL(
   // Initialize opening positions from openingHoldings if provided
   for (const h of openingHoldings) {
     const key = getPositionKey(h.broker_account_id, h.instrument_id);
-    const qty = roundQuantity(Number(h.quantity) || 0);
-    const avgPrice = roundCurrency(Number(h.average_buy_price) || 0);
+    const hasOpening = h.opening_quantity != null && Number(h.opening_quantity) > 0;
+    const qty = hasOpening
+      ? roundQuantity(Number(h.opening_quantity))
+      : roundQuantity(Number(h.quantity) || 0);
+    const avgPrice = hasOpening && h.opening_buy_price != null && Number(h.opening_buy_price) > 0
+      ? roundCurrency(Number(h.opening_buy_price))
+      : roundCurrency(Number(h.average_buy_price) || 0);
     if (qty > 0) {
       positionStates.set(key, {
         instrument_id: h.instrument_id,

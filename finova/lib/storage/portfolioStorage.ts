@@ -949,7 +949,7 @@ export class PortfolioStorage {
       if (tx.unit_price <= 0) {
         throw new Error('Unit price must be greater than zero.');
       }
-      if (typeUpper === 'SELL' && !options?.allowOversell) {
+      if (typeUpper === 'SELL') {
         const existingHolding = state.holdings.find(
           (h) => h.broker_account_id === tx.broker_account_id && h.instrument_id === tx.instrument_id
         );
@@ -1136,7 +1136,16 @@ export class PortfolioStorage {
         const existing = state.holdings[existingIdx];
         const remainingQty = Math.max(0, existing.quantity - tx.quantity);
         if (remainingQty <= 0) {
-          state.holdings.splice(existingIdx, 1);
+          if (existing.opening_quantity != null && existing.opening_quantity > 0) {
+            state.holdings[existingIdx] = {
+              ...existing,
+              quantity: 0,
+              is_ledger_managed: true,
+              updated_at: now,
+            };
+          } else {
+            state.holdings.splice(existingIdx, 1);
+          }
         } else {
           state.holdings[existingIdx] = {
             ...existing,
@@ -1179,7 +1188,10 @@ export class PortfolioStorage {
         const openingQty = existing.opening_quantity ?? 0;
         const openingPrice = existing.opening_buy_price ?? 0;
 
-        if (openingQty > 0) {
+        if (existing.opening_quantity == null) {
+          // Unknown legacy holding with 0 transactions: preserve without modification
+          return;
+        } else if (openingQty > 0) {
           // Genuine manual opening baseline exists: restore to opening state
           state.holdings[existingIdx] = {
             ...existing,
@@ -1251,7 +1263,17 @@ export class PortfolioStorage {
         });
       }
     } else if (existingIdx !== -1) {
-      state.holdings.splice(existingIdx, 1);
+      if (baseQty > 0) {
+        state.holdings[existingIdx] = {
+          ...state.holdings[existingIdx],
+          quantity: 0,
+          average_buy_price: Math.round(avgPrice * 10000) / 10000,
+          is_ledger_managed: true,
+          updated_at: now,
+        };
+      } else {
+        state.holdings.splice(existingIdx, 1);
+      }
     }
   }
 
