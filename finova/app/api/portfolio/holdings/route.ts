@@ -401,6 +401,10 @@ export async function POST(request: Request) {
             instrument_id: instrumentId,
             quantity,
             average_buy_price: avgBuyPrice,
+            opening_quantity: quantity,
+            opening_buy_price: avgBuyPrice,
+            provenance_status: 'MANUAL_DECLARED',
+            is_ledger_managed: false,
             currency: 'INR',
             data_source: 'MANUAL',
             as_of: body.as_of || new Date().toISOString(),
@@ -594,7 +598,7 @@ export async function PUT(request: Request) {
       // LEDGER PROTECTION CHECK: Verify holding and ensure it is not managed by transactions
       const { data: existingHolding, error: fetchErr } = await supabase
         .from('holdings')
-        .select('id, user_id, broker_account_id, instrument_id, is_ledger_managed')
+        .select('id, user_id, broker_account_id, instrument_id, is_ledger_managed, provenance_status, opening_quantity, opening_buy_price')
         .eq('id', id)
         .eq('user_id', user.id)
         .maybeSingle();
@@ -623,8 +627,20 @@ export async function PUT(request: Request) {
       const updateData: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
-      if (numQty !== undefined) updateData.quantity = numQty;
-      if (numPrice !== undefined) updateData.average_buy_price = numPrice;
+      if (numQty !== undefined) {
+        updateData.quantity = numQty;
+        // Maintain opening baseline consistency for manual holdings with 0 transactions
+        if (existingHolding.provenance_status !== 'UNKNOWN' || existingHolding.opening_quantity !== null) {
+          updateData.opening_quantity = numQty;
+        }
+      }
+      if (numPrice !== undefined) {
+        updateData.average_buy_price = numPrice;
+        // Maintain opening baseline consistency for manual holdings with 0 transactions
+        if (existingHolding.provenance_status !== 'UNKNOWN' || existingHolding.opening_quantity !== null) {
+          updateData.opening_buy_price = numPrice;
+        }
+      }
       if (body.as_of) updateData.as_of = body.as_of;
 
       const { data, error } = await supabase

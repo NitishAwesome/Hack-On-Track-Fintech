@@ -168,6 +168,10 @@ export async function POST(request: Request) {
             .update({
               quantity: totalQty,
               average_buy_price: weightedAvg,
+              opening_quantity: totalQty,
+              opening_buy_price: weightedAvg,
+              provenance_status: 'MANUAL_DECLARED',
+              is_ledger_managed: false,
               as_of: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             })
@@ -185,6 +189,10 @@ export async function POST(request: Request) {
         instrument_id: instrumentId,
         quantity: qty,
         average_buy_price: avgPrice,
+        opening_quantity: (item as unknown as Record<string, unknown>).opening_quantity ? Number((item as unknown as Record<string, unknown>).opening_quantity) : qty,
+        opening_buy_price: (item as unknown as Record<string, unknown>).opening_buy_price ? Number((item as unknown as Record<string, unknown>).opening_buy_price) : avgPrice,
+        provenance_status: 'MANUAL_DECLARED',
+        is_ledger_managed: false,
         currency: 'INR',
         data_source: 'MANUAL',
         as_of: item.as_of || new Date().toISOString(),

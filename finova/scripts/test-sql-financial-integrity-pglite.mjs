@@ -44,6 +44,9 @@ async function setupDatabase() {
     CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql STABLE AS $$
       SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::UUID;
     $$;
+    CREATE OR REPLACE FUNCTION auth.role() RETURNS TEXT LANGUAGE sql STABLE AS $$
+      SELECT COALESCE(NULLIF(current_setting('request.jwt.claim.role', true), ''), current_user);
+    $$;
 
     CREATE TABLE IF NOT EXISTS public.broker_accounts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -254,82 +257,123 @@ async function runAllTests() {
   // -------------------------------------------------------------
   // Test 3: Zero-Quantity Constraint Compatibility & Full Sale of Manual Opening Holding
   // -------------------------------------------------------------
-  await runTestCase('Zero-quantity constraint compatibility: Manual opening 50 units @ 100, SELL 50 leaves remaining 0 without CHECK violation', async () => {
-    // Insert manual opening holding: 50 units @ 100
+  await runTestCase('Real manual holding creation (50 @ 100), BUY 20 @ 120 (qty 70, cost ~105.71), SELL 70 (qty 0), delete SELL (qty 70, cost ~105.71)', async () => {
+    // 1. Create manual holding WITHOUT pre-populated opening fields (application-style insert)
     await db.query(`
       INSERT INTO public.holdings (
         user_id, broker_account_id, instrument_id,
-        quantity, average_buy_price, opening_quantity, opening_buy_price,
-        is_ledger_managed, provenance_status
+        quantity, average_buy_price, currency, data_source
       ) VALUES (
         '${testUserId}', '${brokerId}', '${relianceId}',
-        50, 100, 50, 100,
-        false, 'MANUAL_DECLARED'
+        50, 100, 'INR', 'MANUAL'
       );
     `);
 
-    // Record SELL of 50 units at 120 via atomic RPC
-    // On unmodified original schema, this would violate CHECK (quantity > 0).
-    // With forward-only migration 20261011020000, quantity = 0 succeeds safely!
+    // Verify trigger automatically established verified baseline provenance
+    const initialH = await db.query(`
+      SELECT quantity, average_buy_price, opening_quantity, opening_buy_price, is_ledger_managed, provenance_status
+      FROM public.holdings
+      WHERE user_id = '${testUserId}' AND broker_account_id = '${brokerId}' AND instrument_id = '${relianceId}';
+    `);
+    assert.strictEqual(Number(initialH.rows[0].quantity), 50);
+    assert.strictEqual(Number(initialH.rows[0].average_buy_price), 100);
+    assert.strictEqual(Number(initialH.rows[0].opening_quantity), 50, 'Trigger must auto-anchor opening_quantity to 50');
+    assert.strictEqual(Number(initialH.rows[0].opening_buy_price), 100, 'Trigger must auto-anchor opening_buy_price to 100');
+    assert.strictEqual(initialH.rows[0].provenance_status, 'MANUAL_DECLARED', 'Provenance must be MANUAL_DECLARED');
+    assert.strictEqual(initialH.rows[0].is_ledger_managed, false, 'Initial manual holding is not ledger-managed');
+
+    // 2. Record BUY: 20 shares at ₹120
+    const buyRes = await db.query(`
+      SELECT public.record_transaction_atomic(
+        p_broker_account_id => '${brokerId}'::uuid,
+        p_instrument_id => '${relianceId}'::uuid,
+        p_transaction_type => 'BUY',
+        p_quantity => 20,
+        p_unit_price => 120,
+        p_gross_amount => 2400,
+        p_fees => 0,
+        p_taxes => 0,
+        p_transaction_date => '2026-02-01T10:00:00Z'::timestamptz
+      ) AS res;
+    `);
+    assert(buyRes.rows.length === 1);
+
+    // Expect quantity 70 and average cost approx ₹105.71 ((50*100 + 20*120)/70 = 7400/70 = 105.7143)
+    const afterBuyH = await db.query(`
+      SELECT quantity, average_buy_price, opening_quantity, opening_buy_price, is_ledger_managed
+      FROM public.holdings
+      WHERE user_id = '${testUserId}' AND broker_account_id = '${brokerId}' AND instrument_id = '${relianceId}';
+    `);
+    assert.strictEqual(Number(afterBuyH.rows[0].quantity), 70, 'Quantity must be 70 after BUY');
+    const avgPriceAfterBuy = Number(afterBuyH.rows[0].average_buy_price);
+    assert(
+      Math.abs(avgPriceAfterBuy - 105.7143) < 0.01,
+      `Expected average price ~105.71, got ${avgPriceAfterBuy}`
+    );
+    assert.strictEqual(Number(afterBuyH.rows[0].opening_quantity), 50, 'Opening baseline 50 must be preserved');
+    assert.strictEqual(afterBuyH.rows[0].is_ledger_managed, true, 'Holding is now ledger-managed');
+
+    // 3. Record SELL: 70 shares
     await db.query(`
       SELECT public.record_transaction_atomic(
         p_broker_account_id => '${brokerId}'::uuid,
         p_instrument_id => '${relianceId}'::uuid,
         p_transaction_type => 'SELL',
-        p_quantity => 50,
-        p_unit_price => 120,
-        p_gross_amount => 6000,
+        p_quantity => 70,
+        p_unit_price => 130,
+        p_gross_amount => 9100,
         p_fees => 0,
         p_taxes => 0,
         p_transaction_date => '2026-03-01T10:00:00Z'::timestamptz
       ) AS res;
     `);
 
-    // Inspect committed row in holdings table
-    const holdingRes = await db.query(`
-      SELECT quantity, average_buy_price, opening_quantity, opening_buy_price, is_ledger_managed
+    // Expect zero remaining shares (no CHECK constraint violation!)
+    const afterSellH = await db.query(`
+      SELECT quantity, average_buy_price, opening_quantity, is_ledger_managed
       FROM public.holdings
       WHERE user_id = '${testUserId}' AND broker_account_id = '${brokerId}' AND instrument_id = '${relianceId}';
     `);
+    assert.strictEqual(Number(afterSellH.rows[0].quantity), 0, 'Remaining quantity must be strictly 0');
+    assert.strictEqual(Number(afterSellH.rows[0].opening_quantity), 50, 'Opening baseline 50 preserved');
+    assert.strictEqual(afterSellH.rows[0].is_ledger_managed, true, 'Holding is ledger-managed at 0 qty');
 
-    assert.strictEqual(holdingRes.rows.length, 1, 'Holding row should exist');
-    const h = holdingRes.rows[0];
-    assert.strictEqual(Number(h.quantity), 0, 'Remaining position must be strictly ZERO after full sale');
-    assert.strictEqual(Number(h.opening_quantity), 50, 'Opening quantity baseline must be preserved (50)');
-    assert.strictEqual(Number(h.opening_buy_price), 100, 'Opening buy price baseline must be preserved (100)');
-    assert.strictEqual(h.is_ledger_managed, true, 'Holding is now ledger-managed');
-  });
-
-  // -------------------------------------------------------------
-  // Test 4: Deletion of that SELL restores opening baseline (50 units restored)
-  // -------------------------------------------------------------
-  await runTestCase('Deletion of that SELL restores original 50 units opening baseline', async () => {
-    // Find the SELL transaction for RELIANCE
-    const txRes = await db.query(`
+    // 4. Delete the SELL
+    const sellTx = await db.query(`
       SELECT id FROM public.investment_transactions
-      WHERE user_id = '${testUserId}' AND broker_account_id = '${brokerId}' AND instrument_id = '${relianceId}'
-        AND transaction_type = 'SELL';
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${relianceId}' AND transaction_type = 'SELL';
     `);
-    assert.strictEqual(txRes.rows.length, 1, 'Should find 1 SELL transaction');
-    const sellId = txRes.rows[0].id;
+    assert.strictEqual(sellTx.rows.length, 1);
+    await db.query(`SELECT public.delete_transaction_atomic('${sellTx.rows[0].id}'::uuid);`);
 
-    // Delete the SELL transaction via atomic RPC
-    await db.query(`
-      SELECT public.delete_transaction_atomic('${sellId}'::uuid);
-    `);
-
-    // Inspect committed holdings row: must be restored to opening baseline 50 @ 100!
-    const holdingRes = await db.query(`
-      SELECT quantity, average_buy_price, opening_quantity, opening_buy_price, is_ledger_managed
+    // Expect quantity 70 and correct cost basis (~105.71)
+    const afterDeleteSellH = await db.query(`
+      SELECT quantity, average_buy_price, opening_quantity, is_ledger_managed
       FROM public.holdings
       WHERE user_id = '${testUserId}' AND broker_account_id = '${brokerId}' AND instrument_id = '${relianceId}';
     `);
+    assert.strictEqual(Number(afterDeleteSellH.rows[0].quantity), 70, 'Quantity restored to 70 after deleting SELL');
+    assert(
+      Math.abs(Number(afterDeleteSellH.rows[0].average_buy_price) - 105.7143) < 0.01,
+      `Expected restored average price ~105.71, got ${afterDeleteSellH.rows[0].average_buy_price}`
+    );
 
-    assert.strictEqual(holdingRes.rows.length, 1, 'Holding row should exist');
-    const h = holdingRes.rows[0];
-    assert.strictEqual(Number(h.quantity), 50, 'Position must be restored to opening quantity (50)');
-    assert.strictEqual(Number(h.average_buy_price), 100, 'Position average price must be 100');
-    assert.strictEqual(h.is_ledger_managed, false, 'Holding returns to manual mode when 0 trades remain');
+    // 5. Delete the BUY as well -> should restore original 50 @ 100 baseline
+    const buyTx = await db.query(`
+      SELECT id FROM public.investment_transactions
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${relianceId}' AND transaction_type = 'BUY';
+    `);
+    assert.strictEqual(buyTx.rows.length, 1);
+    await db.query(`SELECT public.delete_transaction_atomic('${buyTx.rows[0].id}'::uuid);`);
+
+    const finalH = await db.query(`
+      SELECT quantity, average_buy_price, opening_quantity, is_ledger_managed
+      FROM public.holdings
+      WHERE user_id = '${testUserId}' AND broker_account_id = '${brokerId}' AND instrument_id = '${relianceId}';
+    `);
+    assert.strictEqual(Number(finalH.rows[0].quantity), 50, 'Restored to opening quantity 50');
+    assert.strictEqual(Number(finalH.rows[0].average_buy_price), 100, 'Restored to opening price 100');
+    assert.strictEqual(finalH.rows[0].is_ledger_managed, false, 'Restored to non-ledger-managed state');
   });
 
   // -------------------------------------------------------------
@@ -842,6 +886,242 @@ async function runAllTests() {
     assert(crossDeleteBlocked, 'Cross-user transaction deletion must fail with P0002');
 
     await db.exec(`RESET ROLE;`);
+    await db.exec(`SET request.jwt.claim.sub = '${testUserId}';`);
+  });
+
+  // -------------------------------------------------------------
+  // Test 17: Create holding via CSV snapshot and then record a BUY
+  // -------------------------------------------------------------
+  await runTestCase('Create holding via CSV snapshot and then record a BUY (WAC from snapshot baseline)', async () => {
+    // Register test instrument for CSV snapshot
+    const hdfcRes = await db.query(`
+      INSERT INTO public.instruments (symbol, instrument_name, asset_type, exchange)
+      VALUES ('HDFCBANK', 'HDFC Bank Ltd', 'STOCK', 'NSE')
+      RETURNING id;
+    `);
+    const hdfcId = hdfcRes.rows[0].id;
+
+    // Insert holding as created by CSV snapshot import: 40 shares @ 200
+    await db.query(`
+      INSERT INTO public.holdings (
+        user_id, broker_account_id, instrument_id,
+        quantity, average_buy_price, opening_quantity, opening_buy_price,
+        provenance_status, is_ledger_managed, data_source
+      ) VALUES (
+        '${testUserId}', '${brokerId}', '${hdfcId}',
+        40, 200, 40, 200,
+        'CSV_SNAPSHOT', false, 'CSV'
+      );
+    `);
+
+    // Record BUY: 10 shares @ 250
+    await db.query(`
+      SELECT public.record_transaction_atomic(
+        p_broker_account_id => '${brokerId}'::uuid,
+        p_instrument_id => '${hdfcId}'::uuid,
+        p_transaction_type => 'BUY',
+        p_quantity => 10,
+        p_unit_price => 250,
+        p_gross_amount => 2500,
+        p_transaction_date => '2026-03-01T10:00:00Z'::timestamptz
+      );
+    `);
+
+    // Expected: total qty 50. Total cost = 40*200 + 10*250 = 8000 + 2500 = 10500. WAC = 10500/50 = 210
+    const hRes = await db.query(`
+      SELECT quantity, average_buy_price, opening_quantity, provenance_status, is_ledger_managed
+      FROM public.holdings
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${hdfcId}';
+    `);
+    assert.strictEqual(Number(hRes.rows[0].quantity), 50, 'Quantity must be 50');
+    assert.strictEqual(Number(hRes.rows[0].average_buy_price), 210, 'WAC must be 210 from CSV snapshot baseline');
+    assert.strictEqual(Number(hRes.rows[0].opening_quantity), 40, 'Snapshot opening quantity baseline must be 40');
+    assert.strictEqual(hRes.rows[0].is_ledger_managed, true, 'Holding becomes ledger-managed');
+  });
+
+  // -------------------------------------------------------------
+  // Test 18: Edit an existing manual holding's quantity and price; verify subsequent WAC uses updated baseline
+  // -------------------------------------------------------------
+  await runTestCase('Edit existing manual holding quantity & price; verify subsequent WAC uses updated baseline', async () => {
+    // Register test instrument
+    const itcRes = await db.query(`
+      INSERT INTO public.instruments (symbol, instrument_name, asset_type, exchange)
+      VALUES ('ITC', 'ITC Ltd', 'STOCK', 'NSE')
+      RETURNING id;
+    `);
+    const itcId = itcRes.rows[0].id;
+
+    // Insert manual holding: initial 100 shares @ 50 (no transactions)
+    await db.query(`
+      INSERT INTO public.holdings (
+        user_id, broker_account_id, instrument_id,
+        quantity, average_buy_price, currency, data_source
+      ) VALUES (
+        '${testUserId}', '${brokerId}', '${itcId}',
+        100, 50, 'INR', 'MANUAL'
+      );
+    `);
+
+    // Authorized manual edit: user updates quantity to 80 and price to 60
+    await db.query(`
+      UPDATE public.holdings
+      SET quantity = 80, average_buy_price = 60, updated_at = NOW()
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${itcId}';
+    `);
+
+    // Verify trigger synchronized opening baseline: opening_quantity = 80, opening_buy_price = 60
+    const updatedManual = await db.query(`
+      SELECT quantity, average_buy_price, opening_quantity, opening_buy_price
+      FROM public.holdings
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${itcId}';
+    `);
+    assert.strictEqual(Number(updatedManual.rows[0].quantity), 80);
+    assert.strictEqual(Number(updatedManual.rows[0].average_buy_price), 60);
+    assert.strictEqual(Number(updatedManual.rows[0].opening_quantity), 80, 'Opening quantity baseline synchronized to 80');
+    assert.strictEqual(Number(updatedManual.rows[0].opening_buy_price), 60, 'Opening buy price baseline synchronized to 60');
+
+    // Subsequent BUY: 20 shares @ 110
+    await db.query(`
+      SELECT public.record_transaction_atomic(
+        p_broker_account_id => '${brokerId}'::uuid,
+        p_instrument_id => '${itcId}'::uuid,
+        p_transaction_type => 'BUY',
+        p_quantity => 20,
+        p_unit_price => 110,
+        p_gross_amount => 2200,
+        p_transaction_date => '2026-03-01T10:00:00Z'::timestamptz
+      );
+    `);
+
+    // Expected: total qty 100. Total cost = 80*60 + 20*110 = 4800 + 2200 = 7000. WAC = 7000/100 = 70!
+    const postTradeH = await db.query(`
+      SELECT quantity, average_buy_price, opening_quantity, is_ledger_managed
+      FROM public.holdings
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${itcId}';
+    `);
+    assert.strictEqual(Number(postTradeH.rows[0].quantity), 100);
+    assert.strictEqual(Number(postTradeH.rows[0].average_buy_price), 70, 'Subsequent WAC must use updated baseline 80 @ 60');
+    assert.strictEqual(Number(postTradeH.rows[0].opening_quantity), 80);
+    assert.strictEqual(postTradeH.rows[0].is_ledger_managed, true);
+  });
+
+  // -------------------------------------------------------------
+  // Test 19: Confirm existing ledger-managed positions cannot be overwritten or manually reverted
+  // -------------------------------------------------------------
+  await runTestCase('Confirm existing ledger-managed positions cannot be overwritten or manually reverted', async () => {
+    await db.exec(`SET ROLE authenticated;`);
+    await db.exec(`SET request.jwt.claim.sub = '${testUserId}';`);
+
+    // Attempt direct UPDATE to overwrite quantity of ledger-managed ITC position
+    const directUpdateRes = await db.query(`
+      UPDATE public.holdings
+      SET quantity = 9999
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = (SELECT id FROM public.instruments WHERE symbol = 'ITC');
+    `);
+    assert.strictEqual(directUpdateRes.rowCount, 0, 'Direct UPDATE on ledger-managed position must affect 0 rows under RLS');
+
+    // Attempt direct UPDATE trying to revert is_ledger_managed to false
+    let revertFailed = false;
+    try {
+      const res = await db.query(`
+        UPDATE public.holdings
+        SET is_ledger_managed = false
+        WHERE broker_account_id = '${brokerId}' AND instrument_id = (SELECT id FROM public.instruments WHERE symbol = 'ITC');
+      `);
+      if (res.rowCount === 0) revertFailed = true;
+    } catch {
+      revertFailed = true;
+    }
+    assert(revertFailed, 'Direct revert of is_ledger_managed must fail or affect 0 rows');
+
+    await db.exec(`RESET ROLE;`);
+    await db.exec(`SET request.jwt.claim.sub = '${testUserId}';`);
+  });
+
+  // -------------------------------------------------------------
+  // Test 20: Confirm legacy unknown holdings are preserved
+  // -------------------------------------------------------------
+  await runTestCase('Confirm legacy unknown holdings are preserved without auto-verification', async () => {
+    // Register test instrument
+    const sbiRes = await db.query(`
+      INSERT INTO public.instruments (symbol, instrument_name, asset_type, exchange)
+      VALUES ('SBIN', 'State Bank of India', 'STOCK', 'NSE')
+      RETURNING id;
+    `);
+    const sbiId = sbiRes.rows[0].id;
+
+    // Insert legacy ambiguous holding with NULL opening_quantity and UNKNOWN provenance
+    await db.query(`
+      INSERT INTO public.holdings (
+        user_id, broker_account_id, instrument_id,
+        quantity, average_buy_price, opening_quantity, opening_buy_price,
+        provenance_status, is_ledger_managed, data_source
+      ) VALUES (
+        '${testUserId}', '${brokerId}', '${sbiId}',
+        35, 750, NULL, NULL,
+        'UNKNOWN', false, 'MANUAL'
+      );
+    `);
+
+    // With 0 transactions, reconciliation preserves the holding safely
+    const recRes = await db.query(`
+      SELECT public.reconcile_position_atomic('${brokerId}'::uuid, '${sbiId}'::uuid) AS res;
+    `);
+    assert.strictEqual(recRes.rows[0].res.status, 'LEGACY_HOLDING_PRESERVED', 'Legacy holding must be preserved without modification');
+
+    const checkH = await db.query(`
+      SELECT quantity, opening_quantity, provenance_status
+      FROM public.holdings
+      WHERE broker_account_id = '${brokerId}' AND instrument_id = '${sbiId}';
+    `);
+    assert.strictEqual(Number(checkH.rows[0].quantity), 35);
+    assert.strictEqual(checkH.rows[0].opening_quantity, null, 'opening_quantity must remain NULL (never auto-backfilled)');
+    assert.strictEqual(checkH.rows[0].provenance_status, 'UNKNOWN', 'provenance_status must remain UNKNOWN');
+  });
+
+  // -------------------------------------------------------------
+  // Test 21: Confirm direct table writes cannot create contradictory verified accounting provenance
+  // -------------------------------------------------------------
+  await runTestCase('Confirm direct table writes cannot create contradictory verified accounting provenance', async () => {
+    // 1. Direct INSERT claiming VERIFIED with NULL opening_quantity must fail check constraint
+    let insertContradictionFailed = false;
+    try {
+      await db.query(`
+        INSERT INTO public.holdings (
+          user_id, broker_account_id, instrument_id,
+          quantity, average_buy_price, opening_quantity, opening_buy_price,
+          provenance_status, is_ledger_managed
+        ) VALUES (
+          '${testUserId}', '${brokerId}', '${tcsId}',
+          10, 3000, NULL, NULL,
+          'VERIFIED', false
+        );
+      `);
+    } catch (err) {
+      insertContradictionFailed = true;
+      assert(
+        err.message.includes('chk_holdings_provenance_consistency') || err.message.includes('violates check constraint'),
+        `Expected check constraint violation, got: ${err.message}`
+      );
+    }
+    assert(insertContradictionFailed, 'INSERT with VERIFIED provenance and NULL opening_quantity must be rejected by check constraint');
+
+    // 2. Direct UPDATE claiming VERIFIED on an UNKNOWN holding with NULL opening_quantity must fail check constraint
+    let updateContradictionFailed = false;
+    try {
+      await db.query(`
+        UPDATE public.holdings
+        SET provenance_status = 'VERIFIED'
+        WHERE broker_account_id = '${brokerId}' AND instrument_id = (SELECT id FROM public.instruments WHERE symbol = 'SBIN');
+      `);
+    } catch (err) {
+      updateContradictionFailed = true;
+      assert(
+        err.message.includes('chk_holdings_provenance_consistency') || err.message.includes('violates check constraint'),
+        `Expected check constraint violation, got: ${err.message}`
+      );
+    }
+    assert(updateContradictionFailed, 'UPDATE claiming VERIFIED with NULL opening_quantity must be rejected by check constraint');
   });
 
   console.log('='.repeat(75));

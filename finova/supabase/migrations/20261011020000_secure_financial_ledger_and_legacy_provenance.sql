@@ -59,7 +59,9 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'holdings' AND column_name = 'provenance_status'
   ) THEN
-    ALTER TABLE public.holdings ADD COLUMN provenance_status TEXT NOT NULL DEFAULT 'VERIFIED';
+    ALTER TABLE public.holdings ADD COLUMN provenance_status TEXT NOT NULL DEFAULT 'MANUAL_DECLARED';
+  ELSE
+    ALTER TABLE public.holdings ALTER COLUMN provenance_status SET DEFAULT 'MANUAL_DECLARED';
   END IF;
 END $$;
 
@@ -67,7 +69,15 @@ END $$;
 -- We do NOT guess or automatically fabricate opening balances.
 UPDATE public.holdings
 SET provenance_status = 'UNKNOWN'
-WHERE opening_quantity IS NULL AND provenance_status = 'VERIFIED';
+WHERE opening_quantity IS NULL;
+
+-- Enforce database constraint preventing contradictory provenance status:
+-- If provenance_status is VERIFIED, MANUAL_DECLARED, CSV_SNAPSHOT or LEDGER_DERIVED, opening_quantity and price cannot be NULL.
+ALTER TABLE public.holdings DROP CONSTRAINT IF EXISTS chk_holdings_provenance_consistency;
+ALTER TABLE public.holdings ADD CONSTRAINT chk_holdings_provenance_consistency CHECK (
+  (provenance_status = 'UNKNOWN' AND (opening_quantity IS NULL OR opening_quantity >= 0)) OR
+  (provenance_status IN ('VERIFIED', 'MANUAL_DECLARED', 'CSV_SNAPSHOT', 'LEDGER_DERIVED') AND opening_quantity IS NOT NULL AND opening_quantity >= 0 AND opening_buy_price IS NOT NULL AND opening_buy_price >= 0)
+);
 
 -- Forward-only constraint migration: Relax CHECK (quantity > 0) to CHECK (quantity >= 0)
 -- Original schema in 20261009000000 enforced CHECK (quantity > 0). Reconciled full liquidations
@@ -211,6 +221,77 @@ CREATE POLICY "Users delete own manual holdings"
         AND t.instrument_id = holdings.instrument_id
     )
   );
+
+
+-- ============================================================
+-- SECTION 3B: DATABASE BOUNDARY TRIGGER — INVARIANT ENFORCEMENT
+-- ============================================================
+-- Automatically establishes verified baseline provenance on manual & snapshot inserts,
+-- synchronizes opening baseline on authorized quantity/price edits when 0 transactions exist,
+-- and prevents contradictory provenance claims or direct mutation of ledger-managed positions.
+CREATE OR REPLACE FUNCTION public.maintain_holding_baseline_invariants()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_has_tx BOOLEAN := FALSE;
+BEGIN
+  -- Determine whether transactions exist for this broker account & instrument
+  SELECT EXISTS (
+    SELECT 1 FROM public.investment_transactions t
+    WHERE t.broker_account_id = NEW.broker_account_id
+      AND t.instrument_id = NEW.instrument_id
+  ) INTO v_has_tx;
+
+  -- 1. On INSERT:
+  IF TG_OP = 'INSERT' THEN
+    -- If holding is manual (not ledger-managed) and no transactions exist:
+    IF COALESCE(NEW.is_ledger_managed, FALSE) = FALSE AND NOT v_has_tx THEN
+      -- Automatically establish opening baseline for manual and snapshot entries
+      IF NEW.opening_quantity IS NULL AND NEW.provenance_status IN ('MANUAL_DECLARED', 'CSV_SNAPSHOT') THEN
+        NEW.opening_quantity := NEW.quantity;
+        NEW.opening_buy_price := NEW.average_buy_price;
+      END IF;
+    END IF;
+  END IF;
+
+  -- 2. On UPDATE:
+  IF TG_OP = 'UPDATE' THEN
+    -- Block authenticated users or external mutations from directly reverting ledger-managed positions while transactions exist
+    IF OLD.is_ledger_managed = TRUE AND NEW.is_ledger_managed = FALSE THEN
+      IF v_has_tx OR current_user = 'authenticated' OR COALESCE(NULLIF(current_setting('request.jwt.claim.role', true), ''), '') = 'authenticated' THEN
+        RAISE EXCEPTION 'Cannot manually revert ledger-managed holding to unmanaged state.'
+          USING ERRCODE = '55000';
+      END IF;
+    END IF;
+
+    -- If holding was manual (not ledger-managed) and no transactions exist:
+    IF COALESCE(OLD.is_ledger_managed, FALSE) = FALSE AND NOT v_has_tx THEN
+      -- If quantity or average buy price was edited:
+      IF (NEW.quantity IS DISTINCT FROM OLD.quantity OR NEW.average_buy_price IS DISTINCT FROM OLD.average_buy_price) THEN
+        -- If it is an active/declared holding (not unknown legacy holding with NULL baseline):
+        IF OLD.provenance_status != 'UNKNOWN' OR OLD.opening_quantity IS NOT NULL THEN
+          NEW.opening_quantity := NEW.quantity;
+          NEW.opening_buy_price := NEW.average_buy_price;
+          IF NEW.provenance_status = 'UNKNOWN' THEN
+            NEW.provenance_status := 'MANUAL_DECLARED';
+          END IF;
+        END IF;
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_maintain_holding_baseline_invariants ON public.holdings;
+CREATE TRIGGER trg_maintain_holding_baseline_invariants
+  BEFORE INSERT OR UPDATE ON public.holdings
+  FOR EACH ROW
+  EXECUTE FUNCTION public.maintain_holding_baseline_invariants();
 
 
 -- ============================================================

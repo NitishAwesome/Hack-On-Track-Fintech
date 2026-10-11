@@ -817,6 +817,7 @@ export class PortfolioStorage {
       opening_quantity: holding.quantity,
       opening_buy_price: holding.average_buy_price,
       is_ledger_managed: false,
+      provenance_status: 'MANUAL_DECLARED',
       created_at: now,
       updated_at: now,
     };
@@ -834,6 +835,15 @@ export class PortfolioStorage {
     const idx = state.holdings.findIndex((h) => h.id === id);
     if (idx === -1) return null;
 
+    const existing = state.holdings[idx];
+    const hasTransactions = state.transactions.some(
+      (t) => t.broker_account_id === existing.broker_account_id && t.instrument_id === existing.instrument_id
+    );
+
+    if (existing.is_ledger_managed || hasTransactions) {
+      throw new Error('Cannot directly modify ledger-managed holding. Use trade ledger transactions instead.');
+    }
+
     if (updates.quantity !== undefined && updates.quantity <= 0) {
       throw new Error('Quantity must be greater than zero.');
     }
@@ -841,9 +851,31 @@ export class PortfolioStorage {
       throw new Error('Purchase price cannot be negative.');
     }
 
+    const updatedQty = updates.quantity !== undefined ? updates.quantity : existing.quantity;
+    const updatedPrice = updates.average_buy_price !== undefined ? updates.average_buy_price : existing.average_buy_price;
+
+    let openingQty = existing.opening_quantity;
+    let openingPrice = existing.opening_buy_price;
+    let provenance = existing.provenance_status;
+
+    // Maintain opening baseline consistency when authorized manual quantity/price edit occurs
+    if (existing.opening_quantity !== null && existing.opening_quantity !== undefined) {
+      if (updates.quantity !== undefined) openingQty = updates.quantity;
+      if (updates.average_buy_price !== undefined) openingPrice = updates.average_buy_price;
+      if (!provenance || provenance === 'UNKNOWN') {
+        provenance = 'MANUAL_DECLARED';
+      }
+    }
+
     state.holdings[idx] = {
-      ...state.holdings[idx],
+      ...existing,
       ...updates,
+      quantity: updatedQty,
+      average_buy_price: updatedPrice,
+      opening_quantity: openingQty,
+      opening_buy_price: openingPrice,
+      provenance_status: provenance,
+      is_ledger_managed: false,
       updated_at: new Date().toISOString(),
     };
     this.saveState(state);
@@ -852,6 +884,17 @@ export class PortfolioStorage {
 
   public static deleteHolding(id: string): boolean {
     const state = this.getState();
+    const target = state.holdings.find((h) => h.id === id);
+    if (!target) return false;
+
+    const hasTransactions = state.transactions.some(
+      (t) => t.broker_account_id === target.broker_account_id && t.instrument_id === target.instrument_id
+    );
+
+    if (target.is_ledger_managed || hasTransactions) {
+      throw new Error('Cannot directly delete ledger-managed holding. Remove transactions or liquidate position instead.');
+    }
+
     const beforeCount = state.holdings.length;
     state.holdings = state.holdings.filter((h) => h.id !== id);
     this.saveState(state);
@@ -1206,6 +1249,11 @@ export class PortfolioStorage {
         }
       }
       return;
+    }
+
+    // If transactions exist but holding has unknown legacy baseline (opening_quantity is NULL):
+    if (existing && existing.opening_quantity == null) {
+      throw new Error(`Cannot perform destructive reconciliation on legacy holding: opening position provenance is unverified (opening_quantity is NULL). Please declare verified opening balance before reconciling.`);
     }
 
     const baseQty = (existing && existing.opening_quantity != null) ? existing.opening_quantity : 0;

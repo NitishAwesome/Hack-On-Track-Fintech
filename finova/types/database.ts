@@ -152,6 +152,7 @@ export interface HoldingRow {
   opening_quantity?: number | null;
   opening_buy_price?: number | null;
   is_ledger_managed?: boolean;
+  provenance_status?: 'VERIFIED' | 'MANUAL_DECLARED' | 'CSV_SNAPSHOT' | 'UNKNOWN' | 'LEDGER_DERIVED' | string;
 }
 
 

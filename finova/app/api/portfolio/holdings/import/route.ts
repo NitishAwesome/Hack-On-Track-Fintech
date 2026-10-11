@@ -225,6 +225,10 @@ export async function POST(request: Request) {
               .update({
                 quantity: qty,
                 average_buy_price: avgPrice,
+                opening_quantity: qty,
+                opening_buy_price: avgPrice,
+                provenance_status: 'CSV_SNAPSHOT',
+                is_ledger_managed: false,
                 as_of: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               })
@@ -261,6 +265,10 @@ export async function POST(request: Request) {
               .update({
                 quantity: totalQty,
                 average_buy_price: weightedAvgPrice,
+                opening_quantity: totalQty,
+                opening_buy_price: weightedAvgPrice,
+                provenance_status: 'CSV_SNAPSHOT',
+                is_ledger_managed: false,
                 as_of: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               })
@@ -283,6 +291,10 @@ export async function POST(request: Request) {
           instrument_id: instrumentId,
           quantity: qty,
           average_buy_price: avgPrice,
+          opening_quantity: qty,
+          opening_buy_price: avgPrice,
+          provenance_status: 'CSV_SNAPSHOT',
+          is_ledger_managed: false,
           currency: 'INR',
           data_source: 'CSV',
           as_of: new Date().toISOString(),
