@@ -55,7 +55,7 @@ export async function GET(request: Request) {
       return NextResponse.json(response);
     }
 
-    if (fetchResult.providerStatus === 'RATE_LIMITED') {
+    if (fetchResult.providerStatus === 'RATE_LIMITED' && fetchResult.articles.length === 0) {
       const response: NewsApiResponse = {
         status: 'rate_limited',
         articles: [],
@@ -74,7 +74,10 @@ export async function GET(request: Request) {
       return NextResponse.json(response, { status: 429 });
     }
 
-    if (fetchResult.providerStatus === 'UNAVAILABLE' || fetchResult.providerStatus === 'ERROR') {
+    if (
+      (fetchResult.providerStatus === 'UNAVAILABLE' || fetchResult.providerStatus === 'ERROR') &&
+      fetchResult.articles.length === 0
+    ) {
       const response: NewsApiResponse = {
         status: 'error',
         articles: [],
@@ -149,7 +152,8 @@ export async function GET(request: Request) {
     const response: NewsApiResponse = {
       status: 'success',
       articles: filteredArticles,
-      provider_status: 'ACTIVE',
+      provider_status: fetchResult.providerStatus,
+      message: fetchResult.message,
       meta: {
         total_fetched: fetchResult.articles.length,
         direct_matches_count: directCount,

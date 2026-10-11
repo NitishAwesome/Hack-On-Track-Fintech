@@ -56,12 +56,16 @@ export function getIndianMarketStatus(date = new Date()): {
 interface IndexCacheEntry {
   response: MarketDataResponse;
   expiresAt: number;
+  lastSuccessfulIndices?: MarketIndex[];
+  lastSuccessfulAt?: number;
 }
 
 interface QuoteCacheEntry {
   quote: MarketQuote | null;
   expiresAt: number;
   fetchedAt: number;
+  lastSuccessfulQuote?: MarketQuote | null;
+  lastSuccessfulAt?: number;
 }
 
 /**
@@ -138,9 +142,27 @@ export class MarketDataService {
       const indices = await this.provider.fetchIndices(marketInfo.status);
 
       if (!indices || indices.length === 0) {
+        if (indexMemoryCache?.lastSuccessfulIndices && indexMemoryCache.lastSuccessfulIndices.length > 0) {
+          const staleIndices = indexMemoryCache.lastSuccessfulIndices;
+          return {
+            success: true,
+            status: 'STALE',
+            freshnessState: 'CACHED_STALE',
+            indices: staleIndices,
+            quotes: staleIndices,
+            marketStatus: marketInfo.status,
+            marketStatusLabel: `${marketInfo.label} (Cached Stale)`,
+            isDelayedOrClosing: true,
+            message: 'Market data feed temporarily unreachable. Displaying verified cached quotations.',
+            lastUpdated: staleIndices[0]?.timestamp || new Date(indexMemoryCache.lastSuccessfulAt || now).toISOString(),
+            source: `${this.provider.sourceLabel} (Cached / Stale)`,
+          };
+        }
+
         return {
           success: false,
           status: 'UNAVAILABLE',
+          freshnessState: 'UNAVAILABLE',
           indices: [],
           quotes: [],
           marketStatus: marketInfo.status,
@@ -155,6 +177,7 @@ export class MarketDataService {
       const response: MarketDataResponse = {
         success: true,
         status: 'SUCCESS',
+        freshnessState: marketInfo.status === 'OPEN' ? 'CURRENT_PROVIDER_DATA' : 'PREVIOUS_MARKET_CLOSE',
         indices,
         quotes: indices,
         marketStatus: marketInfo.status,
@@ -167,13 +190,33 @@ export class MarketDataService {
       indexMemoryCache = {
         response,
         expiresAt: now + (marketInfo.status === 'OPEN' ? CACHE_TTL_OPEN_MS : CACHE_TTL_CLOSED_MS),
+        lastSuccessfulIndices: indices,
+        lastSuccessfulAt: now,
       };
 
       return response;
     } catch {
+      if (indexMemoryCache?.lastSuccessfulIndices && indexMemoryCache.lastSuccessfulIndices.length > 0) {
+        const staleIndices = indexMemoryCache.lastSuccessfulIndices;
+        return {
+          success: true,
+          status: 'STALE',
+          freshnessState: 'CACHED_STALE',
+          indices: staleIndices,
+          quotes: staleIndices,
+          marketStatus: marketInfo.status,
+          marketStatusLabel: `${marketInfo.label} (Cached Stale)`,
+          isDelayedOrClosing: true,
+          message: 'Market data feed temporarily unreachable. Displaying verified cached quotations.',
+          lastUpdated: staleIndices[0]?.timestamp || new Date(indexMemoryCache.lastSuccessfulAt || now).toISOString(),
+          source: `${this.provider.sourceLabel} (Cached / Stale)`,
+        };
+      }
+
       return {
         success: false,
         status: 'UNAVAILABLE',
+        freshnessState: 'UNAVAILABLE',
         indices: [],
         quotes: [],
         marketStatus: marketInfo.status,
@@ -201,7 +244,7 @@ export class MarketDataService {
    * Retrieves a dynamic, verified market quote for a single instrument.
    * Leverages server-side in-memory cache with market-aware TTL.
    *
-   * If quote cannot be resolved or is invalid/stale, returns null.
+   * If quote cannot be resolved or is invalid/stale, returns null or last verified stale quote.
    * NEVER returns demo or seed prices.
    */
   public static async getQuote(
@@ -215,9 +258,9 @@ export class MarketDataService {
     const cleanEx = (exchange || 'NSE').trim().toUpperCase();
     const cacheKey = `${cleanSym}|${cleanEx}`;
     const now = Date.now();
+    const cached = quoteMemoryCache.get(cacheKey);
 
     if (!options?.forceRefresh) {
-      const cached = quoteMemoryCache.get(cacheKey);
       if (cached && cached.expiresAt > now) {
         return cached.quote;
       }
@@ -227,20 +270,62 @@ export class MarketDataService {
     try {
       const quote = await this.provider.fetchQuote(cleanSym, cleanEx);
 
-      const ttl = quote
-        ? marketInfo.status === 'OPEN'
-          ? CACHE_TTL_OPEN_MS
-          : CACHE_TTL_CLOSED_MS
-        : CACHE_TTL_NEGATIVE_MS;
+      if (quote) {
+        const ttl = marketInfo.status === 'OPEN' ? CACHE_TTL_OPEN_MS : CACHE_TTL_CLOSED_MS;
+        quoteMemoryCache.set(cacheKey, {
+          quote,
+          expiresAt: now + ttl,
+          fetchedAt: now,
+          lastSuccessfulQuote: quote,
+          lastSuccessfulAt: now,
+        });
+        return quote;
+      }
+
+      // Provider returned null: check for last known verified quote
+      if (cached?.lastSuccessfulQuote) {
+        const staleQuote: MarketQuote = {
+          ...cached.lastSuccessfulQuote,
+          status: 'STALE',
+          isStaleFallback: true,
+          freshnessLabel: 'Cached / Stale',
+          lastSuccessfulRetrieval: new Date(cached.lastSuccessfulAt || now).toISOString(),
+        };
+        quoteMemoryCache.set(cacheKey, {
+          quote: staleQuote,
+          expiresAt: now + CACHE_TTL_NEGATIVE_MS,
+          fetchedAt: now,
+          lastSuccessfulQuote: cached.lastSuccessfulQuote,
+          lastSuccessfulAt: cached.lastSuccessfulAt,
+        });
+        return staleQuote;
+      }
 
       quoteMemoryCache.set(cacheKey, {
-        quote,
-        expiresAt: now + ttl,
+        quote: null,
+        expiresAt: now + CACHE_TTL_NEGATIVE_MS,
         fetchedAt: now,
       });
-
-      return quote;
+      return null;
     } catch {
+      if (cached?.lastSuccessfulQuote) {
+        const staleQuote: MarketQuote = {
+          ...cached.lastSuccessfulQuote,
+          status: 'STALE',
+          isStaleFallback: true,
+          freshnessLabel: 'Cached / Stale',
+          lastSuccessfulRetrieval: new Date(cached.lastSuccessfulAt || now).toISOString(),
+        };
+        quoteMemoryCache.set(cacheKey, {
+          quote: staleQuote,
+          expiresAt: now + CACHE_TTL_NEGATIVE_MS,
+          fetchedAt: now,
+          lastSuccessfulQuote: cached.lastSuccessfulQuote,
+          lastSuccessfulAt: cached.lastSuccessfulAt,
+        });
+        return staleQuote;
+      }
+
       quoteMemoryCache.set(cacheKey, {
         quote: null,
         expiresAt: now + CACHE_TTL_NEGATIVE_MS,
@@ -288,32 +373,60 @@ export class MarketDataService {
     }
 
     const marketInfo = getIndianMarketStatus();
-    const fetchedMap = await this.provider.fetchQuotes(toFetch);
+    let fetchedMap = new Map<string, MarketQuote>();
+    try {
+      fetchedMap = await this.provider.fetchQuotes(toFetch);
+    } catch {
+      // Network/Provider failure: will fall back to cached last successful quotes below
+    }
 
     for (const inst of toFetch) {
       const sym = inst.symbol.trim().toUpperCase();
       const baseSym = extractBaseSymbol(sym);
       const ex = (inst.exchange || 'NSE').trim().toUpperCase();
       const cacheKey = `${sym}|${ex}`;
+      const cached = quoteMemoryCache.get(cacheKey);
       const quote = fetchedMap.get(sym) || fetchedMap.get(baseSym) || null;
 
-      const ttl = quote
-        ? marketInfo.status === 'OPEN'
-          ? CACHE_TTL_OPEN_MS
-          : CACHE_TTL_CLOSED_MS
-        : CACHE_TTL_NEGATIVE_MS;
-
-      quoteMemoryCache.set(cacheKey, {
-        quote,
-        expiresAt: now + ttl,
-        fetchedAt: now,
-      });
-
       if (quote) {
+        const ttl = marketInfo.status === 'OPEN' ? CACHE_TTL_OPEN_MS : CACHE_TTL_CLOSED_MS;
+        quoteMemoryCache.set(cacheKey, {
+          quote,
+          expiresAt: now + ttl,
+          fetchedAt: now,
+          lastSuccessfulQuote: quote,
+          lastSuccessfulAt: now,
+        });
         resultMap.set(sym, quote);
         if (baseSym !== sym) {
           resultMap.set(baseSym, quote);
         }
+      } else if (cached?.lastSuccessfulQuote) {
+        // Honest fallback to last verified quote with STALE indicator
+        const staleQuote: MarketQuote = {
+          ...cached.lastSuccessfulQuote,
+          status: 'STALE',
+          isStaleFallback: true,
+          freshnessLabel: 'Cached / Stale',
+          lastSuccessfulRetrieval: new Date(cached.lastSuccessfulAt || now).toISOString(),
+        };
+        quoteMemoryCache.set(cacheKey, {
+          quote: staleQuote,
+          expiresAt: now + CACHE_TTL_NEGATIVE_MS,
+          fetchedAt: now,
+          lastSuccessfulQuote: cached.lastSuccessfulQuote,
+          lastSuccessfulAt: cached.lastSuccessfulAt,
+        });
+        resultMap.set(sym, staleQuote);
+        if (baseSym !== sym) {
+          resultMap.set(baseSym, staleQuote);
+        }
+      } else {
+        quoteMemoryCache.set(cacheKey, {
+          quote: null,
+          expiresAt: now + CACHE_TTL_NEGATIVE_MS,
+          fetchedAt: now,
+        });
       }
     }
 

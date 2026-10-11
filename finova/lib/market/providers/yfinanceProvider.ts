@@ -30,6 +30,9 @@ export interface MarketQuote {
   volume: number | null;
   isValid: boolean;
   rejectionReason?: string;
+  isStaleFallback?: boolean;
+  freshnessLabel?: string;
+  lastSuccessfulRetrieval?: string;
 }
 
 export interface MarketDataProvider {

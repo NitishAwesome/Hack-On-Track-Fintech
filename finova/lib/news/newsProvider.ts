@@ -225,17 +225,35 @@ export async function fetchIndianFinancialNews(options?: {
 
     clearTimeout(timeoutId);
 
+    const previousCached = newsCache.get(cacheKey);
+
     if (response.status === 429) {
+      if (previousCached && previousCached.articles.length > 0) {
+        return {
+          articles: previousCached.articles,
+          providerStatus: 'RATE_LIMITED',
+          isCached: true,
+          message: 'Daily news quota reached. Displaying previously fetched verified articles.',
+        };
+      }
       return {
         articles: [],
         providerStatus: 'RATE_LIMITED',
         isCached: false,
-        message: 'NewsData.io rate limit reached (HTTP 429). Please wait before requesting new headlines.',
+        message: 'NewsData.io daily rate limit reached (HTTP 429). Please wait before requesting new headlines.',
       };
     }
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
+      if (previousCached && previousCached.articles.length > 0) {
+        return {
+          articles: previousCached.articles,
+          providerStatus: response.status >= 500 ? 'UNAVAILABLE' : 'ERROR',
+          isCached: true,
+          message: `News provider returned HTTP ${response.status}. Displaying previously fetched verified articles.`,
+        };
+      }
       return {
         articles: [],
         providerStatus: response.status >= 500 ? 'UNAVAILABLE' : 'ERROR',
@@ -247,6 +265,14 @@ export async function fetchIndianFinancialNews(options?: {
     const data = await response.json().catch(() => null);
 
     if (!data) {
+      if (previousCached && previousCached.articles.length > 0) {
+        return {
+          articles: previousCached.articles,
+          providerStatus: 'ERROR',
+          isCached: true,
+          message: 'Invalid response from news provider. Displaying previously fetched verified articles.',
+        };
+      }
       return {
         articles: [],
         providerStatus: 'ERROR',
@@ -259,6 +285,16 @@ export async function fetchIndianFinancialNews(options?: {
     if (data.status === 'error') {
       const errorCode = data.results?.code || '';
       const isRateLimit = errorCode.toLowerCase().includes('ratelimit');
+      if (previousCached && previousCached.articles.length > 0) {
+        return {
+          articles: previousCached.articles,
+          providerStatus: isRateLimit ? 'RATE_LIMITED' : 'ERROR',
+          isCached: true,
+          message: isRateLimit
+            ? 'Daily news quota reached. Displaying previously fetched verified articles.'
+            : 'Upstream news provider returned an error. Displaying previously fetched verified articles.',
+        };
+      }
       return {
         articles: [],
         providerStatus: isRateLimit ? 'RATE_LIMITED' : 'ERROR',
@@ -291,6 +327,17 @@ export async function fetchIndianFinancialNews(options?: {
     };
   } catch (err: unknown) {
     const isAbort = err instanceof Error && err.name === 'AbortError';
+    const previousCached = newsCache.get(cacheKey);
+    if (previousCached && previousCached.articles.length > 0) {
+      return {
+        articles: previousCached.articles,
+        providerStatus: 'UNAVAILABLE',
+        isCached: true,
+        message: isAbort
+          ? 'News provider timed out. Displaying previously fetched verified articles.'
+          : 'Network connection issue with news provider. Displaying previously fetched verified articles.',
+      };
+    }
     return {
       articles: [],
       providerStatus: 'UNAVAILABLE',

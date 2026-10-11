@@ -37,6 +37,7 @@ function NewsAndMarketContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [providerStatus, setProviderStatus] = useState<string>('ACTIVE');
   const [providerMessage, setProviderMessage] = useState<string | null>(null);
+  const [isCached, setIsCached] = useState<boolean>(false);
   const [selectedCategory, setSelectedCategory] = useState<string>(initialSymbol ? 'direct' : 'all');
   const [searchQuery, setSearchQuery] = useState<string>(initialSymbol);
   const [activeArticleForAi, setActiveArticleForAi] = useState<PersonalizedNewsArticle | null>(null);
@@ -58,6 +59,7 @@ function NewsAndMarketContent() {
       setArticles(data.articles || []);
       setProviderStatus(data.provider_status || 'ACTIVE');
       setProviderMessage(data.message || null);
+      setIsCached(Boolean(data.meta?.cached));
     } catch {
       setProviderStatus('ERROR');
       setProviderMessage('Unable to connect to financial news service.');
@@ -78,6 +80,7 @@ function NewsAndMarketContent() {
           setArticles(data.articles || []);
           setProviderStatus(data.provider_status || 'ACTIVE');
           setProviderMessage(data.message || null);
+          setIsCached(Boolean(data.meta?.cached));
         }
       } catch {
         if (active) {
@@ -174,27 +177,37 @@ function NewsAndMarketContent() {
               className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5"
               style={{
                 backgroundColor:
-                  providerStatus === 'ACTIVE'
+                  providerStatus === 'ACTIVE' && !isCached
                     ? 'rgb(var(--gain) / 0.1)'
-                    : providerStatus === 'NOT_CONFIGURED'
+                    : providerStatus === 'ACTIVE' && isCached
+                    ? 'rgb(var(--brand) / 0.1)'
+                    : providerStatus === 'NOT_CONFIGURED' || providerStatus === 'RATE_LIMITED'
                     ? 'rgb(var(--warning) / 0.1)'
                     : 'rgb(var(--loss) / 0.1)',
                 color:
-                  providerStatus === 'ACTIVE'
+                  providerStatus === 'ACTIVE' && !isCached
                     ? 'rgb(var(--gain))'
-                    : providerStatus === 'NOT_CONFIGURED'
+                    : providerStatus === 'ACTIVE' && isCached
+                    ? 'rgb(var(--brand))'
+                    : providerStatus === 'NOT_CONFIGURED' || providerStatus === 'RATE_LIMITED'
                     ? 'rgb(var(--warning))'
                     : 'rgb(var(--loss))',
               }}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-              {providerStatus === 'ACTIVE'
-                ? 'Live Financial Feed'
+              <span className={`w-1.5 h-1.5 rounded-full bg-current ${providerStatus === 'ACTIVE' && !isCached ? 'animate-pulse' : ''}`} />
+              {providerStatus === 'ACTIVE' && !isCached
+                ? 'Latest Financial News'
+                : providerStatus === 'ACTIVE' && isCached
+                ? 'Showing Previously Fetched Articles'
+                : providerStatus === 'RATE_LIMITED'
+                ? articles.length > 0
+                  ? 'Daily Quota Reached · Cached Feed'
+                  : 'Daily News Quota Reached'
                 : providerStatus === 'NOT_CONFIGURED'
                 ? 'Provider Unconfigured'
-                : providerStatus === 'RATE_LIMITED'
-                ? 'Rate Limit Reached'
-                : 'Feed Unavailable'}
+                : articles.length > 0
+                ? 'Feed Offline · Cached Feed'
+                : 'News Temporarily Unavailable'}
             </span>
           </div>
           <p className="text-sm mt-1" style={{ color: 'rgb(var(--muted))' }}>
@@ -234,6 +247,28 @@ function NewsAndMarketContent() {
             </p>
             <p style={{ color: 'rgb(var(--muted))' }}>
               {providerMessage || 'To receive live streaming Indian financial news, add your NEWSDATA_API_KEY to your server environment. FINOVA strictly refuses to fabricate fake news headlines or mock publisher articles in production.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Daily Quota / Rate Limit Notice with Cached Articles */}
+      {providerStatus === 'RATE_LIMITED' && articles.length > 0 && (
+        <div
+          className="p-3.5 rounded-xl border flex items-start gap-2.5 text-xs"
+          style={{
+            backgroundColor: 'rgb(var(--warning-bg) / 0.3)',
+            borderColor: 'rgb(var(--warning) / 0.3)',
+            color: 'rgb(var(--foreground))',
+          }}
+        >
+          <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-500 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-semibold text-amber-400">
+              Daily News Quota Reached
+            </p>
+            <p className="text-[11px]" style={{ color: 'rgb(var(--muted))' }}>
+              Displaying previously fetched verified financial headlines. Live requests will resume when the external provider quota resets.
             </p>
           </div>
         </div>

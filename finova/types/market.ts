@@ -15,9 +15,16 @@ export interface MarketIndex {
 
 export type MarketIndexQuote = MarketIndex;
 
+export type MarketFreshnessState =
+  | 'CURRENT_PROVIDER_DATA'
+  | 'PREVIOUS_MARKET_CLOSE'
+  | 'CACHED_STALE'
+  | 'UNAVAILABLE';
+
 export interface MarketDataResponse {
   success: boolean;
-  status: 'SUCCESS' | 'UNAVAILABLE' | 'ERROR';
+  status: 'SUCCESS' | 'UNAVAILABLE' | 'ERROR' | 'STALE';
+  freshnessState?: MarketFreshnessState;
   indices: MarketIndex[];
   /** Alias for indices to maintain compatibility */
   quotes: MarketIndex[];
