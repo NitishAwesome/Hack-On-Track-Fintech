@@ -39,6 +39,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { SkeletonTable } from '@/components/shared/Skeletons';
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
 import { StockSearchDropdown } from '@/components/market/StockSearchDropdown';
+import { parseAndNormalizeCsvDate } from '@/lib/utils/csvDateParser';
 import { GLOBAL_SEED_INSTRUMENTS } from '@/lib/storage/portfolioStorage';
 import type { BrokerAccountRow, InvestmentInstrumentRow, TransactionType } from '@/types/database';
 import type {
@@ -1741,6 +1742,8 @@ function ImportTradebookModal({
   const [selectedBrokerId, setSelectedBrokerId] = useState(brokers[0]?.id || '');
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<RawTradebookRow[]>([]);
+  const [dateWarnings, setDateWarnings] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<{
@@ -1757,6 +1760,8 @@ function ImportTradebookModal({
     setFile(f);
     setError(null);
     setImportResult(null);
+    setDateWarnings([]);
+    setDateRange(null);
 
     Papa.parse(f, {
       header: true,
@@ -1768,28 +1773,61 @@ function ImportTradebookModal({
           return;
         }
 
-        // Map columns across Zerodha, Groww, Angel One, or standard FINOVA headers
-        const normalized: RawTradebookRow[] = raw.map((r, i) => {
-          const sym = r['symbol'] || r['Symbol'] || r['Stock Name'] || r['stock_name'] || r['Instrument'] || '';
-          const type = (r['trade_type'] || r['Trade Type'] || r['Type'] || r['transaction_type'] || r['Action'] || 'BUY').toUpperCase();
-          const qty = Number(r['quantity'] || r['Quantity'] || r['Qty'] || 0);
-          const price = Number(r['price'] || r['Price'] || r['unit_price'] || r['Trade Price'] || 0);
-          const date = r['trade_date'] || r['Trade Date'] || r['Date'] || r['transaction_date'] || new Date().toISOString();
-          const ref = r['trade_id'] || r['Trade ID'] || r['Order ID'] || r['order_id'] || r['external_reference'] || '';
-          const fees = Number(r['fees'] || r['Fees'] || r['Brokerage'] || 0);
-          const taxes = Number(r['taxes'] || r['Taxes'] || r['STT'] || 0);
+        const warnings: string[] = [];
+        const dateErrors: string[] = [];
+        const validDates: string[] = [];
 
-          return {
-            symbol: sym.trim(),
-            trade_type: type as TransactionType,
-            quantity: qty,
-            price: price,
-            trade_date: date,
-            external_reference: ref.trim() || undefined,
-            fees,
-            taxes,
-          };
-        }).filter((r) => Boolean(r.symbol));
+        // Map columns across Zerodha, Groww, Angel One, or standard FINOVA headers
+        const normalized: RawTradebookRow[] = raw
+          .map((r, i): RawTradebookRow | null => {
+            const sym = r['symbol'] || r['Symbol'] || r['Stock Name'] || r['stock_name'] || r['Instrument'] || '';
+            if (!sym.trim()) return null;
+
+            const type = (r['trade_type'] || r['Trade Type'] || r['Type'] || r['transaction_type'] || r['Action'] || 'BUY').toUpperCase();
+            const qty = Number(r['quantity'] || r['Quantity'] || r['Qty'] || 0);
+            const price = Number(r['price'] || r['Price'] || r['unit_price'] || r['Trade Price'] || 0);
+            const rawDate = r['trade_date'] || r['Trade Date'] || r['Date'] || r['transaction_date'];
+            const dateCheck = parseAndNormalizeCsvDate(rawDate);
+
+            if (!dateCheck.isValid) {
+              dateErrors.push(`Row ${i + 1} (${sym}): ${dateCheck.error}`);
+              return null;
+            }
+
+            if (dateCheck.isAmbiguous && dateCheck.ambiguityWarning) {
+              warnings.push(dateCheck.ambiguityWarning);
+            }
+
+            validDates.push(dateCheck.normalizedDate);
+
+            const ref = r['trade_id'] || r['Trade ID'] || r['Order ID'] || r['order_id'] || r['external_reference'] || '';
+            const fees = Number(r['fees'] || r['Fees'] || r['Brokerage'] || 0);
+            const taxes = Number(r['taxes'] || r['Taxes'] || r['STT'] || 0);
+
+            return {
+              symbol: sym.trim(),
+              trade_type: type as TransactionType,
+              quantity: qty,
+              price: price,
+              trade_date: dateCheck.normalizedIso || `${dateCheck.normalizedDate}T00:00:00.000Z`,
+              external_reference: ref.trim() || undefined,
+              fees,
+              taxes,
+            };
+          })
+          .filter((r): r is RawTradebookRow => r !== null);
+
+        if (dateErrors.length > 0) {
+          setError(`Found ${dateErrors.length} invalid trade date(s): ${dateErrors.slice(0, 2).join('; ')}`);
+        }
+
+        setDateWarnings(warnings);
+        if (validDates.length > 0) {
+          const sorted = [...validDates].sort();
+          setDateRange({ start: sorted[0], end: sorted[sorted.length - 1] });
+        } else {
+          setDateRange(null);
+        }
 
         setParsedRows(normalized);
       },
@@ -1915,11 +1953,30 @@ function ImportTradebookModal({
 
           {/* Preview count */}
           {parsedRows.length > 0 && (
-            <div className="p-3 rounded-xl border bg-surface-raised text-xs space-y-1">
-              <div className="flex justify-between font-medium">
-                <span>Parsed Transactions:</span>
-                <span className="font-bold text-foreground">{parsedRows.length} trades</span>
+            <div className="p-3.5 rounded-xl border bg-surface-raised text-xs space-y-2">
+              <div className="flex justify-between items-center font-medium">
+                <span>Validated Transactions:</span>
+                <span className="font-bold text-foreground px-2 py-0.5 rounded bg-brand/10 text-brand">
+                  {parsedRows.length} trades ready
+                </span>
               </div>
+              {dateRange && (
+                <div className="flex items-center gap-1.5 text-[11px] text-muted">
+                  <Calendar className="w-3.5 h-3.5 text-brand" />
+                  <span>
+                    Verified Date Span: <strong className="text-foreground font-mono">{dateRange.start}</strong> to{' '}
+                    <strong className="text-foreground font-mono">{dateRange.end}</strong>
+                  </span>
+                </div>
+              )}
+              {dateWarnings.length > 0 && (
+                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-start gap-1.5">
+                  <Info className="w-3.5 h-3.5 shrink-0 text-amber-400 mt-0.5" />
+                  <span>
+                    Ambiguous day/month values detected ({dateWarnings.length} entries). Normalized strictly using Indian market convention (DD-MM-YYYY).
+                  </span>
+                </div>
+              )}
               <p className="text-[11px] text-muted">
                 Deduplication is active: repeated trades with matching external trade references will be skipped to protect your ledger integrity.
               </p>

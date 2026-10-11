@@ -8,7 +8,8 @@ import Papa from 'papaparse';
 import {
   Plus, Upload, Search, X, Loader2,
   LineChart, Trash2, Download, Eye, Building2, Info, Edit2, Newspaper,
-  AlertCircle, CheckCircle2, FileText, ArrowUpDown, Filter, ChevronRight, RefreshCw
+  AlertCircle, CheckCircle2, FileText, ArrowUpDown, Filter, ChevronRight, RefreshCw,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -138,6 +139,7 @@ export default function HoldingsPage() {
   const [editingHolding, setEditingHolding] = useState<HoldingWithMetrics | null>(null);
   const [deletingHolding, setDeletingHolding] = useState<HoldingWithMetrics | null>(null);
   const [selectedHolding, setSelectedHolding] = useState<HoldingWithMetrics | null>(null);
+  const [expandedMobileId, setExpandedMobileId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
   const [selectedBrokerFilter, setSelectedBrokerFilter] = useState<string>('');
@@ -555,167 +557,302 @@ export default function HoldingsPage() {
           <p className="text-xs text-slate-500">Try adjusting your search query, broker filter, or category tab.</p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-900/80 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                <tr>
-                  <th className="px-4 py-3">Asset & Symbol</th>
-                  <th className="px-4 py-3">Broker</th>
-                  <th className="px-4 py-3 text-right">Quantity</th>
-                  <th className="px-4 py-3 text-right">Avg Buy Price</th>
-                  <th className="px-4 py-3 text-right">Current Price</th>
-                  <th className="px-4 py-3 text-right">Invested Value</th>
-                  <th className="px-4 py-3 text-right">Current Value</th>
-                  <th className="px-4 py-3 text-right">P&L / Return</th>
-                  <th className="px-4 py-3 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/80">
-                {filteredHoldings.map((h) => {
-                  const hasPrice = h.current_price !== null && typeof h.current_price === 'number';
-                  const returnPct = h.absolute_return_pct;
-                  const isPositive = (h.absolute_return ?? 0) >= 0;
+        <div>
+          {/* Desktop Table View (>= 768px) */}
+          <div className="card overflow-hidden hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-900/80 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3">Asset & Symbol</th>
+                    <th className="px-4 py-3">Broker</th>
+                    <th className="px-4 py-3 text-right">Quantity</th>
+                    <th className="px-4 py-3 text-right">Avg Buy Price</th>
+                    <th className="px-4 py-3 text-right">Current Price</th>
+                    <th className="px-4 py-3 text-right">Invested Value</th>
+                    <th className="px-4 py-3 text-right">Current Value</th>
+                    <th className="px-4 py-3 text-right">P&L / Return</th>
+                    <th className="px-4 py-3 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/80">
+                  {filteredHoldings.map((h) => {
+                    const hasPrice = h.current_price !== null && typeof h.current_price === 'number';
+                    const returnPct = h.absolute_return_pct;
+                    const isPositive = (h.absolute_return ?? 0) >= 0;
 
-                  return (
-                    <tr key={h.id} className="hover:bg-slate-850/50 transition-colors group">
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
-                            style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#60A5FA' }}
-                          >
-                            {h.asset_class}
-                          </span>
-                          <div>
-                            <p className="font-semibold text-slate-100">{h.name}</p>
-                            <p className="text-xs text-slate-500 font-mono">{h.symbol} • {h.exchange || 'NSE'}</p>
+                    return (
+                      <tr key={h.id} className="hover:bg-slate-850/50 transition-colors group">
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
+                              style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#60A5FA' }}
+                            >
+                              {h.asset_class}
+                            </span>
+                            <div>
+                              <p className="font-semibold text-slate-100">{h.name}</p>
+                              <p className="text-xs text-slate-500 font-mono">{h.symbol} • {h.exchange || 'NSE'}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-4 py-3.5">
-                        <span className="text-xs px-2 py-0.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300">
-                          {h.broker_account?.display_name || h.broker_account?.broker_name || 'Manual'}
-                        </span>
-                      </td>
+                        <td className="px-4 py-3.5">
+                          <span className="text-xs px-2 py-0.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300">
+                            {h.broker_account?.display_name || h.broker_account?.broker_name || 'Manual'}
+                          </span>
+                        </td>
 
-                      <td className="px-4 py-3.5 text-right font-mono font-medium text-slate-200">
-                        {h.quantity}
-                      </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-medium text-slate-200">
+                          {h.quantity}
+                        </td>
 
-                      <td className="px-4 py-3.5 text-right font-mono text-slate-300">
-                        {formatStockPrice(h.avg_buy_price)}
-                      </td>
+                        <td className="px-4 py-3.5 text-right font-mono text-slate-300">
+                          {formatStockPrice(h.avg_buy_price)}
+                        </td>
 
-                      <td className="px-4 py-3.5 text-right font-mono">
-                        {hasPrice ? (
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="text-slate-100 font-semibold">{formatStockPrice(h.current_price!)}</span>
-                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                              <span
-                                className={`text-[10px] px-1.5 py-0.5 rounded font-sans font-semibold tracking-wide ${
-                                  h.price_status === 'REALTIME'
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                    : h.price_status === 'DELAYED'
-                                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                    : h.price_status === 'EOD'
-                                    ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                }`}
-                              >
-                                {h.price_status || 'DELAYED'}
+                        <td className="px-4 py-3.5 text-right font-mono">
+                          {hasPrice ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="text-slate-100 font-semibold">{formatStockPrice(h.current_price!)}</span>
+                              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                <span
+                                  className={`text-[10px] px-1.5 py-0.5 rounded font-sans font-semibold tracking-wide ${
+                                    h.price_status === 'REALTIME'
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : h.price_status === 'DELAYED'
+                                      ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                      : h.price_status === 'EOD'
+                                      ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                  }`}
+                                >
+                                  {h.price_status || 'DELAYED'}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-sans">
+                                  {h.price_source || 'Yahoo Finance'}
+                                </span>
+                              </div>
+                              {h.price_updated_at && (
+                                <span className="text-[9px] text-slate-500 font-sans" title={h.price_updated_at}>
+                                  {new Date(h.price_updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-sans font-medium">
+                                Price unavailable
                               </span>
-                              <span className="text-[10px] text-slate-400 font-sans">
-                                {h.price_source || 'Yahoo Finance'}
+                              <span className="text-[9px] text-slate-500 font-sans">
+                                Feed unquoted or stale
                               </span>
                             </div>
-                            {h.price_updated_at && (
-                              <span className="text-[9px] text-slate-500 font-sans" title={h.price_updated_at}>
-                                {new Date(h.price_updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          )}
+                        </td>
+
+                        <td
+                          className="px-4 py-3.5 text-right font-mono text-slate-300 font-medium"
+                          title={formatCurrency(h.invested_value)}
+                        >
+                          {formatCurrency(h.invested_value)}
+                        </td>
+
+                        <td
+                          className="px-4 py-3.5 text-right font-mono font-semibold text-slate-100"
+                          title={hasPrice && h.current_value !== null ? formatCurrency(h.current_value) : 'Valuation unavailable'}
+                        >
+                          {hasPrice && h.current_value !== null ? (
+                            formatCurrency(h.current_value)
+                          ) : (
+                            <span className="text-slate-500">—</span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3.5 text-right font-mono">
+                          {hasPrice && h.absolute_return !== null ? (
+                            <div className="flex flex-col items-end">
+                              <span
+                                className={`text-xs font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}
+                                title={formatCurrency(h.absolute_return)}
+                              >
+                                {isPositive ? '+' : ''}{formatCurrency(h.absolute_return)}
                               </span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-end gap-0.5">
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-sans font-medium">
-                              Price unavailable
+                              {returnPct !== null && (
+                                <PercentageBadge value={returnPct} size="sm" />
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                              P&L unavailable
                             </span>
-                            <span className="text-[9px] text-slate-500 font-sans">
-                              Feed unquoted or stale
-                            </span>
-                          </div>
-                        )}
-                      </td>
+                          )}
+                        </td>
 
-                      <td
-                        className="px-4 py-3.5 text-right font-mono text-slate-300 font-medium"
-                        title={formatCurrency(h.invested_value)}
-                      >
-                        {formatCurrency(h.invested_value)}
-                      </td>
-
-                      <td
-                        className="px-4 py-3.5 text-right font-mono font-semibold text-slate-100"
-                        title={hasPrice && h.current_value !== null ? formatCurrency(h.current_value) : 'Valuation unavailable'}
-                      >
-                        {hasPrice && h.current_value !== null ? (
-                          formatCurrency(h.current_value)
-                        ) : (
-                          <span className="text-slate-500">—</span>
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3.5 text-right font-mono">
-                        {hasPrice && h.absolute_return !== null ? (
-                          <div className="flex flex-col items-end">
-                            <span
-                              className={`text-xs font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}
-                              title={formatCurrency(h.absolute_return)}
+                        <td className="px-4 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                            <Link
+                              href={`/news?symbol=${encodeURIComponent(h.symbol)}`}
+                              title={`View news for ${h.symbol}`}
+                              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition-colors"
                             >
-                              {isPositive ? '+' : ''}{formatCurrency(h.absolute_return)}
-                            </span>
-                            {returnPct !== null && (
-                              <PercentageBadge value={returnPct} size="sm" />
-                            )}
+                              <Newspaper className="w-4 h-4" />
+                            </Link>
+                            <button
+                              title="Edit Holding"
+                              onClick={() => setEditingHolding(h)}
+                              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              title="Delete Holding"
+                              onClick={() => setDeletingHolding(h)}
+                              className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
-                        ) : (
-                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                            P&L unavailable
-                          </span>
-                        )}
-                      </td>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                      <td className="px-4 py-3.5 text-center">
-                        <div className="flex items-center justify-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                          <Link
-                            href={`/news?symbol=${encodeURIComponent(h.symbol)}`}
-                            title={`View news for ${h.symbol}`}
-                            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition-colors"
-                          >
-                            <Newspaper className="w-4 h-4" />
-                          </Link>
-                          <button
-                            title="Edit Holding"
-                            onClick={() => setEditingHolding(h)}
-                            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            title="Delete Holding"
-                            onClick={() => setDeletingHolding(h)}
-                            className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+          {/* Mobile Accordion Card View (< 768px) */}
+          <div className="md:hidden space-y-3">
+            {filteredHoldings.map((h) => {
+              const hasPrice = h.current_price !== null && typeof h.current_price === 'number';
+              const returnPct = h.absolute_return_pct;
+              const isPositive = (h.absolute_return ?? 0) >= 0;
+              const isExpanded = expandedMobileId === h.id;
+
+              return (
+                <div
+                  key={h.id}
+                  className="p-4 rounded-xl border transition-all"
+                  style={{
+                    backgroundColor: 'rgb(var(--surface))',
+                    borderColor: 'rgb(var(--border))',
+                  }}
+                >
+                  {/* Top Bar: Symbol, Name & Current Value */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
+                          style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#60A5FA' }}
+                        >
+                          {h.asset_class}
+                        </span>
+                        <span className="font-bold text-sm truncate text-foreground">{h.name}</span>
+                      </div>
+                      <p className="text-xs text-muted font-mono mt-0.5">
+                        {h.symbol} • {h.exchange || 'NSE'}
+                      </p>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold font-mono text-foreground">
+                        {hasPrice && h.current_value !== null ? formatCurrency(h.current_value) : '—'}
+                      </p>
+                      <span className="text-[10px] text-muted">
+                        {h.quantity} units
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Secondary Bar: Broker Badge & Return */}
+                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'rgb(var(--border) / 0.5)' }}>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300">
+                      {h.broker_account?.display_name || h.broker_account?.broker_name || 'Manual'}
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      {hasPrice && h.absolute_return !== null ? (
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className={`font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {isPositive ? '+' : ''}{formatCurrency(h.absolute_return)}
+                          </span>
+                          {returnPct !== null && <PercentageBadge value={returnPct} size="sm" />}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      ) : (
+                        <span className="text-[10px] text-muted italic">P&L unavailable</span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setExpandedMobileId(isExpanded ? null : h.id)}
+                        className="p-1 rounded text-muted hover:text-foreground"
+                        aria-label="Toggle details"
+                      >
+                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Expandable Accordion Drawer */}
+                  {isExpanded && (
+                    <div className="mt-3 pt-3 border-t space-y-2.5 text-xs text-muted" style={{ borderColor: 'rgb(var(--border) / 0.4)' }}>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-semibold text-muted">Avg Buy Price</span>
+                          <p className="font-mono text-foreground font-medium">{formatStockPrice(h.avg_buy_price)}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-semibold text-muted">Invested Value</span>
+                          <p className="font-mono text-foreground font-medium">{formatCurrency(h.invested_value)}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-semibold text-muted">Current Quote</span>
+                          <p className="font-mono text-foreground font-medium">
+                            {hasPrice ? formatStockPrice(h.current_price!) : 'Unquoted'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-semibold text-muted">Quote Status</span>
+                          <p className="text-[11px] font-sans font-semibold text-foreground">
+                            {h.price_status || 'DELAYED'} ({h.price_source || 'Yahoo Finance'})
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: 'rgb(var(--border) / 0.3)' }}>
+                        <Link
+                          href={`/news?symbol=${encodeURIComponent(h.symbol)}`}
+                          className="px-2.5 py-1 rounded text-xs border border-border bg-surface-raised flex items-center gap-1 text-foreground hover:text-brand"
+                        >
+                          <Newspaper className="w-3.5 h-3.5" />
+                          <span>News</span>
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => setEditingHolding(h)}
+                          className="px-2.5 py-1 rounded text-xs border border-border bg-surface-raised flex items-center gap-1 text-foreground hover:text-brand"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingHolding(h)}
+                          className="px-2.5 py-1 rounded text-xs border border-loss/20 bg-loss-bg/10 flex items-center gap-1 text-loss hover:opacity-90"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

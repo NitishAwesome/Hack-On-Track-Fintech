@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
 import { roundCurrency, roundQuantity } from '@/lib/calculations/portfolio';
+import { parseAndNormalizeCsvDate } from '@/lib/utils/csvDateParser';
 import type {
   InvestmentTransactionRow,
   TransactionInsert,
@@ -113,11 +114,13 @@ export async function POST(request: Request) {
             : grossAmount
         );
 
-        const dateStr = row.transaction_date || row.trade_date || new Date().toISOString();
-        if (isNaN(new Date(dateStr).getTime())) {
-          errors.push({ row: rowNum, error: `Invalid trade date "${dateStr}".` });
+        const rawDateStr = row.transaction_date || row.trade_date;
+        const dateCheck = parseAndNormalizeCsvDate(rawDateStr);
+        if (!dateCheck.isValid) {
+          errors.push({ row: rowNum, error: dateCheck.error || `Invalid trade date "${rawDateStr}".` });
           continue;
         }
+        const dateStr = dateCheck.normalizedIso || `${dateCheck.normalizedDate}T00:00:00.000Z`;
 
         const externalRef =
           row.external_reference?.trim() ||
@@ -400,11 +403,13 @@ export async function POST(request: Request) {
           : grossAmount
       );
 
-      const dateStr = row.transaction_date || row.trade_date || new Date().toISOString();
-      if (isNaN(new Date(dateStr).getTime())) {
-        errors.push({ row: rowNum, error: `Invalid trade date "${dateStr}".` });
-        continue;
-      }
+        const rawDateStr = row.transaction_date || row.trade_date;
+        const dateCheck = parseAndNormalizeCsvDate(rawDateStr);
+        if (!dateCheck.isValid) {
+          errors.push({ row: rowNum, error: dateCheck.error || `Invalid trade date "${rawDateStr}".` });
+          continue;
+        }
+        const dateStr = dateCheck.normalizedIso || `${dateCheck.normalizedDate}T00:00:00.000Z`;
 
       const externalRef =
         row.external_reference?.trim() ||
