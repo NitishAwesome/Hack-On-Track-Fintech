@@ -51,9 +51,17 @@ export interface EducationalThreshold {
   screeningRationale: string;
 }
 
+export interface RiskExplanation {
+  narrative: string;
+  primaryDrivers: string[];
+  riskClassificationRationale: string;
+  factorBreakdownSummary: string;
+}
+
 export interface SmartRiskRadarAnalysis {
   baseMetrics: RiskMetrics;
   xraySummary: UnifiedXRayAnalysis['summary'];
+  xray: UnifiedXRayAnalysis;
   observations: SmartRiskObservation[];
   educationalThresholds: EducationalThreshold[];
   dataQualityRadar: {
@@ -67,6 +75,8 @@ export interface SmartRiskRadarAnalysis {
     isFullyReliable: boolean;
     coverageNotice: string;
   };
+  explanation: RiskExplanation;
+  riskFactorBreakdown: NonNullable<RiskMetrics['risk_factors']>;
 }
 
 /**
@@ -79,6 +89,11 @@ export function generateSmartRiskObservations(
 ): SmartRiskObservation[] {
   const observations: SmartRiskObservation[] = [];
   const { summary, overlaps, consolidated_instruments, data_quality } = xray;
+
+  if (consolidated_instruments.length === 0) {
+    return [];
+  }
+
   const isComplete = data_quality.unquoted_positions === 0;
   const coverageNote = isComplete
     ? 'Calculated across 100% of portfolio positions with verified active market quotes.'
@@ -89,12 +104,13 @@ export function generateSmartRiskObservations(
     const topInst = consolidated_instruments[0];
     const topPct = (risk.top_holding_weight * 100).toFixed(1);
     const isAlert = risk.top_holding_weight >= 0.4;
+    const displayName = topInst ? `${topInst.symbol} (${topInst.name})` : 'Single Holding';
 
     observations.push({
       id: 'obs-single-holding-concentration',
       category: 'concentration',
       severity: isAlert ? 'alert' : 'warning',
-      title: `${topInst ? topInst.name : 'Single Holding'} Represents ${topPct}% of Valued Portfolio`,
+      title: `${displayName} Represents ${topPct}% of Valued Portfolio`,
       calculatedFigure: `${topPct}% of valued capital (${topInst && topInst.current_value !== null ? formatIndianCurrency(topInst.current_value) : 'Market Value'})`,
       whyItMatters:
         'When a single security accounts for over a quarter of valued investments, portfolio performance and drawdown risk are predominantly tied to that single company’s operational and financial health.',
@@ -134,7 +150,7 @@ export function generateSmartRiskObservations(
   }
 
   // 3. Top-5 Holdings Concentration Observation
-  if (risk.top_five_holding_weight >= 0.6) {
+  if (risk.top_five_holding_weight >= 0.6 && consolidated_instruments.length >= 5) {
     const top5Pct = (risk.top_five_holding_weight * 100).toFixed(1);
     const top5Insts = consolidated_instruments.slice(0, 5);
 
@@ -237,8 +253,25 @@ export function generateSmartRiskObservations(
     });
   }
 
-  // 8. Positive Diversification Observation (if healthy)
-  if (risk.top_holding_weight < 0.25 && risk.top_five_holding_weight < 0.6 && overlaps.length === 0) {
+  // 8. Single-Broker Operational Custody (when only 1 broker)
+  if (summary.tracked_brokers_count <= 1) {
+    observations.push({
+      id: 'obs-single-broker-custody',
+      category: 'broker',
+      severity: 'info',
+      title: 'Single-Broker Custody Structure',
+      calculatedFigure: '1 Tracked Broker Account',
+      whyItMatters:
+        'All holdings are registered through one broker platform. While assets are legally safeguarded in central depositories (CDSL/NSDL), holding assets through one provider creates execution and platform dependency, distinct from market price risk.',
+      contributingHoldings: ['Assets managed in single broker account'],
+      coverageLimitation: 'Cross-broker duplicate overlap cannot be assessed across multiple accounts yet.',
+      neutralNextStep:
+        'Connect additional broker accounts if you invest across multiple platforms to automatically detect duplicate stock positions.',
+    });
+  }
+
+  // 9. Positive Diversification Observation (if healthy)
+  if (risk.top_holding_weight < 0.25 && (consolidated_instruments.length < 5 || risk.top_five_holding_weight < 0.6) && overlaps.length === 0) {
     observations.push({
       id: 'obs-healthy-diversification',
       category: 'concentration',
@@ -268,6 +301,7 @@ export function buildEducationalThresholds(
   const top5Pct = risk.top_five_holding_weight * 100;
   const eqPct = risk.equity_weight * 100;
   const overlapPct = xray.summary.cross_broker_overlap_valued_pct;
+  const isSmallPortfolio = xray.consolidated_instruments.length < 5;
 
   return [
     {
@@ -285,18 +319,36 @@ export function buildEducationalThresholds(
         'Heuristic screen to identify vulnerability to individual company performance shocks.',
     },
     {
-      metric: 'Top 5 Holdings Weight',
-      conservativeLimit: '< 50%',
-      moderateLimit: '50% – 60%',
-      currentValue: `${top5Pct.toFixed(1)}%`,
+      metric: 'Herfindahl Index (HHI)',
+      conservativeLimit: '< 1,500',
+      moderateLimit: '1,500 – 2,500',
+      currentValue: `${xray.summary.hhi.toLocaleString('en-IN')}`,
       status:
-        top5Pct > 75
+        xray.summary.hhi >= 2500
           ? 'high_attention'
-          : top5Pct > 60
+          : xray.summary.hhi >= 1500
           ? 'elevated'
           : 'within_screening_range',
       screeningRationale:
-        'Evaluates concentration in top core holdings versus peripheral positions.',
+        'Standard financial scale (0–10,000) measuring portfolio concentration. >2,500 denotes high concentration.',
+    },
+    {
+      metric: 'Top 5 Holdings Weight',
+      conservativeLimit: '< 50%',
+      moderateLimit: '50% – 60%',
+      currentValue: isSmallPortfolio
+        ? `${top5Pct.toFixed(1)}% (${xray.consolidated_instruments.length} total holdings)`
+        : `${top5Pct.toFixed(1)}%`,
+      status: isSmallPortfolio
+        ? 'within_screening_range'
+        : top5Pct > 75
+        ? 'high_attention'
+        : top5Pct > 60
+        ? 'elevated'
+        : 'within_screening_range',
+      screeningRationale: isSmallPortfolio
+        ? 'For small portfolios with under 5 holdings, combined weight reflects portfolio size rather than excessive tilt among many positions.'
+        : 'Evaluates concentration in top core holdings versus peripheral positions.',
     },
     {
       metric: 'Equity Asset Class Weight',
@@ -316,9 +368,14 @@ export function buildEducationalThresholds(
       metric: 'Cross-Broker Overlap Exposure',
       conservativeLimit: '0%',
       moderateLimit: '< 15%',
-      currentValue: `${overlapPct.toFixed(1)}%`,
+      currentValue:
+        xray.summary.tracked_brokers_count <= 1
+          ? 'Not assessable (1 broker)'
+          : `${overlapPct.toFixed(1)}%`,
       status:
-        overlapPct > 35
+        xray.summary.tracked_brokers_count <= 1
+          ? 'within_screening_range'
+          : overlapPct > 35
           ? 'high_attention'
           : overlapPct > 15
           ? 'elevated'
@@ -344,6 +401,84 @@ export function buildEducationalThresholds(
 }
 
 /**
+ * Generates deterministic narrative explanation for why the portfolio was classified this way.
+ */
+export function generateRiskExplanation(
+  xray: UnifiedXRayAnalysis,
+  risk: RiskMetrics
+): RiskExplanation {
+  const topInst = xray.consolidated_instruments[0];
+  const topWeightPct = (xray.summary.top_holding_weight).toFixed(1);
+  const top3WeightPct = (xray.summary.top_3_holdings_weight).toFixed(1);
+  const equityPct = (risk.equity_weight * 100).toFixed(1);
+  const hhiVal = xray.summary.hhi;
+
+  const topDisplayName = topInst ? `${topInst.name} (${topInst.symbol})` : 'Top Holding';
+  const narrative = `Your largest investment (${topDisplayName}) accounts for approximately ${topWeightPct}% of your valued portfolio. The top three holdings represent ${top3WeightPct}%, and equities account for ${equityPct}%. These exposures explain the ${risk.risk_label} screening result.`;
+
+  const primaryDrivers: string[] = [];
+
+  if (xray.summary.top_holding_weight >= 25 && topInst) {
+    primaryDrivers.push(
+      `Single-holding concentration in ${topInst.name} (${topWeightPct}%) exceeds the 25% screening threshold.`
+    );
+  } else if (topInst) {
+    primaryDrivers.push(
+      `Largest holding (${topInst.name}) represents a controlled ${topWeightPct}% of valued assets.`
+    );
+  }
+
+  if (risk.equity_weight >= 0.85) {
+    primaryDrivers.push(
+      `High equity allocation (${equityPct}%) leaves little defensive cushion during broad market pullbacks.`
+    );
+  } else if (risk.equity_weight <= 0.6) {
+    primaryDrivers.push(
+      `Balanced multi-asset allocation moderating equity market drawdown risk.`
+    );
+  }
+
+  if (xray.summary.top_sector && xray.summary.top_sector_weight >= 35 && xray.summary.top_sector !== 'Unclassified') {
+    primaryDrivers.push(
+      `Heavy sector tilt toward ${xray.summary.top_sector} (${xray.summary.top_sector_weight.toFixed(1)}%).`
+    );
+  }
+
+  if (hhiVal >= 2500) {
+    primaryDrivers.push(
+      `Herfindahl-Hirschman Index (${hhiVal.toLocaleString('en-IN')}) denotes elevated concentration across positions.`
+    );
+  } else if (hhiVal < 1500) {
+    primaryDrivers.push(
+      `Herfindahl-Hirschman Index (${hhiVal.toLocaleString('en-IN')}) confirms broad diversification across positions.`
+    );
+  }
+
+  if (xray.summary.unpriced_positions_count > 0) {
+    primaryDrivers.push(
+      `Valuation completeness notice: ${xray.summary.unpriced_positions_count} holding(s) lack active market quotes.`
+    );
+  }
+
+  const riskClassificationRationale =
+    risk.risk_label === 'Aggressive'
+      ? 'A portfolio with substantial single-stock, sector, or equity concentration is categorized as Higher Observed Screening Risk because adverse company-specific or cyclical events will exert a dominant impact on capital.'
+      : risk.risk_label === 'Moderate'
+      ? 'A portfolio with moderate concentration or balanced equity exposure is categorized as Moderate Observed Screening Risk, reflecting intermediate dispersion with some sector or stock tilts.'
+      : 'A portfolio with low concentration (HHI < 1,500), distributed position sizes, and multi-asset exposure is categorized as Lower Observed Screening Risk.';
+
+  const factorBreakdownSummary =
+    `Screening Score: ${risk.risk_score} / 100 based on Diversification/HHI (35%), Equity Allocation (35%), Single-Stock Exposure (18%), and Sector Concentration (12%).`;
+
+  return {
+    narrative,
+    primaryDrivers,
+    riskClassificationRationale,
+    factorBreakdownSummary,
+  };
+}
+
+/**
  * Builds the complete Smart Risk & Diversification Radar analysis
  */
 export function computeSmartRiskRadar(
@@ -354,15 +489,21 @@ export function computeSmartRiskRadar(
   const baseMetrics = buildRiskMetrics(holdings);
   const observations = generateSmartRiskObservations(xray, baseMetrics);
   const educationalThresholds = buildEducationalThresholds(baseMetrics, xray);
+  const explanation = generateRiskExplanation(xray, baseMetrics);
 
-  const isFullyReliable = xray.data_quality.unquoted_positions === 0;
+  const isFullyReliable = xray.data_quality.is_fully_reliable;
   const coverageNotice = isFullyReliable
-    ? 'All holdings have verified market prices. Risk metrics represent 100% of portfolio value.'
-    : `Market data is unavailable for ${xray.data_quality.unquoted_positions} of ${holdings.length} positions. Concentration percentages are calculated against the reliably valued subset (${formatIndianCurrency(xray.summary.market_valued_capital || 0)}).`;
+    ? 'All holdings have verified market prices and cost basis. Risk metrics represent 100% of portfolio value.'
+    : xray.data_quality.unquoted_positions > 0
+    ? `Market data is unavailable for ${xray.data_quality.unquoted_positions} of ${holdings.length} positions. Concentration percentages are calculated against the reliably valued subset (${formatIndianCurrency(xray.summary.market_valued_capital || 0)}).`
+    : xray.data_quality.stale_quotes_count > 0
+    ? `${xray.data_quality.stale_quotes_count} holding quote(s) are older than 48 hours. Valuations may reflect previous market closes.`
+    : `${xray.data_quality.positions_without_cost_basis} position(s) lack purchase cost basis.`;
 
   return {
     baseMetrics,
     xraySummary: xray.summary,
+    xray,
     observations,
     educationalThresholds,
     dataQualityRadar: {
@@ -376,5 +517,7 @@ export function computeSmartRiskRadar(
       isFullyReliable,
       coverageNotice,
     },
+    explanation,
+    riskFactorBreakdown: baseMetrics.risk_factors || [],
   };
 }

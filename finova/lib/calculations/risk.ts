@@ -140,6 +140,13 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
     diversification_observations: [],
     positive_observations: [],
     data_quality_warnings: [],
+    hhi_scaled: 0,
+    risk_factors: [],
+    operational_risk: {
+      broker_count: 0,
+      is_single_broker: true,
+      notice: 'No active broker accounts or holdings recorded.',
+    },
   };
 
   if (holdings.length === 0) {
@@ -227,24 +234,44 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
   const equityValue = (assetClassTotals.get('equity') || 0) + (assetClassTotals.get('etf') || 0);
   const equityWeight = roundPercent(equityValue / valuationBase);
 
-  // 6. Broker diversification
+  // 6. Broker diversification (tracked for operational custody assessment)
   const brokerIds = new Set(holdings.map((h) => h.broker_account_id).filter(Boolean));
   const brokerCount = brokerIds.size || 1;
-  const brokerDiversification = clamp((brokerCount - 1) / 3, 0, 1);
 
   // 7. Sector Allocation
   const sectorResult = computeSectorAllocation(holdings, valuationBase, usingMarketValuation);
 
-  // 8. Composite Risk Score (0–100)
-  const minHHI = holdingsForConcentration.length > 0 ? 1 / holdingsForConcentration.length : 1;
-  const hhiNormalised = clamp((hhi - minHHI) / Math.max(1 - minHHI, 0.001), 0, 1);
+  // Dimension 1: Overall Diversification / HHI (35% weight)
+  // Absolute HHI scaling: HHI of 0.10 (1,000) = low (10), HHI of 0.25 (2,500) = moderate (25), HHI of 1.0 (10,000) = maximum (100)
+  const hhiScore = clamp(Math.round(hhi * 100), 0, 100);
 
+  // Dimension 2: Asset-Class Allocation (35% weight)
+  const equityScore = clamp(Math.round(equityWeight * 100), 0, 100);
+
+  // Dimension 3: Single-Stock Concentration (18% weight)
+  const singleStockScore = clamp(
+    Math.round((clamp(topHoldingWeight - 0.15, 0, 0.6) / 0.6) * 100),
+    0,
+    100
+  );
+
+  // Dimension 4: Sector Concentration (12% weight)
+  const sectorScore =
+    sectorResult.hasSectorData && sectorResult.topSector !== 'Unclassified'
+      ? clamp(
+          Math.round((clamp(sectorResult.topSectorWeight - 0.25, 0, 0.5) / 0.5) * 100),
+          0,
+          100
+        )
+      : 0;
+
+  // Composite Risk Score
   const riskScore = clamp(
     Math.round(
-      hhiNormalised * 35 +
-      equityWeight * 35 +
-      (1 - brokerDiversification) * 20 +
-      clamp((topHoldingWeight - 0.2) / 0.6, 0, 1) * 10
+      hhiScore * 0.35 +
+      equityScore * 0.35 +
+      singleStockScore * 0.18 +
+      sectorScore * 0.12
     ),
     0,
     100
@@ -252,6 +279,60 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
 
   const riskLabel: RiskMetrics['risk_label'] =
     riskScore < 34 ? 'Conservative' : riskScore < 67 ? 'Moderate' : 'Aggressive';
+
+  const hhiScaled = Math.round(hhi * 10000);
+
+  const riskFactors: NonNullable<RiskMetrics['risk_factors']> = [
+    {
+      id: 'factor-hhi',
+      name: 'Portfolio Concentration (HHI)',
+      score: hhiScore,
+      weightPct: 35,
+      contribution: Math.round(hhiScore * 0.35),
+      status: (hhiScore < 30 ? 'low' : hhiScore < 60 ? 'moderate' : hhiScore < 80 ? 'elevated' : 'high') as 'low' | 'moderate' | 'elevated' | 'high',
+      calculatedValue: `${hhiScaled.toLocaleString('en-IN')} / 10,000`,
+      description: 'Measures dispersion across all positions. Higher index indicates concentrated capital.',
+    },
+    {
+      id: 'factor-asset-class',
+      name: 'Asset-Class Skew (Equity %)',
+      score: equityScore,
+      weightPct: 35,
+      contribution: Math.round(equityScore * 0.35),
+      status: (equityScore < 60 ? 'low' : equityScore < 80 ? 'moderate' : equityScore < 90 ? 'elevated' : 'high') as 'low' | 'moderate' | 'elevated' | 'high',
+      calculatedValue: `${(equityWeight * 100).toFixed(1)}%`,
+      description: 'Evaluates exposure to market drawdowns. Equities exhibit higher historical volatility than debt or gold.',
+    },
+    {
+      id: 'factor-single-stock',
+      name: 'Single-Stock Exposure',
+      score: singleStockScore,
+      weightPct: 18,
+      contribution: Math.round(singleStockScore * 0.18),
+      status: (topHoldingWeight < 0.15 ? 'low' : topHoldingWeight < 0.25 ? 'moderate' : topHoldingWeight < 0.40 ? 'elevated' : 'high') as 'low' | 'moderate' | 'elevated' | 'high',
+      calculatedValue: `${(topHoldingWeight * 100).toFixed(1)}% (${topHolding?.symbol || 'Top Holding'})`,
+      description: 'Screens for vulnerability to unsystematic risk from individual company operational shocks.',
+    },
+    {
+      id: 'factor-sector',
+      name: 'Sector Concentration',
+      score: sectorScore,
+      weightPct: 12,
+      contribution: Math.round(sectorScore * 0.12),
+      status: (sectorResult.topSectorWeight < 0.25 ? 'low' : sectorResult.topSectorWeight < 0.35 ? 'moderate' : sectorResult.topSectorWeight < 0.50 ? 'elevated' : 'high') as 'low' | 'moderate' | 'elevated' | 'high',
+      calculatedValue: sectorResult.topSector ? `${(sectorResult.topSectorWeight * 100).toFixed(1)}% (${sectorResult.topSector})` : 'Unclassified',
+      description: 'Screens for exposure to sector-specific economic cycles and regulatory headwinds.',
+    },
+  ];
+
+  const isSingleBroker = brokerCount <= 1;
+  const operationalRisk: NonNullable<RiskMetrics['operational_risk']> = {
+    broker_count: brokerCount,
+    is_single_broker: isSingleBroker,
+    notice: isSingleBroker
+      ? 'All assets are held with a single broker/depository. While assets reside securely with central depositories (CDSL/NSDL), holding via a single platform presents operational and execution dependency, distinct from market price risk.'
+      : `Assets distributed across ${brokerCount} separate broker accounts/depositories, providing operational redundancy.`,
+  };
 
   // 9. Warnings & Observations
   const concentrationWarnings: string[] = [];
@@ -312,8 +393,8 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
       `Assets distributed across ${brokerCount} separate broker accounts/depositories, reducing counterparty settlement risk.`
     );
   } else {
-    concentrationWarnings.push(
-      'All assets are held with a single broker/depository. Consider holding assets across multiple depositories.'
+    diversificationObservations.push(
+      'All assets are held with a single broker account. Central depositories (CDSL/NSDL) protect legal ownership, though single-app operational dependency exists.'
     );
   }
 
@@ -352,6 +433,7 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
     risk_score: riskScore,
     risk_label: riskLabel,
     hhi,
+    hhi_scaled: hhiScaled,
     equity_weight: equityWeight,
     broker_count: brokerCount,
     top_holding_weight: topHoldingWeight,
@@ -373,5 +455,7 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
     diversification_observations: diversificationObservations,
     positive_observations: positiveObservations,
     data_quality_warnings: dataQualityWarnings,
+    risk_factors: riskFactors,
+    operational_risk: operationalRisk,
   };
 }
