@@ -4,8 +4,8 @@
 // FINOVA — News & Market Page
 // /news route
 //
-// Modern Editorial Financial News Feed, Portfolio-Aware Personalization,
-// and Grounded AI News Intelligence
+// Modern Editorial Financial News Feed, Verified Timestamps,
+// Separation of Recent vs Delayed Content, and Multi-Provider Transparency
 // ============================================================
 
 import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
@@ -17,10 +17,14 @@ import {
   Search,
   RefreshCw,
   AlertCircle,
+  Clock,
+  Layers,
+  Building2,
 } from 'lucide-react';
 import { NewsCard } from '@/components/news/NewsCard';
 import { NewsExplanationModal } from '@/components/news/NewsExplanationModal';
 import type { PersonalizedNewsArticle, NewsApiResponse } from '@/types/news';
+import { resolveArticleTemporalInfo } from '@/lib/news/temporalUtils';
 
 function NewsSkeletonCard({ isFeatured }: { isFeatured?: boolean }) {
   if (isFeatured) {
@@ -73,6 +77,8 @@ function NewsSkeletonCard({ isFeatured }: { isFeatured?: boolean }) {
   );
 }
 
+type FeedSourceView = 'all' | 'recent' | 'delayed';
+
 function NewsAndMarketContent() {
   const searchParams = useSearchParams();
   const initialSymbol = searchParams.get('symbol') || '';
@@ -85,6 +91,7 @@ function NewsAndMarketContent() {
   const [providerStatus, setProviderStatus] = useState<string>('ACTIVE');
   const [providerMessage, setProviderMessage] = useState<string | null>(null);
   const [isCached, setIsCached] = useState<boolean>(false);
+  const [sourceView, setSourceView] = useState<FeedSourceView>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>(initialSymbol ? 'direct' : 'all');
   const [searchQuery, setSearchQuery] = useState<string>(initialSymbol);
   const [activeArticleForAi, setActiveArticleForAi] = useState<PersonalizedNewsArticle | null>(null);
@@ -200,7 +207,7 @@ function NewsAndMarketContent() {
     }
   };
 
-  // Filtered articles
+  // Filtered articles based on Category and Search
   const filteredArticles = useMemo(() => {
     let result = articles;
 
@@ -234,6 +241,31 @@ function NewsAndMarketContent() {
     return result;
   }, [articles, selectedCategory, searchQuery]);
 
+  // Section A: Recent Financial News (Marketaux & GDELT)
+  const recentArticles = useMemo(
+    () => filteredArticles.filter((a) => a.source_provider === 'marketaux' || a.source_provider === 'gdelt'),
+    [filteredArticles]
+  );
+
+  // Section B: Delayed News & Market Context (NewsData.io Free)
+  const delayedArticles = useMemo(
+    () => filteredArticles.filter((a) => a.source_provider === 'newsdata'),
+    [filteredArticles]
+  );
+
+  // Accurate displayed provider breakdown calculated strictly from displayed unique articles
+  const displayedProviderCounts = useMemo(() => {
+    let mkt = 0;
+    let gdl = 0;
+    let nd = 0;
+    for (const a of filteredArticles) {
+      if (a.source_provider === 'marketaux') mkt++;
+      else if (a.source_provider === 'gdelt') gdl++;
+      else if (a.source_provider === 'newsdata') nd++;
+    }
+    return { marketaux: mkt, gdelt: gdl, newsdata: nd };
+  }, [filteredArticles]);
+
   // Aggregate metrics
   const directMatchesCount = useMemo(
     () => articles.filter((a) => a.relevance_category === 'DIRECT_HOLDING').length,
@@ -244,9 +276,24 @@ function NewsAndMarketContent() {
     [articles]
   );
 
+  // Determine featured article (top recent story on default view)
   const isDefaultView = selectedCategory === 'all' && !searchQuery.trim();
-  const featuredArticle = isDefaultView && filteredArticles.length > 0 ? filteredArticles[0] : null;
-  const regularArticles = isDefaultView && filteredArticles.length > 0 ? filteredArticles.slice(1) : filteredArticles;
+  const featuredArticle =
+    isDefaultView && (sourceView === 'all' || sourceView === 'recent') && recentArticles.length > 0
+      ? recentArticles[0]
+      : isDefaultView && sourceView === 'delayed' && delayedArticles.length > 0
+      ? delayedArticles[0]
+      : null;
+
+  const regularRecentArticles =
+    featuredArticle && recentArticles.includes(featuredArticle)
+      ? recentArticles.filter((a) => a.article_id !== featuredArticle.article_id)
+      : recentArticles;
+
+  const regularDelayedArticles =
+    featuredArticle && delayedArticles.includes(featuredArticle)
+      ? delayedArticles.filter((a) => a.article_id !== featuredArticle.article_id)
+      : delayedArticles;
 
   return (
     <div className="page-container space-y-6">
@@ -280,7 +327,7 @@ function NewsAndMarketContent() {
             >
               <span className={`w-1.5 h-1.5 rounded-full bg-current ${providerStatus === 'ACTIVE' && !isCached ? 'animate-pulse' : ''}`} />
               {providerStatus === 'ACTIVE' && !isCached
-                ? 'Latest Financial Feed'
+                ? 'Active Aggregated Feed'
                 : providerStatus === 'ACTIVE' && isCached
                 ? 'Showing Cached Feed'
                 : providerStatus === 'RATE_LIMITED'
@@ -295,7 +342,7 @@ function NewsAndMarketContent() {
             </span>
           </div>
           <p className="text-sm mt-1" style={{ color: 'rgb(var(--muted))' }}>
-            Market updates and financial news relevant to your investments.
+            Multi-source financial intelligence, verified timestamps, and portfolio-grounded insights.
           </p>
         </div>
 
@@ -310,7 +357,7 @@ function NewsAndMarketContent() {
           }}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          <span>{refreshing ? 'Refreshing...' : 'Refresh News'}</span>
+          <span>{refreshing ? 'Refreshing...' : 'Refresh Feed'}</span>
         </button>
       </div>
 
@@ -327,10 +374,10 @@ function NewsAndMarketContent() {
           <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-500 mt-0.5" />
           <div className="space-y-1">
             <p className="font-semibold" style={{ color: 'rgb(var(--warning))' }}>
-              NewsData.io Provider Notice
+              Financial News Provider Notice
             </p>
             <p style={{ color: 'rgb(var(--muted))' }}>
-              {providerMessage || 'Live Indian financial headlines require NEWSDATA_API_KEY in your server environment.'}
+              {providerMessage || 'Live Indian financial headlines require MARKETAUX_API_KEY or NEWSDATA_API_KEY in your server environment.'}
             </p>
           </div>
         </div>
@@ -349,10 +396,10 @@ function NewsAndMarketContent() {
           <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-500 mt-0.5" />
           <div className="space-y-0.5">
             <p className="font-semibold text-amber-400">
-              Daily News Quota Reached
+              Provider Rate Limit Notice
             </p>
             <p className="text-[11px]" style={{ color: 'rgb(var(--muted))' }}>
-              Displaying previously fetched verified financial headlines. Live requests will resume when the quota resets.
+              Displaying previously fetched and cached financial articles. Live requests will resume when provider quotas reset.
             </p>
           </div>
         </div>
@@ -404,7 +451,7 @@ function NewsAndMarketContent() {
           }}
         >
           <span className="text-[11px] font-medium" style={{ color: 'rgb(var(--muted))' }}>
-            Verified Articles
+            Source-Attributed Stories
           </span>
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-xl font-bold" style={{ color: 'rgb(var(--foreground))' }}>
@@ -435,7 +482,80 @@ function NewsAndMarketContent() {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
+      {/* Row 1: Feed Source Mode Selector (Section 2 Separation) */}
+      <div
+        className="p-1.5 rounded-xl border flex flex-wrap items-center gap-1.5"
+        style={{
+          backgroundColor: 'rgb(var(--surface))',
+          borderColor: 'rgb(var(--border))',
+        }}
+      >
+        <button
+          onClick={() => setSourceView('all')}
+          className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+          style={{
+            backgroundColor:
+              sourceView === 'all' ? 'rgb(var(--brand-500))' : 'transparent',
+            color: sourceView === 'all' ? '#ffffff' : 'rgb(var(--muted))',
+          }}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>All Sources</span>
+          <span
+            className="px-1.5 py-0.2 rounded-full text-[10px]"
+            style={{
+              backgroundColor: sourceView === 'all' ? 'rgba(255,255,255,0.2)' : 'rgb(var(--surface-raised))',
+            }}
+          >
+            {filteredArticles.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSourceView('recent')}
+          className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+          style={{
+            backgroundColor:
+              sourceView === 'recent' ? 'rgb(var(--brand-500))' : 'transparent',
+            color: sourceView === 'recent' ? '#ffffff' : 'rgb(var(--muted))',
+          }}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          <span>Recent News (Marketaux & GDELT)</span>
+          <span
+            className="px-1.5 py-0.2 rounded-full text-[10px]"
+            style={{
+              backgroundColor: sourceView === 'recent' ? 'rgba(255,255,255,0.2)' : 'rgb(var(--surface-raised))',
+            }}
+          >
+            {recentArticles.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSourceView('delayed')}
+          className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+          style={{
+            backgroundColor:
+              sourceView === 'delayed' ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
+            color: sourceView === 'delayed' ? '#fbbf24' : 'rgb(var(--muted))',
+            border: sourceView === 'delayed' ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent',
+          }}
+        >
+          <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+          <span>Delayed News & Context (NewsData.io)</span>
+          <span
+            className="px-1.5 py-0.2 rounded-full text-[10px]"
+            style={{
+              backgroundColor: sourceView === 'delayed' ? 'rgba(245, 158, 11, 0.3)' : 'rgb(var(--surface-raised))',
+            }}
+          >
+            {delayedArticles.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Row 2: Category Filter Pills & Search Input */}
       <div
         className="p-3 rounded-xl border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3"
         style={{
@@ -446,7 +566,7 @@ function NewsAndMarketContent() {
         {/* Categories Tab Pill */}
         <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 text-xs">
           {[
-            { id: 'all', label: 'All News' },
+            { id: 'all', label: 'All Stories' },
             { id: 'portfolio', label: 'For Your Portfolio' },
             { id: 'direct', label: 'Direct Matches' },
             { id: 'sector', label: 'Sector News' },
@@ -458,8 +578,9 @@ function NewsAndMarketContent() {
               className="px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-150 cursor-pointer"
               style={{
                 backgroundColor:
-                  selectedCategory === tab.id ? 'rgb(var(--brand-500))' : 'transparent',
-                color: selectedCategory === tab.id ? '#ffffff' : 'rgb(var(--muted))',
+                  selectedCategory === tab.id ? 'rgb(var(--surface-raised))' : 'transparent',
+                color: selectedCategory === tab.id ? 'rgb(var(--foreground))' : 'rgb(var(--muted))',
+                border: selectedCategory === tab.id ? '1px solid rgb(var(--border))' : '1px solid transparent',
               }}
             >
               {tab.label}
@@ -503,7 +624,7 @@ function NewsAndMarketContent() {
           </div>
         </div>
       ) : filteredArticles.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {/* Featured Hero Story (when on default All tab without active search) */}
           {featuredArticle && (
             <motion.div
@@ -521,52 +642,143 @@ function NewsAndMarketContent() {
             </motion.div>
           )}
 
-          {/* Section Heading for Remaining News if Featured Story is Present */}
-          {featuredArticle && regularArticles.length > 0 && (
-            <div className="flex items-center justify-between pt-2">
-              <h2
-                className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2"
-                style={{ color: 'rgb(var(--foreground))' }}
-              >
-                <span>Latest Financial Stories</span>
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full border font-normal"
+          {/* SECTION A — Recent Financial News (Marketaux & GDELT) */}
+          {(sourceView === 'all' || sourceView === 'recent') && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: 'rgb(var(--border))' }}>
+                <div>
+                  <h2
+                    className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2"
+                    style={{ color: 'rgb(var(--foreground))' }}
+                  >
+                    <span>Recent Financial News</span>
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full border font-medium"
+                      style={{
+                        backgroundColor: 'rgb(var(--brand-500) / 0.1)',
+                        borderColor: 'rgb(var(--brand-500) / 0.25)',
+                        color: 'rgb(var(--brand-400))',
+                      }}
+                    >
+                      {recentArticles.length} stories · Marketaux & GDELT
+                    </span>
+                  </h2>
+                  <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
+                    Verified publication and indexing timestamps from Marketaux and GDELT 2.0.
+                  </p>
+                </div>
+              </div>
+
+              {recentArticles.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {regularRecentArticles.map((article, index) => (
+                    <motion.div
+                      key={article.article_id || `recent-${index}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                    >
+                      <NewsCard
+                        article={article}
+                        isFeatured={false}
+                        onExplainAi={setActiveArticleForAi}
+                        isExpandedReason={Boolean(expandedReasons[article.article_id])}
+                        onToggleReason={() => toggleReason(article.article_id)}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className="p-6 rounded-xl border text-center text-xs"
                   style={{
-                    backgroundColor: 'rgb(var(--surface-raised))',
+                    backgroundColor: 'rgb(var(--surface))',
                     borderColor: 'rgb(var(--border))',
                     color: 'rgb(var(--muted))',
                   }}
                 >
-                  {regularArticles.length} stories
-                </span>
-              </h2>
+                  <p>No recent articles from Marketaux or GDELT match this filter or are currently active.</p>
+                  {delayedArticles.length > 0 && (
+                    <p className="mt-1 font-medium text-amber-400">
+                      Broader market reports are available below in Delayed News & Market Context.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Grid Layout for News Cards */}
-          {regularArticles.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {regularArticles.map((article, index) => (
-                <motion.div
-                  key={article.article_id || index}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(index * 0.03, 0.3) }}
-                >
-                  <NewsCard
-                    article={article}
-                    isFeatured={false}
-                    onExplainAi={setActiveArticleForAi}
-                    isExpandedReason={Boolean(expandedReasons[article.article_id])}
-                    onToggleReason={() => toggleReason(article.article_id)}
-                  />
-                </motion.div>
-              ))}
+          {/* SECTION B — Delayed News & Market Context (NewsData.io Free) */}
+          {(sourceView === 'all' || sourceView === 'delayed') && delayedArticles.length > 0 && (
+            <div className="space-y-4 pt-4">
+              <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: 'rgb(var(--border))' }}>
+                <div>
+                  <h2
+                    className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2"
+                    style={{ color: 'rgb(var(--foreground))' }}
+                  >
+                    <span>Delayed News & Market Context</span>
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full border font-medium"
+                      style={{
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderColor: 'rgba(245, 158, 11, 0.25)',
+                        color: '#fbbf24',
+                      }}
+                    >
+                      {delayedArticles.length} stories · NewsData.io Free
+                    </span>
+                  </h2>
+                  <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
+                    Extended reporting for macro context and broader industry background.
+                  </p>
+                </div>
+              </div>
+
+              {/* Required Explanatory Notice Banner (Section 2) */}
+              <div
+                className="p-3.5 rounded-xl border flex items-start gap-3 text-xs"
+                style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                  borderColor: 'rgba(245, 158, 11, 0.25)',
+                  color: 'rgb(var(--foreground))',
+                }}
+              >
+                <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-amber-300">
+                    Delayed Feed Notice
+                  </p>
+                  <p className="text-[11px] leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
+                    NewsData.io&apos;s free feed may provide articles with an approximately 12-hour access delay. These reports are useful for broader context but should not be treated as real-time trading signals.
+                  </p>
+                </div>
+              </div>
+
+              {/* Grid of Delayed News Articles */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {regularDelayedArticles.map((article, index) => (
+                  <motion.div
+                    key={article.article_id || `delayed-${index}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                  >
+                    <NewsCard
+                      article={article}
+                      isFeatured={false}
+                      onExplainAi={setActiveArticleForAi}
+                      isExpandedReason={Boolean(expandedReasons[article.article_id])}
+                      onToggleReason={() => toggleReason(article.article_id)}
+                    />
+                  </motion.div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Load More News Action Bar */}
-          <div className="flex flex-col items-center justify-center pt-6 pb-4 gap-2">
+          {/* Load More News Action Bar & Accurate Provider Footer (Section 5) */}
+          <div className="flex flex-col items-center justify-center pt-6 pb-4 gap-2.5 text-center">
             {nextPage ? (
               <button
                 onClick={handleLoadMore}
@@ -592,17 +804,31 @@ function NewsAndMarketContent() {
               </button>
             ) : (
               <div
-                className="text-xs flex items-center justify-center gap-1.5 py-2 font-medium"
+                className="text-xs flex items-center justify-center gap-1.5 py-1.5 font-medium"
                 style={{ color: 'rgb(var(--muted))' }}
               >
                 <span>✓</span>
-                <span>All latest verified market stories loaded</span>
+                <span>
+                  {isCached
+                    ? 'Showing cached articles; new results are temporarily unavailable.'
+                    : "You've reached the end of available articles."}
+                </span>
               </div>
             )}
 
-            <span className="text-[11px]" style={{ color: 'rgb(var(--muted))' }}>
-              Showing {filteredArticles.length} verified financial stories from NewsData.io
-            </span>
+            {/* Accurate Provider Breakdown Footer */}
+            <div
+              className="flex flex-col sm:flex-row items-center gap-1.5 text-[11px]"
+              style={{ color: 'rgb(var(--muted))' }}
+            >
+              <span>
+                Showing {filteredArticles.length} financial articles
+              </span>
+              <span className="hidden sm:inline">·</span>
+              <span className="font-medium text-foreground/80">
+                Marketaux: {displayedProviderCounts.marketaux} · GDELT: {displayedProviderCounts.gdelt} · NewsData.io: {displayedProviderCounts.newsdata}
+              </span>
+            </div>
           </div>
         </div>
       ) : (
@@ -621,13 +847,14 @@ function NewsAndMarketContent() {
           <p className="text-xs max-w-md leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
             {searchQuery
               ? `No articles matched your search query "${searchQuery}". Try searching for another ticker or reset your filters.`
-              : 'No articles currently match this category filter. Switch to "All News" or "Market News" to view broader market coverage.'}
+              : 'No articles currently match this filter. Switch to "All Sources" or reset your category filters to view broader market coverage.'}
           </p>
-          {(searchQuery || selectedCategory !== 'all') && (
+          {(searchQuery || selectedCategory !== 'all' || sourceView !== 'all') && (
             <button
               onClick={() => {
                 setSearchQuery('');
                 setSelectedCategory('all');
+                setSourceView('all');
               }}
               className="px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm mt-2 transition-all hover:opacity-95 cursor-pointer"
               style={{
@@ -640,7 +867,7 @@ function NewsAndMarketContent() {
         </div>
       )}
 
-      {/* Grounded News Explainer Modal (Zero technical Gemini model details exposed) */}
+      {/* Grounded News Explainer Modal */}
       {activeArticleForAi && (
         <NewsExplanationModal
           key={activeArticleForAi.article_id}

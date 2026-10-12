@@ -21,6 +21,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import type { PersonalizedNewsArticle } from '@/types/news';
+import { resolveArticleTemporalInfo } from '@/lib/news/temporalUtils';
 
 interface NewsExplanationModalProps {
   article: PersonalizedNewsArticle;
@@ -32,6 +33,8 @@ export function NewsExplanationModal({ article, onClose }: NewsExplanationModalP
   const [explanation, setExplanation] = useState<string | null>(null);
   const [source, setSource] = useState<'gemini' | 'deterministic_fallback'>('deterministic_fallback');
   const [error, setError] = useState<string | null>(null);
+
+  const temporalInfo = article.temporal_info || resolveArticleTemporalInfo(article);
 
   useEffect(() => {
     let isMounted = true;
@@ -49,6 +52,9 @@ export function NewsExplanationModal({ article, onClose }: NewsExplanationModalP
               pubDate: article.pubDate,
               description: article.description,
               link: article.link,
+              source_provider: article.source_provider,
+              is_delayed_feed: temporalInfo.is_delayed_feed,
+              timestamp_display: temporalInfo.display_label,
             },
             query: 'Explain why this news is relevant to my portfolio, what it means for Indian markets, and what facts should be verified further.',
           }),
@@ -79,7 +85,7 @@ export function NewsExplanationModal({ article, onClose }: NewsExplanationModalP
     return () => {
       isMounted = false;
     };
-  }, [article]);
+  }, [article, temporalInfo.display_label, temporalInfo.is_delayed_feed]);
 
   return (
     <AnimatePresence>
@@ -145,13 +151,18 @@ export function NewsExplanationModal({ article, onClose }: NewsExplanationModalP
                   <h4 className="font-semibold leading-snug" style={{ color: 'rgb(var(--foreground))' }}>
                     {article.title}
                   </h4>
-                  <p className="text-[11px]" style={{ color: 'rgb(var(--muted))' }}>
-                    {article.source_name} · {new Date(article.pubDate).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] pt-0.5" style={{ color: 'rgb(var(--muted))' }}>
+                    <span className="font-bold text-foreground">{article.source_name}</span>
+                    <span>·</span>
+                    <span>{temporalInfo.display_label}</span>
+                    <span>·</span>
+                    <span>via {temporalInfo.provider_display_name}</span>
+                  </div>
+                  {temporalInfo.is_delayed_feed && (
+                    <p className="text-[10px] text-amber-400 font-medium pt-1">
+                      Delayed Feed: NewsData.io Free feed provides ~12-hour delayed news for broader market context.
+                    </p>
+                  )}
                 </div>
                 <a
                   href={article.link}

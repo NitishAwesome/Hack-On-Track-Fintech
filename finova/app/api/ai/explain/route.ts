@@ -79,6 +79,8 @@ export async function POST(request: Request) {
     const articleSource = typeof article.source_name === 'string' ? sanitizeUntrustedInput(article.source_name) : 'Financial Media';
     const articlePubDate = typeof article.pubDate === 'string' ? article.pubDate : '';
     const articleDesc = typeof article.description === 'string' ? sanitizeUntrustedInput(article.description) : '';
+    const isDelayedFeed = Boolean(article.is_delayed_feed);
+    const timestampDisplay = typeof article.timestamp_display === 'string' ? sanitizeUntrustedInput(article.timestamp_display) : articlePubDate;
 
     // Check if article matches any holding in user's verified portfolio
     let verifiedMatchedHolding: {
@@ -153,11 +155,15 @@ Strict Regulatory & Safety Rules:
 3. NEVER predict stock market movements or claim guaranteed returns.
 4. Keep the explanation under 3-4 clear, professional sentences.
 5. Emphasize Indian financial context (SEBI, NSE/BSE, RBI).
+6. Delayed articles must NEVER be described as breaking news or real-time alerts. If delayed, treat as broader background context.
+7. GDELT indexing timestamps represent indexing/discovery time, not guaranteed publication time.
+8. NEVER derive BUY/SELL/HOLD instructions solely from headlines.
 
 Verified Article Context:
 - Headline: "${articleTitle}"
 - Publisher: ${articleSource}
-- Publication Date: ${articlePubDate}
+- Publication / Indexing Time: ${timestampDisplay || articlePubDate}
+- Feed Timing Status: ${isDelayedFeed ? 'DELAYED FEED (~12-hour access delay from NewsData.io Free). Provide broader contextual analysis only; do NOT describe as breaking or real-time news.' : 'Standard feed.'}
 - Excerpt: "${articleDesc.slice(0, 300)}"
 
 Verified Investor Portfolio Context:

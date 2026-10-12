@@ -106,14 +106,16 @@ export function PortfolioIntelligenceHub() {
                 borderColor: 'rgb(var(--border))',
                 color: meta.provider === 'gemini' ? 'rgb(var(--brand-500))' : 'rgb(var(--muted))',
               }}
-              title={`Active Engine: ${meta.model}`}
+              title="Active Engine: AI Portfolio Intelligence"
             >
               {meta.provider === 'gemini' ? (
                 <Cpu className="w-3.5 h-3.5" />
               ) : (
                 <Database className="w-3.5 h-3.5" />
               )}
-              <span className="font-medium">{meta.model}</span>
+              <span className="font-medium">
+                {meta.provider === 'gemini' ? 'AI Insight Engine' : 'Deterministic Engine'}
+              </span>
             </div>
           )}
 

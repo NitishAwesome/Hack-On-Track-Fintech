@@ -363,7 +363,7 @@ export async function POST(request: Request) {
             text: cached.insight_text,
             generated_at: cached.created_at,
             cached: true,
-            model: 'Gemini 1.5 Flash (Cached)',
+            model: 'AI Insight (Cached)',
           },
         });
       }
@@ -479,7 +479,7 @@ No specific stock names. Educational tone.`,
           text,
           generated_at: new Date().toISOString(),
           cached: false,
-          model: 'Gemini 1.5 Flash',
+          model: 'AI Insight Engine',
         },
       });
     } catch (err) {
