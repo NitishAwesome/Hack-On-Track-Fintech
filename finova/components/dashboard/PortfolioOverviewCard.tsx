@@ -57,180 +57,198 @@ interface DualWaveLineGraphProps {
 }
 
 function DualWaveLineGraph({ items, activeIndex, onHoverIndex }: DualWaveLineGraphProps) {
-  const item1 = items[0] || null;
-  const item2 = items[1] || null;
+  // Take all non-empty items up to 5 waves
+  const waveItems = items.filter((item) => item.value > 0 || item.percent > 0).slice(0, 5);
+  const N = waveItems.length;
 
-  const color1 = item1?.color || '#38bdf8';
-  const color2 = item2?.color || '#a855f7';
+  if (N === 0) {
+    return null;
+  }
 
-  const pct1 = item1 ? item1.percent : 0;
-  const pct2 = item2 ? item2.percent : 0;
+  const baselineY = 118;
 
-  // Compute smooth curve y positions dynamically based on percentage
-  const normPct1 = Math.min(100, Math.max(10, pct1));
-  const yEnd1 = Math.max(32, Math.min(60, Math.round(70 - (normPct1 / 100) * 40)));
-  const yPeak1 = Math.max(26, yEnd1 - 5);
-  const yDip1 = Math.min(98, yEnd1 + 36);
+  // Compute layout & coordinates for each item dynamically
+  const curves = waveItems.map((item, idx) => {
+    const isHovered = activeIndex === idx;
+    const color = item.color || '#38bdf8';
+    const percent = item.percent;
 
-  const normPct2 = Math.min(50, Math.max(4, pct2));
-  const yEnd2 = Math.max(yEnd1 + 26, Math.min(96, Math.round(104 - (normPct2 / 50) * 22)));
-  const yPeak2 = Math.max(yPeak1 + 22, yEnd2 - 4);
-  const yDip2 = Math.min(108, yEnd2 + 18);
+    // Distribute end y-coordinates cleanly without collision
+    let yEnd: number;
+    if (N === 1) {
+      yEnd = 52;
+    } else if (N === 2) {
+      yEnd = idx === 0 ? 42 : 78;
+    } else {
+      const step = Math.min(30, Math.max(18, 72 / (N - 1)));
+      yEnd = Math.round(32 + idx * step);
+    }
 
-  const baselineY = 116;
+    const yPeak = Math.max(22, yEnd - Math.max(4, 7 - idx));
+    const yDip = Math.min(baselineY - 8, yEnd + Math.max(12, 28 - idx * 4));
 
-  // Seamless C1-continuous cubic bezier spline paths
-  const d1 = `M 14 ${baselineY} L 62 ${baselineY} C 92 ${baselineY}, 114 ${yPeak1}, 138 ${yPeak1} C 160 ${yPeak1}, 170 ${yDip1}, 188 ${yDip1} C 215 ${yDip1}, 242 ${yEnd1}, 268 ${yEnd1}`;
-  const d1Area = `${d1} L 268 ${baselineY} L 14 ${baselineY} Z`;
+    // Stagger peak and dip horizontally for an organic liquid wave aesthetic
+    const peakX = 136 + idx * 4;
+    const dipX = 186 + idx * 4;
+    const endX = 268;
 
-  const d2 = `M 14 ${baselineY} L 62 ${baselineY} C 92 ${baselineY}, 114 ${yPeak2}, 138 ${yPeak2} C 160 ${yPeak2}, 170 ${yDip2}, 188 ${yDip2} C 215 ${yDip2}, 242 ${yEnd2}, 268 ${yEnd2}`;
-  const d2Area = `${d2} L 268 ${baselineY} L 14 ${baselineY} Z`;
+    const d = `M 14 ${baselineY} L 62 ${baselineY} C 92 ${baselineY}, ${peakX - 22} ${yPeak}, ${peakX} ${yPeak} C ${peakX + 22} ${yPeak}, ${dipX - 18} ${yDip}, ${dipX} ${yDip} C ${dipX + 26} ${yDip}, 242 ${yEnd}, ${endX} ${yEnd}`;
+    const dArea = `${d} L ${endX} ${baselineY} L 14 ${baselineY} Z`;
 
-  const isHov1 = activeIndex === 0;
-  const isHov2 = activeIndex === 1;
+    // Left label position
+    let labelY: number;
+    if (N === 1) {
+      labelY = 56;
+    } else if (N === 2) {
+      labelY = idx === 0 ? 44 : 70;
+    } else {
+      const labelStep = Math.min(26, Math.max(17, 72 / (N - 1)));
+      labelY = Math.round(30 + idx * labelStep);
+    }
+
+    const rawName = item.name || `Item ${idx + 1}`;
+    const displayName = rawName.length > 12 ? rawName.slice(0, 11) + '…' : rawName;
+
+    return {
+      item,
+      idx,
+      color,
+      percent,
+      isHovered,
+      yEnd,
+      yPeak,
+      yDip,
+      peakX,
+      dipX,
+      endX,
+      d,
+      dArea,
+      labelY,
+      rawName,
+      displayName,
+    };
+  });
 
   return (
     <div className="flex-1 w-full min-w-0 flex flex-col justify-center">
       <div className="relative w-full aspect-[22/10] sm:aspect-[24/11] max-h-[165px]">
         <svg
-          viewBox="0 0 335 138"
+          viewBox="0 0 338 140"
           className="w-full h-full overflow-visible select-none"
           preserveAspectRatio="xMidYMid meet"
         >
           <defs>
-            <linearGradient id="wave1Stroke" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor={color1} stopOpacity="0.25" />
-              <stop offset="35%" stopColor={color1} stopOpacity="0.85" />
-              <stop offset="100%" stopColor={color1} stopOpacity="1" />
-            </linearGradient>
-            <linearGradient id="wave1Fill" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor={color1} stopOpacity={isHov1 ? "0.38" : "0.24"} />
-              <stop offset="85%" stopColor={color1} stopOpacity="0.03" />
-              <stop offset="100%" stopColor={color1} stopOpacity="0.0" />
-            </linearGradient>
+            {curves.map(({ color, idx, isHovered }) => (
+              <React.Fragment key={`defs-${idx}`}>
+                <linearGradient id={`waveStroke_${idx}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+                  <stop offset="35%" stopColor={color} stopOpacity="0.85" />
+                  <stop offset="100%" stopColor={color} stopOpacity="1" />
+                </linearGradient>
 
-            <linearGradient id="wave2Stroke" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor={color2} stopOpacity="0.2" />
-              <stop offset="35%" stopColor={color2} stopOpacity="0.8" />
-              <stop offset="100%" stopColor={color2} stopOpacity="1" />
-            </linearGradient>
-            <linearGradient id="wave2Fill" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor={color2} stopOpacity={isHov2 ? "0.32" : "0.18"} />
-              <stop offset="85%" stopColor={color2} stopOpacity="0.02" />
-              <stop offset="100%" stopColor={color2} stopOpacity="0.0" />
-            </linearGradient>
+                <linearGradient id={`waveFill_${idx}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor={color} stopOpacity={isHovered ? "0.38" : "0.20"} />
+                  <stop offset="85%" stopColor={color} stopOpacity="0.02" />
+                  <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+                </linearGradient>
 
-            <filter id="glowWave1" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color1} floodOpacity={isHov1 ? "0.95" : "0.65"} />
-            </filter>
-            <filter id="glowWave2" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color2} floodOpacity={isHov2 ? "0.95" : "0.65"} />
-            </filter>
+                <filter id={`waveGlow_${idx}`} x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow
+                    dx="0"
+                    dy="0"
+                    stdDeviation="3"
+                    floodColor={color}
+                    floodOpacity={isHovered ? "0.95" : "0.6"}
+                  />
+                </filter>
+              </React.Fragment>
+            ))}
           </defs>
 
           {/* Background Grid Lines */}
-          <line x1="12" y1={baselineY} x2="325" y2={baselineY} stroke="rgb(var(--border) / 0.55)" strokeWidth="1" />
-          <line x1="12" y1="70" x2="325" y2="70" stroke="rgb(var(--border) / 0.22)" strokeWidth="1" strokeDasharray="3 3" />
+          <line x1="12" y1={baselineY} x2="328" y2={baselineY} stroke="rgb(var(--border) / 0.55)" strokeWidth="1" />
+          <line x1="12" y1="70" x2="328" y2="70" stroke="rgb(var(--border) / 0.22)" strokeWidth="1" strokeDasharray="3 3" />
 
-          {/* Left Category Labels (as positioned in the design) */}
-          {item1 && (
+          {/* Left Category Labels */}
+          {curves.map(({ idx, color, labelY, displayName, rawName, isHovered }) => (
             <g
-              transform="translate(14, 46)"
+              key={`label-${idx}`}
+              transform={`translate(14, ${labelY})`}
               className="cursor-pointer transition-opacity"
-              onMouseEnter={() => onHoverIndex(0)}
+              onMouseEnter={() => onHoverIndex(idx)}
               onMouseLeave={() => onHoverIndex(null)}
-              opacity={activeIndex === null || isHov1 ? 1 : 0.45}
+              opacity={activeIndex === null || isHovered ? 1 : 0.35}
             >
-              <circle cx="4" cy="4" r="3.5" fill={color1} />
-              <text x="13" y="7.5" fill="rgb(var(--foreground))" fontSize="11" fontWeight="600" letterSpacing="-0.1px">
-                {item1.name || 'Asset 1'}
-              </text>
-            </g>
-          )}
-
-          {item2 && (
-            <g
-              transform="translate(14, 70)"
-              className="cursor-pointer transition-opacity"
-              onMouseEnter={() => onHoverIndex(1)}
-              onMouseLeave={() => onHoverIndex(null)}
-              opacity={activeIndex === null || isHov2 ? 1 : 0.45}
-            >
-              <circle cx="4" cy="4" r="3.5" fill={color2} />
-              <text x="13" y="7.5" fill="rgb(var(--foreground))" fontSize="11" fontWeight="600" letterSpacing="-0.1px">
-                {item2.name || 'Asset 2'}
-              </text>
-            </g>
-          )}
-
-          {/* Secondary Wave Area & Path (Wave 2) */}
-          {item2 && (
-            <g
-              className="cursor-pointer transition-all duration-200"
-              onMouseEnter={() => onHoverIndex(1)}
-              onMouseLeave={() => onHoverIndex(null)}
-              opacity={activeIndex === null || isHov2 ? 1 : 0.35}
-            >
-              <path d={d2Area} fill="url(#wave2Fill)" />
-              <path
-                d={d2}
-                fill="none"
-                stroke="url(#wave2Stroke)"
-                strokeWidth={isHov2 ? 3 : 2.2}
-                strokeLinecap="round"
-                filter="url(#glowWave2)"
-              />
-              <circle cx="268" cy={yEnd2} r="3.5" fill={color2} />
-              <circle cx="268" cy={yEnd2} r={isHov2 ? 6.5 : 5} fill="none" stroke={color2} strokeWidth="1" opacity="0.45" />
+              <title>{rawName}</title>
+              <circle cx="4" cy="4" r="3.5" fill={color} />
               <text
-                x="278"
-                y={yEnd2 + 4}
-                fill={color2}
+                x="13"
+                y="7.5"
+                fill="rgb(var(--foreground))"
                 fontSize="11"
-                fontWeight="700"
-                letterSpacing="-0.2px"
+                fontWeight="600"
+                letterSpacing="-0.1px"
               >
-                {item2.percent.toFixed(1)}%
+                {displayName}
               </text>
             </g>
-          )}
+          ))}
 
-          {/* Primary Wave Area & Path (Wave 1) */}
-          {item1 && (
-            <g
-              className="cursor-pointer transition-all duration-200"
-              onMouseEnter={() => onHoverIndex(0)}
-              onMouseLeave={() => onHoverIndex(null)}
-              opacity={activeIndex === null || isHov1 ? 1 : 0.35}
-            >
-              <path d={d1Area} fill="url(#wave1Fill)" />
-              <path
-                d={d1}
-                fill="none"
-                stroke="url(#wave1Stroke)"
-                strokeWidth={isHov1 ? 3 : 2.4}
-                strokeLinecap="round"
-                filter="url(#glowWave1)"
-              />
-              <circle cx="268" cy={yEnd1} r="4" fill={color1} />
-              <circle cx="268" cy={yEnd1} r={isHov1 ? 7.5 : 5.5} fill="none" stroke={color1} strokeWidth="1" opacity="0.5" />
-              <text
-                x="278"
-                y={yEnd1 + 4}
-                fill={color1}
-                fontSize="11"
-                fontWeight="700"
-                letterSpacing="-0.2px"
+          {/* Wave Area Fills & Lines (Rendered from bottom to top) */}
+          {[...curves].reverse().map(({ idx, color, d, dArea, yEnd, endX, percent, isHovered }) => {
+            const isDimmed = activeIndex !== null && !isHovered;
+            return (
+              <g
+                key={`wave-${idx}`}
+                className="cursor-pointer transition-all duration-200"
+                onMouseEnter={() => onHoverIndex(idx)}
+                onMouseLeave={() => onHoverIndex(null)}
+                opacity={isDimmed ? 0.3 : 1}
               >
-                {item1.percent.toFixed(1)}%
-              </text>
-            </g>
-          )}
+                {/* Area Gradient Fill */}
+                <path d={dArea} fill={`url(#waveFill_${idx})`} />
+
+                {/* Spline Stroke */}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={`url(#waveStroke_${idx})`}
+                  strokeWidth={isHovered ? 3.2 : 2.2}
+                  strokeLinecap="round"
+                  filter={`url(#waveGlow_${idx})`}
+                />
+
+                {/* End Glowing Node */}
+                <circle cx={endX} cy={yEnd} r={isHovered ? 4.5 : 3.5} fill={color} />
+                <circle
+                  cx={endX}
+                  cy={yEnd}
+                  r={isHovered ? 7.5 : 5.5}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="1.2"
+                  opacity={isHovered ? 0.8 : 0.45}
+                />
+
+                {/* Percentage Badge */}
+                <text
+                  x={endX + 10}
+                  y={yEnd + 4}
+                  fill={color}
+                  fontSize="11"
+                  fontWeight="700"
+                  letterSpacing="-0.2px"
+                >
+                  {percent.toFixed(1)}%
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
 
-      {/* Pill Chips for remaining/all categories if > 2 */}
-      {items.length > 2 && (
+      {/* Pill Chips for all categories */}
+      {items.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 pt-1.5 px-1 max-h-[52px] overflow-y-auto no-scrollbar">
           {items.map((item, idx) => {
             const isActive = activeIndex === idx;

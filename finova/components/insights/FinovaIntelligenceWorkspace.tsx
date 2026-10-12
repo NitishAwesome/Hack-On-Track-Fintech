@@ -36,9 +36,11 @@ export function FinovaIntelligenceWorkspace() {
   const [sidebarOpenMobile, setSidebarOpenMobile] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasInitializedRef = useRef(false);
 
   // 1. Fetch Conversations
   const {
@@ -63,10 +65,13 @@ export function FinovaIntelligenceWorkspace() {
   );
   const persistenceStatus: string = convData?.persistenceStatus || 'persisted';
 
-  // If activeConversationId not set and we have conversations, select the first one
+  // If activeConversationId not set and we have conversations, select the first one on initial load only
   useEffect(() => {
-    if (!activeConversationId && conversations.length > 0) {
-      setActiveConversationId(conversations[0].id);
+    if (!hasInitializedRef.current && conversations.length > 0) {
+      hasInitializedRef.current = true;
+      if (!activeConversationId) {
+        setActiveConversationId(conversations[0].id);
+      }
     }
   }, [conversations, activeConversationId]);
 
@@ -102,10 +107,31 @@ export function FinovaIntelligenceWorkspace() {
   }, [localMessages, isGenerating]);
 
   // 3. New Chat Handler
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
+    // Immediately clear active chat and messages to show the clean welcome workspace
     setActiveConversationId(undefined);
     setLocalMessages([]);
     setSidebarOpenMobile(false);
+
+    try {
+      setIsCreatingNewChat(true);
+      const res = await fetch('/api/ai/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'New Research Chat' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.conversation?.id) {
+          setActiveConversationId(data.conversation.id);
+          queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+        }
+      }
+    } catch {
+      // If network fails, stay in draft new chat mode (activeConversationId = undefined)
+    } finally {
+      setIsCreatingNewChat(false);
+    }
   };
 
   // 4. Send Message Handler
@@ -231,8 +257,13 @@ export function FinovaIntelligenceWorkspace() {
         method: 'DELETE',
       });
       if (activeConversationId === id) {
-        setActiveConversationId(undefined);
-        setLocalMessages([]);
+        const remaining = conversations.filter((c) => c.id !== id);
+        if (remaining.length > 0) {
+          setActiveConversationId(remaining[0].id);
+        } else {
+          setActiveConversationId(undefined);
+          setLocalMessages([]);
+        }
       }
       refetchConvs();
     } catch {
@@ -324,6 +355,7 @@ export function FinovaIntelligenceWorkspace() {
                 setSidebarOpenMobile(false);
               }}
               onNewChat={handleNewChat}
+              isCreatingNewChat={isCreatingNewChat}
               onRenameConversation={handleRename}
               onDeleteConversation={handleDelete}
               isLoading={convsLoading}

@@ -23,6 +23,7 @@ import {
   X,
   Check,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import type { AIChatConversation } from '@/types/chat';
 
@@ -31,6 +32,7 @@ interface ChatSidebarProps {
   activeConversationId?: string;
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
+  isCreatingNewChat?: boolean;
   onRenameConversation: (id: string, newTitle: string) => void;
   onDeleteConversation: (id: string) => void;
   isLoading?: boolean;
@@ -42,6 +44,7 @@ export function ChatSidebar({
   activeConversationId,
   onSelectConversation,
   onNewChat,
+  isCreatingNewChat = false,
   onRenameConversation,
   onDeleteConversation,
   isLoading = false,
@@ -95,10 +98,20 @@ export function ChatSidebar({
         <button
           type="button"
           onClick={onNewChat}
-          className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 bg-brand text-white hover:opacity-90 transition-all cursor-pointer shadow-xs"
+          disabled={isCreatingNewChat}
+          className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 bg-brand text-white hover:opacity-90 transition-all cursor-pointer shadow-xs disabled:opacity-75"
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New Chat</span>
+          {isCreatingNewChat ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Creating…</span>
+            </>
+          ) : (
+            <>
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Chat</span>
+            </>
+          )}
         </button>
         {onCloseMobile && (
           <button

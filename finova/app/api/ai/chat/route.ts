@@ -15,6 +15,7 @@ import {
   saveConversationMessage,
   getConversationMessages,
   generateDeterministicTitle,
+  renameUserConversation,
 } from '@/lib/ai/chatPersistence';
 import { resolveQuestionContext } from '@/lib/ai/chatContextResolver';
 import { generateChatResponse } from '@/lib/ai/chatIntelligenceEngine';
@@ -84,6 +85,13 @@ export async function POST(req: Request) {
           { error: 'Conversation not found or access denied.' },
           { status: 404 }
         );
+      }
+
+      // If conversation has placeholder title, update it from first message
+      if (currentConversation.title === 'New Research Chat' || !currentConversation.title) {
+        const autoTitle = generateDeterministicTitle(rawMessage);
+        await renameUserConversation(conversationId, userId, autoTitle);
+        currentConversation.title = autoTitle;
       }
     } else {
       const autoTitle = generateDeterministicTitle(rawMessage);
