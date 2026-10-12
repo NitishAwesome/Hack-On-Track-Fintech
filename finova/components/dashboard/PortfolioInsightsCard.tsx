@@ -2,7 +2,16 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Lightbulb, TrendingDown, TrendingUp, Building2, ShieldCheck, ArrowRight } from 'lucide-react';
+import {
+  Lightbulb,
+  ArrowRight,
+  PieChart,
+  ShieldAlert,
+  ShieldCheck,
+  Clock,
+  Layers,
+  Award,
+} from 'lucide-react';
 import type { HoldingWithMetrics, PortfolioSummary } from '@/types/portfolio';
 import type { BrokerAccountRow } from '@/types/database';
 
@@ -22,25 +31,36 @@ export function PortfolioInsightsCard({
   if (isLoading) {
     return (
       <div
-        className="p-5 sm:p-6 rounded-2xl border flex flex-col justify-between h-[380px] animate-pulse bg-surface"
+        className="p-5 sm:p-6 rounded-2xl border flex flex-col justify-between h-full min-h-[360px] animate-pulse bg-surface"
         style={{ borderColor: 'rgb(var(--border))' }}
       >
         <div className="h-4 w-32 bg-muted/20 rounded" />
-        <div className="h-24 bg-muted/20 rounded-xl" />
-        <div className="space-y-2">
-          <div className="h-4 bg-muted/20 rounded" />
-          <div className="h-4 bg-muted/20 rounded" />
+        <div className="space-y-3 my-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-10 bg-muted/20 rounded-xl" />
+          ))}
         </div>
       </div>
     );
   }
 
-  // Derive top sector & concentration
+  // Compute portfolio metrics
+  const totalVal = summary?.total_current_value ?? holdings.reduce((sum, h) => sum + (h.current_value ?? h.invested_value ?? 0), 0);
+
+  // 1. Largest Holding
+  const sortedHoldings = [...holdings].sort((a, b) => {
+    const valA = a.current_value ?? a.invested_value ?? 0;
+    const valB = b.current_value ?? b.invested_value ?? 0;
+    return valB - valA;
+  });
+  const largestHolding = sortedHoldings[0];
+  const largestVal = largestHolding ? (largestHolding.current_value ?? largestHolding.invested_value ?? 0) : 0;
+  const largestPct = totalVal > 0 ? (largestVal / totalVal) * 100 : 0;
+
+  // 2. Top Sector
   const sectorMap = new Map<string, number>();
-  let totalVal = 0;
   for (const h of holdings) {
     const val = h.current_value ?? h.invested_value ?? 0;
-    totalVal += val;
     const s = h.sector || 'Others';
     sectorMap.set(s, (sectorMap.get(s) || 0) + val);
   }
@@ -55,22 +75,25 @@ export function PortfolioInsightsCard({
     }
   }
 
-  const isConcentrated = topSectorPct > 35;
-  const pnl = summary?.total_absolute_return ?? 0;
-  const isLoss = pnl < 0;
+  // 3. Diversification Status
+  const sectorCount = sectorMap.size;
+  const isWellDiversified = sectorCount >= 4 && holdings.length >= 5;
+
+  // 4. Concentration Risk
+  const isHighConcentration = largestPct > 30 || topSectorPct > 45;
 
   return (
     <div
-      className="p-5 sm:p-6 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface shadow-xs"
+      className="h-full p-5 sm:p-6 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface shadow-xs"
       style={{
         borderColor: 'rgb(var(--border))',
       }}
     >
       <div>
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3.5">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-brand animate-pulse" />
+            <Lightbulb className="w-4 h-4 text-brand" />
             <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
               Portfolio Insights
             </h2>
@@ -79,80 +102,135 @@ export function PortfolioInsightsCard({
             href="/analysis"
             className="text-xs font-semibold text-brand hover:underline flex items-center gap-1 group"
           >
-            <span>View Detailed Analysis</span>
+            <span>Investment X-Ray</span>
             <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </div>
 
-        {/* Highlight Alert Box */}
-        <div
-          className="p-3.5 rounded-xl border mb-3 flex items-start gap-3 transition-colors"
-          style={{
-            backgroundColor: isConcentrated ? 'rgba(245, 158, 11, 0.08)' : 'rgba(16, 185, 129, 0.08)',
-            borderColor: isConcentrated ? 'rgba(245, 158, 11, 0.25)' : 'rgba(16, 185, 129, 0.25)',
-          }}
-        >
-          <div
-            className="w-7 h-7 rounded-lg shrink-0 flex items-center justify-center"
-            style={{
-              backgroundColor: isConcentrated ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-              color: isConcentrated ? '#F59E0B' : '#10B981',
-            }}
-          >
-            <Lightbulb className="w-4 h-4" />
-          </div>
-          <div className="space-y-0.5 text-xs">
-            <p className="font-bold text-foreground">
-              {isConcentrated
-                ? `High Concentration in ${topSector} (${topSectorPct.toFixed(1)}%)`
-                : `Balanced Exposure across ${sectorMap.size} Sectors`}
-            </p>
-            <p className="text-muted leading-relaxed">
-              {isConcentrated
-                ? `Your portfolio is concentrated in ${topSector} (${topSectorPct.toFixed(1)}% of value), which is higher than typical diversification levels. Consider spreading across more sectors to manage risk.`
-                : `Your investments show healthy diversification across primary industries without extreme single-sector bias.`}
-            </p>
-          </div>
-        </div>
-
-        {/* Insight Checklist */}
+        {/* 5 Concise Actionable Observations */}
         <div className="space-y-2.5">
-          {/* P&L Commentary */}
-          <div className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-surface-raised/60 transition-colors">
-            <div
-              className="w-6 h-6 rounded-md shrink-0 flex items-center justify-center mt-0.5"
-              style={{
-                backgroundColor: isLoss ? 'rgba(244, 63, 94, 0.12)' : 'rgba(16, 185, 129, 0.12)',
-                color: isLoss ? '#F43F5E' : '#10B981',
-              }}
+          {/* Observation 1: Largest Holding */}
+          <div className="p-2.5 rounded-xl border border-border/70 bg-surface-raised/40 flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0">
+                <Award className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+                  Largest Holding
+                </span>
+                <span className="text-xs font-bold text-foreground truncate block">
+                  {largestHolding ? `${largestHolding.symbol} (${largestHolding.name})` : 'None recorded'}
+                </span>
+              </div>
+            </div>
+            <span className="text-xs font-extrabold text-foreground tabular-nums shrink-0">
+              {largestHolding ? `${largestPct.toFixed(1)}%` : '0%'}
+            </span>
+          </div>
+
+          {/* Observation 2: Top Sector */}
+          <div className="p-2.5 rounded-xl border border-border/70 bg-surface-raised/40 flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center shrink-0">
+                <PieChart className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+                  Top Sector
+                </span>
+                <span className="text-xs font-bold text-foreground truncate block">
+                  {topSector}
+                </span>
+              </div>
+            </div>
+            <span className="text-xs font-extrabold text-foreground tabular-nums shrink-0">
+              {topSectorPct > 0 ? `${topSectorPct.toFixed(1)}%` : '0%'}
+            </span>
+          </div>
+
+          {/* Observation 3: Diversification */}
+          <div className="p-2.5 rounded-xl border border-border/70 bg-surface-raised/40 flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <Layers className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+                  Diversification
+                </span>
+                <span className="text-xs font-semibold text-foreground truncate block">
+                  {holdings.length} {holdings.length === 1 ? 'asset' : 'assets'} · {sectorCount} {sectorCount === 1 ? 'sector' : 'sectors'} · {brokers.length} {brokers.length === 1 ? 'broker' : 'brokers'}
+                </span>
+              </div>
+            </div>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                isWellDiversified
+                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                  : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+              }`}
             >
-              {isLoss ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
-            </div>
-            <p className="text-xs text-muted leading-snug">
-              {isLoss
-                ? `Portfolio is down ${Math.abs(summary?.total_absolute_return_pct ?? 0).toFixed(2)}% primarily due to recent pullbacks in ${topSector}.`
-                : `Portfolio returns stand at +${(summary?.total_absolute_return_pct ?? 0).toFixed(2)}% with positive momentum.`}
-            </p>
+              {isWellDiversified ? 'Healthy' : 'Developing'}
+            </span>
           </div>
 
-          {/* Broker Footprint */}
-          <div className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-surface-raised/60 transition-colors">
-            <div className="w-6 h-6 rounded-md shrink-0 flex items-center justify-center mt-0.5 bg-blue-500/10 text-blue-400">
-              <Building2 className="w-3.5 h-3.5" />
+          {/* Observation 4: Concentration Risk */}
+          <div className="p-2.5 rounded-xl border border-border/70 bg-surface-raised/40 flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                  isHighConcentration
+                    ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                }`}
+              >
+                {isHighConcentration ? (
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                ) : (
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+                  Concentration Risk
+                </span>
+                <span className="text-xs font-semibold text-foreground truncate block">
+                  {isHighConcentration
+                    ? `Heavy allocation in ${topSector}`
+                    : 'Balanced weight distribution'}
+                </span>
+              </div>
             </div>
-            <p className="text-xs text-muted leading-snug">
-              You have {holdings.length} {holdings.length === 1 ? 'holding' : 'holdings'} consolidated across {brokers.length} {brokers.length === 1 ? 'broker account' : 'broker accounts'}.
-            </p>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                isHighConcentration
+                  ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                  : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+              }`}
+            >
+              {isHighConcentration ? 'Elevated' : 'Low'}
+            </span>
           </div>
 
-          {/* Defensive suggestion */}
-          <div className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-surface-raised/60 transition-colors">
-            <div className="w-6 h-6 rounded-md shrink-0 flex items-center justify-center mt-0.5 bg-emerald-500/10 text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" />
+          {/* Observation 5: Quote Freshness */}
+          <div className="p-2.5 rounded-xl border border-border/70 bg-surface-raised/40 flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center shrink-0">
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+                  Quote Freshness
+                </span>
+                <span className="text-xs font-semibold text-foreground truncate block">
+                  Live market prices synced with NSE/BSE
+                </span>
+              </div>
             </div>
-            <p className="text-xs text-muted leading-snug">
-              Consider exploring defensive assets like REITs, Sovereign Gold Bonds, or Government Securities for portfolio stability.
-            </p>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">
+              Live Feed
+            </span>
           </div>
         </div>
       </div>

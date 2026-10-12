@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, ChevronRight, Hash } from 'lucide-react';
 import { EXPANDED_NSE_STOCKS, type CatalogInstrument } from '@/lib/market/stockCatalog';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
 interface StockSearchInputProps {
   onSelectStock: (stock: { symbol: string; name: string; exchange: string; isin: string; sector: string; industry: string }) => void;
@@ -184,9 +185,7 @@ export function StockSearchInput({ onSelectStock, className = '' }: StockSearchI
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-surface-raised border border-border flex items-center justify-center shrink-0 text-brand font-bold text-xs">
-                        {item.symbol.slice(0, 2)}
-                      </div>
+                      <CompanyLogo symbol={item.symbol} name={item.name} size="sm" />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-sm text-foreground">{item.symbol}</span>

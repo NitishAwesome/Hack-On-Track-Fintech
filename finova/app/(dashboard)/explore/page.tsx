@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { InvestmentExplorerHub } from '@/components/explorer/InvestmentExplorerHub';
-import { Compass, Sparkles } from 'lucide-react';
+import { Compass } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Investment Explorer — FINOVA',
@@ -13,30 +13,68 @@ export default function ExplorePage() {
   return (
     <div className="page-container space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/50 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Compass className="w-5 h-5" />
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-              Investment Explorer
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-              <Sparkles className="w-3 h-3" />
-              Market Discovery
-            </span>
+      <div
+        className="relative rounded-2xl border overflow-hidden px-6 py-5"
+        style={{
+          background: 'linear-gradient(135deg, rgb(var(--surface)) 0%, rgb(var(--surface-raised)) 100%)',
+          borderColor: 'rgb(var(--border))',
+        }}
+      >
+        {/* Subtle grid background */}
+        <div
+          className="absolute inset-0 opacity-[0.03] pointer-events-none"
+          style={{
+            backgroundImage: 'linear-gradient(rgb(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--foreground)) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }}
+        />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center border shadow-sm"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.1))',
+                  borderColor: 'rgba(16,185,129,0.25)',
+                  color: '#10B981',
+                }}
+              >
+                <Compass className="w-5 h-5" />
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                Investment Explorer
+              </h1>
+            </div>
+            <p className="text-sm text-muted max-w-2xl leading-relaxed">
+              Discover stocks, track market indices, explore sectors, research fundamentals, and uncover investment opportunities across India&apos;s financial markets.
+            </p>
           </div>
-          <p className="text-sm text-muted mt-1.5 max-w-3xl">
-            Explore major Indian market indices, interactive historical price charts (1D to MAX), sector breakdowns, verified fundamentals, precious metals, and cross-feature intelligence.
-          </p>
+          <div className="flex flex-wrap gap-3 shrink-0">
+            {[
+              { label: 'Indices', value: '3+' },
+              { label: 'Sectors', value: '11' },
+              { label: 'Instruments', value: '500+' },
+            ].map(({ label, value }) => (
+              <div
+                key={label}
+                className="px-3 py-2 rounded-xl border text-center"
+                style={{
+                  backgroundColor: 'rgb(var(--surface))',
+                  borderColor: 'rgb(var(--border))',
+                }}
+              >
+                <p className="text-base font-extrabold text-foreground tabular-nums">{value}</p>
+                <p className="text-[10px] uppercase font-bold text-muted tracking-wider">{label}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Main Explorer Hub with Suspense */}
       <Suspense
         fallback={
-          <div className="p-12 text-center text-xs text-muted flex items-center justify-center gap-2">
+          <div className="p-16 text-center text-xs text-muted flex items-center justify-center gap-2">
             <span className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
             Loading Investment Explorer...
           </div>
@@ -47,3 +85,4 @@ export default function ExplorePage() {
     </div>
   );
 }
+

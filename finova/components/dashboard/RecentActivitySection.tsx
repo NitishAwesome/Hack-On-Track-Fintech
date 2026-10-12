@@ -36,9 +36,28 @@ export function RecentActivitySection({
     );
   }
 
+  if (error) {
+    return (
+      <div
+        className="p-5 sm:p-6 rounded-2xl border flex flex-col items-center justify-center text-center space-y-3 bg-surface"
+        style={{ borderColor: 'rgb(var(--border))' }}
+      >
+        <p className="text-xs font-semibold text-rose-500">{error}</p>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-surface-raised transition-colors"
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
-      className="p-5 sm:p-6 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface shadow-xs"
+      className="h-full p-5 sm:p-6 rounded-2xl border flex flex-col transition-all duration-200 bg-surface shadow-xs"
       style={{
         borderColor: 'rgb(var(--border))',
       }}

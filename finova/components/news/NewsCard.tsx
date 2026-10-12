@@ -173,7 +173,7 @@ export function NewsCard({
     return (
       <article
         onClick={handleCardClick}
-        className="group relative rounded-2xl border transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-black/25 hover:border-brand/40 cursor-pointer overflow-hidden"
+        className="group relative rounded-2xl border transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-black/25 hover:border-brand/40 cursor-pointer overflow-hidden news-card-hover"
         style={{
           backgroundColor: 'rgb(var(--surface))',
           borderColor: 'rgb(var(--border))',
@@ -522,7 +522,7 @@ export function NewsCard({
   return (
     <article
       onClick={handleCardClick}
-      className="group relative rounded-2xl border transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-black/25 hover:border-brand/40 cursor-pointer overflow-hidden flex flex-col justify-between"
+      className="group relative rounded-2xl border transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 hover:border-brand/40 cursor-pointer overflow-hidden flex flex-col justify-between news-card-hover"
       style={{
         backgroundColor: 'rgb(var(--surface))',
         borderColor: 'rgb(var(--border))',

@@ -102,26 +102,26 @@ export function ReitDiscoveryView() {
   return (
     <div className="space-y-8">
       {/* ─── Breadcrumb Navigation ──── */}
-      <div className="flex items-center gap-2 text-xs text-slate-400">
+      <div className="flex items-center gap-2 text-xs text-muted">
         <Link href="/explore/alternatives" className="hover:text-pink-400 transition-colors">
           Alternative Investments Hub
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
-        <span className="text-slate-200 font-semibold">REITs Discovery</span>
+        <span className="text-foreground font-semibold">REITs Discovery</span>
       </div>
 
       {/* ─── Header ──── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
         <div>
           <div className="flex items-center gap-2.5">
             <span className="p-2 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/20">
               <Building2 className="w-6 h-6" />
             </span>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-100">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
               Explore Listed Indian REITs
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-3xl">
+          <p className="text-xs sm:text-sm text-muted mt-1 max-w-3xl">
             Co-own Grade-A tech parks, business campuses, and prime malls. Discover verified distribution
             yields, occupancy metrics, lease durations, and commercial tenancy risks.
           </p>
@@ -139,49 +139,49 @@ export function ReitDiscoveryView() {
       </div>
 
       {/* ─── SECTION 1: INTERACTIVE EDUCATION (Concise, Not Boring) ──── */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/60 border border-slate-800 space-y-6">
+      <div className="p-5 sm:p-6 rounded-2xl bg-surface border border-border space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <HelpCircle className="w-4 h-4 text-pink-400" />
-            <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
+            <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
               REIT Fundamentals in 60 Seconds
             </h2>
           </div>
-          <span className="text-[11px] text-slate-400 font-mono">SEBI (REIT) Regulations, 2014</span>
+          <span className="text-[11px] text-muted font-mono">SEBI (REIT) Regulations, 2014</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* What is it */}
-          <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-800 space-y-1.5">
+          <div className="p-4 rounded-xl bg-slate-800/30 border border-border space-y-1.5">
             <div className="text-xs font-bold text-pink-300 flex items-center gap-1.5">
               <Building2 className="w-3.5 h-3.5" />
               <span>What is a REIT?</span>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-muted leading-relaxed">
               A trust that owns commercial real estate (offices and malls). You buy exchange-traded units on
               NSE/BSE like a stock, earning a proportional share of tenant rent without property upkeep.
             </p>
           </div>
 
           {/* How do I earn */}
-          <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-800 space-y-1.5">
+          <div className="p-4 rounded-xl bg-slate-800/30 border border-border space-y-1.5">
             <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
               <Coins className="w-3.5 h-3.5" />
               <span>How Do You Earn?</span>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-muted leading-relaxed">
               By law, <strong>90% of Net Distributable Cash Flows</strong> must be distributed quarterly as
               interest, dividends, or return of capital, plus potential capital appreciation of unit price.
             </p>
           </div>
 
           {/* Main risks */}
-          <div className="p-4 rounded-xl bg-slate-800/30 border border-slate-800 space-y-1.5">
+          <div className="p-4 rounded-xl bg-slate-800/30 border border-border space-y-1.5">
             <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>Main Risks to Watch</span>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-muted leading-relaxed">
               Unit prices fluctuate daily. Rising RBI interest rates can compress REIT valuations, and tenant
               vacancies reduce distributable cash flow. They are not risk-free fixed deposits.
             </p>
@@ -193,7 +193,7 @@ export function ReitDiscoveryView() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Calculator className="w-4 h-4 text-pink-400" />
-              <h3 className="text-xs font-bold text-slate-200">
+              <h3 className="text-xs font-bold text-foreground">
                 Illustrative Cash Distribution Simulator
               </h3>
             </div>
@@ -204,7 +204,7 @@ export function ReitDiscoveryView() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1 items-center">
             <div className="space-y-1">
-              <label className="text-[11px] text-slate-400">Hypothetical Investment (₹)</label>
+              <label className="text-[11px] text-muted">Hypothetical Investment (₹)</label>
               <input
                 type="range"
                 min={25000}
@@ -214,20 +214,20 @@ export function ReitDiscoveryView() {
                 onChange={(e) => setSimCapital(Number(e.target.value))}
                 className="w-full accent-pink-500 cursor-pointer"
               />
-              <div className="text-xs font-mono font-bold text-slate-200">
+              <div className="text-xs font-mono font-bold text-foreground">
                 ₹{simCapital.toLocaleString('en-IN')}
               </div>
             </div>
 
-            <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-center">
-              <span className="text-[10px] text-slate-400">At Avg ~6.2% Trailing Yield</span>
+            <div className="p-3 rounded-lg bg-surface border border-border text-center">
+              <span className="text-[10px] text-muted">At Avg ~6.2% Trailing Yield</span>
               <div className="text-sm font-bold font-mono text-emerald-400">
                 ~₹{Math.round(simCapital * 0.062).toLocaleString('en-IN')} / yr
               </div>
               <span className="text-[10px] text-slate-500">~₹{Math.round((simCapital * 0.062) / 4).toLocaleString('en-IN')} / quarter</span>
             </div>
 
-            <p className="text-[11px] text-slate-400 leading-relaxed">
+            <p className="text-[11px] text-muted leading-relaxed">
               Actual payout varies every quarter depending on occupancy, tenant lease renewals, interest rates,
               and whether distributions are taxed as interest or exempt dividends.
             </p>
@@ -240,13 +240,13 @@ export function ReitDiscoveryView() {
         <div className="flex flex-1 items-center gap-2">
           {/* Search */}
           <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search by name, symbol, city (e.g. Embassy, Bengaluru)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-800/40 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-pink-500"
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground placeholder:text-slate-500 focus:outline-none focus:border-pink-500"
             />
           </div>
 
@@ -254,7 +254,7 @@ export function ReitDiscoveryView() {
           <select
             value={selectedPropertyType}
             onChange={(e) => setSelectedPropertyType(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-pink-500"
+            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-pink-500"
           >
             <option value="ALL">All Properties</option>
             <option value="Office">Office Campuses</option>
@@ -265,11 +265,11 @@ export function ReitDiscoveryView() {
 
         {/* Sort */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 shrink-0">Sort by:</span>
+          <span className="text-xs text-muted shrink-0">Sort by:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'yield' | 'mcap' | 'occupancy' | 'name')}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-pink-500"
+            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-pink-500"
           >
             <option value="yield">Trailing Distribution Yield</option>
             <option value="mcap">Market Capitalization</option>
@@ -294,7 +294,7 @@ export function ReitDiscoveryView() {
               className={`p-5 rounded-2xl border transition-all cursor-pointer relative flex flex-col justify-between ${
                 isSelectedForCompare
                   ? 'bg-pink-950/20 border-pink-500/50'
-                  : 'bg-slate-900/60 hover:bg-slate-800/40 border-slate-800 hover:border-slate-700'
+                  : 'bg-surface hover:bg-surface-raised border-border hover:border-brand/40'
               }`}
             >
               {/* Card Top */}
@@ -303,7 +303,7 @@ export function ReitDiscoveryView() {
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono font-bold text-pink-400">{reit.symbol}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300">
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-muted">
                         {reit.propertyType}
                       </span>
                       {isHeld && (
@@ -312,12 +312,12 @@ export function ReitDiscoveryView() {
                         </span>
                       )}
                     </div>
-                    <h3 className="text-sm font-bold text-slate-100">{reit.name}</h3>
-                    <p className="text-[11px] text-slate-400">Sponsor: {reit.sponsor}</p>
+                    <h3 className="text-sm font-bold text-foreground">{reit.name}</h3>
+                    <p className="text-[11px] text-muted">Sponsor: {reit.sponsor}</p>
                   </div>
 
                   <div className="text-right">
-                    <div className="text-base font-bold font-mono text-slate-100">
+                    <div className="text-base font-bold font-mono text-foreground">
                       ₹{reit.unitPrice.toFixed(2)}
                     </div>
                     <div
@@ -332,9 +332,9 @@ export function ReitDiscoveryView() {
                 </div>
 
                 {/* Key Stats Grid */}
-                <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-slate-800/30 border border-slate-800 text-center">
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-slate-800/30 border border-border text-center">
                   <div>
-                    <span className="text-[10px] text-slate-400">Trailing Yield</span>
+                    <span className="text-[10px] text-muted">Trailing Yield</span>
                     <div className="text-xs font-bold font-mono text-emerald-400 mt-0.5">
                       {reit.trailingYieldPct.toFixed(2)}%
                     </div>
@@ -342,16 +342,16 @@ export function ReitDiscoveryView() {
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-slate-400">Occupancy</span>
-                    <div className="text-xs font-bold font-mono text-slate-200 mt-0.5">
+                    <span className="text-[10px] text-muted">Occupancy</span>
+                    <div className="text-xs font-bold font-mono text-foreground mt-0.5">
                       {reit.occupancyPct.toFixed(1)}%
                     </div>
                     <span className="text-[9px] text-slate-500">{reit.waleYears.toFixed(1)}y WALE</span>
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-slate-400">Net Debt / GAV</span>
-                    <div className="text-xs font-bold font-mono text-slate-200 mt-0.5">
+                    <span className="text-[10px] text-muted">Net Debt / GAV</span>
+                    <div className="text-xs font-bold font-mono text-foreground mt-0.5">
                       {reit.netDebtToGavPct.toFixed(1)}%
                     </div>
                     <span className="text-[9px] text-slate-500">SEBI cap 49%</span>
@@ -359,19 +359,19 @@ export function ReitDiscoveryView() {
                 </div>
 
                 {/* Geographic exposure */}
-                <div className="text-[11px] text-slate-400">
-                  <strong className="text-slate-300">Footprint:</strong> {reit.keyGeographies.join(', ')}
+                <div className="text-[11px] text-muted">
+                  <strong className="text-muted">Footprint:</strong> {reit.keyGeographies.join(', ')}
                 </div>
               </div>
 
               {/* Card Footer Actions */}
-              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <div className="mt-4 pt-3 border-t border-border/80 flex items-center justify-between text-xs">
                 <button
                   onClick={(e) => toggleCompare(reit.symbol, e)}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-colors ${
                     isSelectedForCompare
                       ? 'bg-pink-500 text-white font-semibold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      : 'text-muted hover:text-foreground hover:bg-slate-800'
                   }`}
                 >
                   <Scale className="w-3.5 h-3.5" />
@@ -389,14 +389,14 @@ export function ReitDiscoveryView() {
       </div>
 
       {/* ─── SECTION 4: UNDERSTAND BEFORE INVESTING CHECKLIST ──── */}
-      <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-3">
-        <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+      <div className="p-5 rounded-2xl bg-surface border border-border space-y-3">
+        <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
           <Shield className="w-4 h-4 text-pink-400" />
           <span>REIT Investor Checklist: Understand Before Investing</span>
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-300">
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-slate-800 flex items-start gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-muted">
+          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Yield is not guaranteed interest:</strong> Distributions fluctuate with tenant vacancies,
@@ -404,7 +404,7 @@ export function ReitDiscoveryView() {
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-slate-800 flex items-start gap-2.5">
+          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Check Tax Split on DPU:</strong> Distributions arrive split into Interest (taxed at slab),
@@ -412,7 +412,7 @@ export function ReitDiscoveryView() {
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-slate-800 flex items-start gap-2.5">
+          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Monitor 10Y G-Sec Spreads:</strong> When government bond yields rise above 7.2%, REIT unit
@@ -420,7 +420,7 @@ export function ReitDiscoveryView() {
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-slate-800 flex items-start gap-2.5">
+          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Track Tenant Concentration:</strong> Large MNC IT/BFSI tenants account for 30–50% of gross

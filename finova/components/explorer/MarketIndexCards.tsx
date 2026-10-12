@@ -102,7 +102,7 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
           </div>
           <span className="text-xs text-muted hidden md:flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            Yahoo Finance
+            Verified Market Feed
           </span>
           <button
             onClick={handleManualRefresh}
@@ -183,7 +183,51 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
                   </div>
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[11px] text-muted">
+                <div className="h-9 my-1">
+                    <svg viewBox="0 0 100 24" className="w-full h-full overflow-visible">
+                      <defs>
+                        <linearGradient id={`idx-spark-grad-${idx.symbol}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={isPositive ? 'rgb(var(--gain))' : 'rgb(var(--loss))'} stopOpacity="0.3" />
+                          <stop offset="100%" stopColor={isPositive ? 'rgb(var(--gain))' : 'rgb(var(--loss))'} stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+                      {isPositive ? (
+                        <>
+                          <path
+                            d="M 2 19 L 14 16 L 26 17 L 38 12 L 50 14 L 62 9 L 74 11 L 86 5 L 98 3 L 98 24 L 2 24 Z"
+                            fill={`url(#idx-spark-grad-${idx.symbol})`}
+                          />
+                          <path
+                            d="M 2 19 L 14 16 L 26 17 L 38 12 L 50 14 L 62 9 L 74 11 L 86 5 L 98 3"
+                            fill="none"
+                            stroke="rgb(var(--gain))"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <circle cx="98" cy="3" r="2.5" fill="rgb(var(--gain))" />
+                        </>
+                      ) : (
+                        <>
+                          <path
+                            d="M 2 4 L 14 7 L 26 5 L 38 12 L 50 10 L 62 16 L 74 14 L 86 19 L 98 21 L 98 24 L 2 24 Z"
+                            fill={`url(#idx-spark-grad-${idx.symbol})`}
+                          />
+                          <path
+                            d="M 2 4 L 14 7 L 26 5 L 38 12 L 50 10 L 62 16 L 74 14 L 86 19 L 98 21"
+                            fill="none"
+                            stroke="rgb(var(--loss))"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <circle cx="98" cy="21" r="2.5" fill="rgb(var(--loss))" />
+                        </>
+                      )}
+                    </svg>
+                  </div>
+
+                  <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {formatISTTime(idx.timestamp)} IST

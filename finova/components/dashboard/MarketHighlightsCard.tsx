@@ -33,14 +33,14 @@ export function MarketHighlightsCard() {
 
   return (
     <div
-      className="p-5 sm:p-6 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface shadow-xs"
+      className="h-full p-5 sm:p-6 rounded-2xl border flex flex-col transition-all duration-200 bg-surface shadow-xs"
       style={{
         borderColor: 'rgb(var(--border))',
       }}
     >
-      <div>
+      <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 shrink-0">
           <div className="flex items-center gap-2">
             <Newspaper className="w-4 h-4 text-brand" />
             <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
@@ -67,39 +67,49 @@ export function MarketHighlightsCard() {
             ))}
           </div>
         ) : articles.length === 0 ? (
-          <div className="py-8 text-center text-xs text-muted">
-            No live news items currently available. Check back during market hours.
+          <div className="flex-1 flex items-center justify-center py-8">
+            <p className="text-center text-xs text-muted">
+              No live news items currently available.
+            </p>
           </div>
         ) : (
-          <div className="space-y-2.5">
-            {articles.map((item) => (
-              <a
-                key={item.article_id}
-                href={item.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-3 rounded-xl border border-border/60 hover:border-brand/40 bg-surface-raised/40 hover:bg-surface-raised transition-all block group"
-              >
-                <div className="flex items-start gap-2.5">
-                  <div className="w-6 h-6 rounded-md bg-brand/10 text-brand shrink-0 flex items-center justify-center mt-0.5">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-xs font-semibold text-foreground group-hover:text-brand transition-colors line-clamp-2 leading-snug">
-                      {item.title}
-                    </p>
-                    <div className="flex items-center gap-2 text-[10px] text-muted font-mono">
-                      <span className="font-sans font-medium text-foreground/80">{item.source_name}</span>
-                      <span>•</span>
-                      <span className="flex items-center gap-0.5">
-                        <Clock className="w-2.5 h-2.5" />
-                        {item.pubDate ? new Date(item.pubDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'}
-                      </span>
+          <div className="flex-1 space-y-2">
+            {articles.map((item, idx) => {
+              const iconColors = [
+                { bg: 'bg-emerald-500/10', text: 'text-emerald-400', Icon: TrendingUp },
+                { bg: 'bg-brand/10', text: 'text-brand', Icon: TrendingDown },
+                { bg: 'bg-amber-500/10', text: 'text-amber-400', Icon: TrendingUp },
+              ];
+              const { bg, text, Icon: ItemIcon } = iconColors[idx % iconColors.length];
+              return (
+                <a
+                  key={item.article_id}
+                  href={item.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`p-3 rounded-xl border border-border/60 bg-surface-raised/30 block group news-card-hover`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div className={`w-6 h-6 rounded-md ${bg} ${text} shrink-0 flex items-center justify-center mt-0.5`}>
+                      <ItemIcon className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="text-xs font-semibold text-foreground group-hover:text-brand transition-colors line-clamp-2 leading-snug">
+                        {item.title}
+                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-muted">
+                        <span className="font-medium text-foreground/70 truncate max-w-[100px]">{item.source_name}</span>
+                        <span>·</span>
+                        <span className="flex items-center gap-0.5 shrink-0">
+                          <Clock className="w-2.5 h-2.5" />
+                          {item.pubDate ? new Date(item.pubDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </a>
-            ))}
+                </a>
+              );
+            })}
           </div>
         )}
       </div>

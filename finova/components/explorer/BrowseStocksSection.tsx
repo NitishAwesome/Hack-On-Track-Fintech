@@ -152,7 +152,7 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
       <div className="flex items-start gap-2 p-3 rounded-xl bg-surface-raised border border-border text-xs text-muted">
         <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
         <span>
-          <strong className="text-foreground">Catalog Coverage Notice:</strong> Displaying {filteredStocks.length} supported NSE stocks from FINOVA’s verified equity catalog. Real-time quotes are dynamically retrieved from Yahoo Finance. Non-covered small-cap or illiquid securities are excluded to maintain verified quote integrity.
+          <strong className="text-foreground">Catalog Coverage Notice:</strong> Displaying {filteredStocks.length} supported NSE stocks from FINOVA’s verified equity catalog. Real-time quotes are dynamically retrieved from verified market feeds. Non-covered small-cap or illiquid securities are excluded to maintain verified quote integrity.
         </span>
       </div>
 

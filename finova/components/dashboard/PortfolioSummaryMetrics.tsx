@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Wallet, Landmark, TrendingUp, TrendingDown, Percent, Layers, Building2, HelpCircle } from 'lucide-react';
+import { Wallet, Landmark, TrendingUp, TrendingDown, Percent, Layers, Building2 } from 'lucide-react';
 import type { PortfolioSummary } from '@/types/portfolio';
 import { formatCurrency, formatPercentSafe } from '@/lib/utils';
 
@@ -39,7 +39,6 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
   const isReturnUnavailable = summary.total_absolute_return === null;
   const isPositiveReturn = (summary.total_absolute_return ?? 0) >= 0;
   const returnPct = summary.total_absolute_return_pct ?? 0;
-  const hasUnquoted = Boolean(summary.has_unquoted_assets);
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">

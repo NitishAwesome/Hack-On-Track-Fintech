@@ -4,13 +4,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { RefreshCw, Plus, Upload } from 'lucide-react';
 
+// Subcomponents
 import { PortfolioSummaryMetrics } from './PortfolioSummaryMetrics';
 import { PortfolioOverviewCard } from './PortfolioOverviewCard';
+import { PortfolioExposureCard } from './PortfolioExposureCard';
+import { MyHoldingsSection } from './MyHoldingsSection';
+import { NewsRelevantToYouSection } from './NewsRelevantToYouSection';
+import { AskFinovaCommandSection } from './AskFinovaCommandSection';
+import { ExploreOpportunitiesSection } from './ExploreOpportunitiesSection';
+import { BeyondStocksSection } from './BeyondStocksSection';
 import { PortfolioInsightsCard } from './PortfolioInsightsCard';
-import { MarketHighlightsCard } from './MarketHighlightsCard';
-import { RecentActivitySection } from './RecentActivitySection';
 import { QuickLinksCard } from './QuickLinksCard';
+import { RecentActivitySection } from './RecentActivitySection';
 
+// Types & Supabase
 import type { PortfolioSummary, AssetAllocation, HoldingWithMetrics } from '@/types/portfolio';
 import type { BrokerAccountRow, InvestmentTransactionRow } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
@@ -142,19 +149,25 @@ export function FinovaDashboard() {
 
   return (
     <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-6">
-      {/* 1. Welcome Hero Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-            Welcome back, <span className="text-brand">{userName}</span>
-          </h1>
-          <p className="text-xs sm:text-sm mt-1 text-muted">
-            Here&apos;s a unified view of all your investments across Zerodha, Groww and more.
+      {/* ── Welcome Header ─────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 mb-1">
+            <div
+              className="w-1.5 h-8 rounded-full shrink-0"
+              style={{ background: 'linear-gradient(180deg, rgb(var(--brand-400)), rgb(var(--brand-600)))' }}
+            />
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground leading-none">
+              Welcome back, <span className="text-gradient">{userName}</span>
+            </h1>
+          </div>
+          <p className="text-xs sm:text-sm text-muted ml-4 pl-3 border-l-2 border-border-subtle">
+            FINOVA Command Center · Unified portfolio analytics, live market feeds &amp; intelligence.
           </p>
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             onClick={handleSyncAll}
             disabled={isRefreshing}
@@ -162,7 +175,7 @@ export function FinovaDashboard() {
             title="Sync all broker holdings and market valuations"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Sync Accounts</span>
+            <span>Sync</span>
           </button>
 
           <Link
@@ -175,7 +188,7 @@ export function FinovaDashboard() {
 
           <Link
             href="/holdings"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-xs transition-all hover:opacity-95"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md"
             style={{
               background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
             }}
@@ -186,55 +199,90 @@ export function FinovaDashboard() {
         </div>
       </div>
 
-      {/* 2. Top KPI Cards: 6 Glowing Metric Blocks in Row */}
+      {/* ── B. Portfolio Summary (6 KPI Metrics) ──────────────── */}
       <PortfolioSummaryMetrics
         summary={summary}
         isLoading={summaryLoading}
       />
 
-      {/* 3. Middle 3-Column Section: Overview Donut (4) + Insights (4) + Market Highlights (4) */}
+      {/* ── C. Portfolio Analysis (Enlarged Donut + Exposure Breakdown) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        {/* Col 1: Portfolio Overview Donut + Tabs */}
-        <div className="lg:col-span-4 flex flex-col">
-          <PortfolioOverviewCard
-            allocations={allocations}
-            holdings={holdings}
-            brokers={brokers}
-            totalValue={summary?.total_current_value ?? null}
-            isLoading={summaryLoading || holdingsLoading}
-          />
+        {/* Left: Portfolio Overview Donut (7 cols) */}
+        <div className="lg:col-span-7 flex flex-col">
+          <div className="flex-1">
+            <PortfolioOverviewCard
+              allocations={allocations}
+              holdings={holdings}
+              brokers={brokers}
+              totalValue={summary?.total_current_value ?? null}
+              isLoading={summaryLoading || holdingsLoading}
+            />
+          </div>
         </div>
 
-        {/* Col 2: Portfolio Insights Diagnostic */}
-        <div className="lg:col-span-4 flex flex-col">
-          <PortfolioInsightsCard
-            summary={summary}
-            holdings={holdings}
-            brokers={brokers}
-            isLoading={summaryLoading || holdingsLoading}
-          />
-        </div>
-
-        {/* Col 3: Market Highlights Live News */}
-        <div className="lg:col-span-4 flex flex-col">
-          <MarketHighlightsCard />
+        {/* Right: Portfolio Exposure & Top Holding Concentration (5 cols) */}
+        <div className="lg:col-span-5 flex flex-col">
+          <div className="flex-1">
+            <PortfolioExposureCard
+              holdings={holdings}
+              allocations={allocations}
+              totalValue={summary?.total_current_value ?? null}
+              isLoading={summaryLoading || holdingsLoading}
+            />
+          </div>
         </div>
       </div>
 
-      {/* 4. Lower 2-Column Section: Recent Activity Table (7) + Quick Links (5) */}
+      {/* ── D. My Holdings (Top 5-6 Positions with Logos, Prices, P&L) ─ */}
+      <MyHoldingsSection
+        holdings={holdings}
+        totalValue={summary?.total_current_value ?? null}
+        isLoading={holdingsLoading}
+      />
+
+      {/* ── E. Recent News (News Relevant to You with Fallback Images) ── */}
+      <NewsRelevantToYouSection />
+
+      {/* ── F. FINOVA Intelligence (Ask FINOVA Command Container) ─── */}
+      <AskFinovaCommandSection />
+
+      {/* ── G. New Investment Ideas (Explore New Opportunities) ───── */}
+      <ExploreOpportunitiesSection
+        allocations={allocations}
+        holdings={holdings}
+      />
+
+      {/* ── H. Beyond Stocks (REITs / InvITs / Bonds Discovery) ─────── */}
+      <BeyondStocksSection />
+
+      {/* ── I & J. Portfolio Insights (5 cols) + Quick Actions (7 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        {/* Col 1: Clean Financial Transaction Ledger */}
-        <div className="lg:col-span-7 flex flex-col">
-          <RecentActivitySection
-            transactions={transactions}
-            isLoading={transactionsLoading}
-          />
+        {/* Section I: Portfolio Insights (Actionable observations) */}
+        <div className="lg:col-span-5 flex flex-col">
+          <div className="flex-1">
+            <PortfolioInsightsCard
+              summary={summary}
+              holdings={holdings}
+              brokers={brokers}
+              isLoading={summaryLoading || holdingsLoading}
+            />
+          </div>
         </div>
 
-        {/* Col 2: 2x2 Quick Links Cards */}
-        <div className="lg:col-span-5 flex flex-col">
-          <QuickLinksCard />
+        {/* Section J: Quick Actions */}
+        <div className="lg:col-span-7 flex flex-col">
+          <div className="flex-1">
+            <QuickLinksCard />
+          </div>
         </div>
+      </div>
+
+      {/* ── J. Recent Activity (Ledger of recent trade executions) ─── */}
+      <div className="w-full">
+        <RecentActivitySection
+          transactions={transactions}
+          isLoading={transactionsLoading}
+        />
       </div>
     </div>
   );

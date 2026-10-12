@@ -98,7 +98,7 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
             <button
               onClick={handleClear}
               type="button"
-              className="text-[11px] text-muted hover:text-rose-400 flex items-center gap-1 transition px-2 py-0.5 rounded hover:bg-zinc-800"
+              className="text-[11px] text-muted hover:text-rose-400 flex items-center gap-1 transition px-2 py-0.5 rounded hover:bg-surface-raised"
               title="Clear browsing history"
             >
               <Trash2 className="w-3 h-3" />

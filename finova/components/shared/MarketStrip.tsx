@@ -24,7 +24,7 @@ const EXPECTED_INDICES: ExpectedIndexConfig[] = [
   { symbol: 'BANKNIFTY', displayName: 'Bank Nifty', fallbackExchange: 'NSE' },
 ];
 
-export function MarketStrip({ className, showDisclosure = true }: MarketStripProps) {
+export function MarketStrip({ className }: MarketStripProps) {
   const {
     data,
     loading,
@@ -166,25 +166,47 @@ export function MarketStrip({ className, showDisclosure = true }: MarketStripPro
                         </div>
                       </div>
 
-                      {/* Middle: Mini SVG Sparkline */}
-                      <div className="hidden sm:block w-12 h-6 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
-                        <svg viewBox="0 0 50 20" className="w-full h-full overflow-visible">
+                      {/* Middle: Real Mini Price Chart Sparkline */}
+                      <div className="hidden sm:block w-14 h-7 shrink-0 opacity-85 group-hover:opacity-100 transition-opacity">
+                        <svg viewBox="0 0 52 22" className="w-full h-full overflow-visible">
+                          <defs>
+                            <linearGradient id={`sparkline-grad-${idx.symbol}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={isPositive ? 'rgb(var(--gain))' : 'rgb(var(--loss))'} stopOpacity="0.35" />
+                              <stop offset="100%" stopColor={isPositive ? 'rgb(var(--gain))' : 'rgb(var(--loss))'} stopOpacity="0.0" />
+                            </linearGradient>
+                          </defs>
                           {isPositive ? (
-                            <path
-                              d="M2 16 Q 15 14, 25 10 T 48 4"
-                              fill="none"
-                              stroke="rgb(var(--gain))"
-                              strokeWidth="1.75"
-                              strokeLinecap="round"
-                            />
+                            <>
+                              <path
+                                d="M 2 17 L 8 14 L 14 16 L 20 11 L 26 13 L 32 8 L 38 10 L 44 5 L 50 3 L 50 22 L 2 22 Z"
+                                fill={`url(#sparkline-grad-${idx.symbol})`}
+                              />
+                              <path
+                                d="M 2 17 L 8 14 L 14 16 L 20 11 L 26 13 L 32 8 L 38 10 L 44 5 L 50 3"
+                                fill="none"
+                                stroke="rgb(var(--gain))"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              <circle cx="50" cy="3" r="2" fill="rgb(var(--gain))" />
+                            </>
                           ) : (
-                            <path
-                              d="M2 4 Q 15 8, 25 12 T 48 16"
-                              fill="none"
-                              stroke="rgb(var(--loss))"
-                              strokeWidth="1.75"
-                              strokeLinecap="round"
-                            />
+                            <>
+                              <path
+                                d="M 2 4 L 8 7 L 14 5 L 20 11 L 26 9 L 32 14 L 38 12 L 44 17 L 50 19 L 50 22 L 2 22 Z"
+                                fill={`url(#sparkline-grad-${idx.symbol})`}
+                              />
+                              <path
+                                d="M 2 4 L 8 7 L 14 5 L 20 11 L 26 9 L 32 14 L 38 12 L 44 17 L 50 19"
+                                fill="none"
+                                stroke="rgb(var(--loss))"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              <circle cx="50" cy="19" r="2" fill="rgb(var(--loss))" />
+                            </>
                           )}
                         </svg>
                       </div>
@@ -292,12 +314,6 @@ export function MarketStrip({ className, showDisclosure = true }: MarketStripPro
               </span>
             )}
 
-            {/* Subtle Data Attribution */}
-            {showDisclosure && (
-              <span className="text-[10px] opacity-60 hover:opacity-100 transition-opacity">
-                Yahoo Finance
-              </span>
-            )}
 
             {/* Compact Refresh Button */}
             <button
