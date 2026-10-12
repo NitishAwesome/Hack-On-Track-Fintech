@@ -23,8 +23,26 @@ export type NewsProviderStatus =
   | 'EMPTY'
   | 'ERROR';
 
+export type TimestampType = 'published' | 'indexed' | 'unavailable';
+
+export interface ArticleTemporalInfo {
+  timestamp_type: TimestampType;
+  raw_timestamp: string | null;
+  formatted_ist: string;
+  relative_time: string;
+  display_label: string;
+  freshness_badge: string;
+  freshness_label: string;
+  is_delayed_feed: boolean;
+  delay_note?: string;
+  provider_display_name: string;
+  is_cached: boolean;
+  retrieved_ist?: string | null;
+  is_future_or_invalid: boolean;
+}
+
 /**
- * Normalized news article from verified providers (e.g. NewsData.io)
+ * Normalized news article from verified providers (e.g. Marketaux, GDELT, NewsData.io)
  * Strict validation: URL must be valid HTTP(S), pubDate must be parseable.
  */
 export interface NormalizedNewsArticle {
@@ -39,9 +57,11 @@ export interface NormalizedNewsArticle {
   image_url: string | null;
   keywords: string[] | null;
   categories: string[] | null;
-  source_provider: 'newsdata' | 'curated_test_fixture' | 'system';
+  source_provider: 'newsdata' | 'marketaux' | 'gdelt' | 'curated_test_fixture' | 'system';
   language: string;
   freshness: NewsFreshness;
+  symbols?: string[] | null;
+  temporal_info?: ArticleTemporalInfo;
 }
 
 /**
@@ -108,6 +128,8 @@ export interface NewsApiResponse {
     sector_matches_count: number;
     cached: boolean;
     provider: string;
+    providers_used?: string[];
+    provider_breakdown?: Record<string, number>;
     last_updated: string;
     portfolio_symbols_count: number;
     next_page?: string | null;

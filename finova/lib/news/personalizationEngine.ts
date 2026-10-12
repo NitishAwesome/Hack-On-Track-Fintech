@@ -402,7 +402,12 @@ export function personalizeArticle(
   let highestDirectWeight = 0;
 
   for (const item of consolidated.values()) {
-    if (matchesSymbolOrCompany(fullText, item.symbol, item.name, item.isin)) {
+    const matchesExplicitSymbol = Boolean(
+      article.symbols &&
+      article.symbols.some((s) => s.toUpperCase() === item.symbol.toUpperCase())
+    );
+
+    if (matchesExplicitSymbol || matchesSymbolOrCompany(fullText, item.symbol, item.name, item.isin)) {
       if (!directMatch || item.weight_pct > highestDirectWeight) {
         highestDirectWeight = item.weight_pct;
         directMatch = {

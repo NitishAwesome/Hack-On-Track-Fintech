@@ -1,17 +1,19 @@
 // ============================================================
-// FINOVA — Personalized Financial News API (Prompt 12)
+// FINOVA — Multi-Provider Financial News API
 // app/api/news/route.ts
 //
 // Key Principles:
-// 1. ZERO fabricated/curated headlines in production.
-// 2. Verified real NewsData.io integration (server-only key).
-// 3. Authenticated server-side portfolio context retrieval.
-// 4. Deterministic relevance ranking & factual explanations.
-// 5. Strict error states (NOT_CONFIGURED, RATE_LIMITED, UNAVAILABLE).
+// 1. Multi-provider aggregation (NewsData.io, MarketAux, GDELT 2.0).
+// 2. ZERO fabricated/curated headlines in production.
+// 3. Strict server-only credentials (never exposed to client).
+// 4. Authenticated server-side portfolio context retrieval.
+// 5. Deterministic relevance ranking & factual explanations.
+// 6. Intelligent multi-factor deduplication & source transparency.
+// 7. Fault-tolerant: single provider outage does not fail the feed.
 // ============================================================
 
 import { NextResponse } from 'next/server';
-import { fetchIndianFinancialNews } from '@/lib/news/newsProvider';
+import { getAggregatedFinancialNews } from '@/lib/news/aggregationService';
 import { resolveServerPortfolioContext } from '@/lib/news/portfolioContextResolver';
 import { personalizeAndRankNews } from '@/lib/news/personalizationEngine';
 import type { NewsApiResponse, PersonalizedNewsArticle } from '@/types/news';
@@ -28,77 +30,64 @@ export async function GET(request: Request) {
     // 1. Resolve authenticated user portfolio context server-side
     const portfolio = await resolveServerPortfolioContext();
 
-    // 2. Fetch real news from NewsData.io
+    // 2. Fetch aggregated news across NewsData.io, MarketAux, and GDELT 2.0
     const portfolioSymbols = portfolio.holdings.map((h) => h.symbol);
-    const fetchResult = await fetchIndianFinancialNews({
+    const fetchResult = await getAggregatedFinancialNews({
       query: customQuery,
       symbols: specificSymbol ? [specificSymbol] : portfolioSymbols,
       forceRefresh,
       page: pageToken,
     });
 
+    const providerLabel =
+      fetchResult.providersUsed.length > 0
+        ? `Aggregated (${fetchResult.providersUsed.join(', ')})`
+        : 'news_aggregator';
+
     // Handle provider error states cleanly without fabricating news
-    if (fetchResult.providerStatus === 'NOT_CONFIGURED') {
-      const response: NewsApiResponse = {
-        status: 'not_configured',
-        articles: [],
-        provider_status: 'NOT_CONFIGURED',
-        message: fetchResult.message,
-        meta: {
-          total_fetched: 0,
-          direct_matches_count: 0,
-          sector_matches_count: 0,
-          cached: false,
-          provider: 'newsdata',
-          last_updated: new Date().toISOString(),
-          portfolio_symbols_count: portfolioSymbols.length,
-        },
-      };
-      return NextResponse.json(response);
-    }
-
-    if (fetchResult.providerStatus === 'RATE_LIMITED' && fetchResult.articles.length === 0) {
-      const response: NewsApiResponse = {
-        status: 'rate_limited',
-        articles: [],
-        provider_status: 'RATE_LIMITED',
-        message: fetchResult.message,
-        meta: {
-          total_fetched: 0,
-          direct_matches_count: 0,
-          sector_matches_count: 0,
-          cached: false,
-          provider: 'newsdata',
-          last_updated: new Date().toISOString(),
-          portfolio_symbols_count: portfolioSymbols.length,
-        },
-      };
-      return NextResponse.json(response, { status: 429 });
-    }
-
-    if (
-      (fetchResult.providerStatus === 'UNAVAILABLE' || fetchResult.providerStatus === 'ERROR') &&
-      fetchResult.articles.length === 0
-    ) {
-      const response: NewsApiResponse = {
-        status: 'error',
-        articles: [],
-        provider_status: fetchResult.providerStatus,
-        message: fetchResult.message,
-        meta: {
-          total_fetched: 0,
-          direct_matches_count: 0,
-          sector_matches_count: 0,
-          cached: false,
-          provider: 'newsdata',
-          last_updated: new Date().toISOString(),
-          portfolio_symbols_count: portfolioSymbols.length,
-        },
-      };
-      return NextResponse.json(response, { status: 502 });
-    }
-
     if (fetchResult.articles.length === 0) {
+      if (fetchResult.providerStatus === 'NOT_CONFIGURED') {
+        const response: NewsApiResponse = {
+          status: 'not_configured',
+          articles: [],
+          provider_status: 'NOT_CONFIGURED',
+          message: fetchResult.message || 'News providers not configured.',
+          meta: {
+            total_fetched: 0,
+            direct_matches_count: 0,
+            sector_matches_count: 0,
+            cached: false,
+            provider: providerLabel,
+            providers_used: fetchResult.providersUsed,
+            provider_breakdown: fetchResult.providerBreakdown,
+            last_updated: new Date().toISOString(),
+            portfolio_symbols_count: portfolioSymbols.length,
+          },
+        };
+        return NextResponse.json(response);
+      }
+
+      if (fetchResult.providerStatus === 'RATE_LIMITED') {
+        const response: NewsApiResponse = {
+          status: 'rate_limited',
+          articles: [],
+          provider_status: 'RATE_LIMITED',
+          message: fetchResult.message || 'News provider rate limits reached.',
+          meta: {
+            total_fetched: 0,
+            direct_matches_count: 0,
+            sector_matches_count: 0,
+            cached: false,
+            provider: providerLabel,
+            providers_used: fetchResult.providersUsed,
+            provider_breakdown: fetchResult.providerBreakdown,
+            last_updated: new Date().toISOString(),
+            portfolio_symbols_count: portfolioSymbols.length,
+          },
+        };
+        return NextResponse.json(response, { status: 429 });
+      }
+
       const response: NewsApiResponse = {
         status: 'empty',
         articles: [],
@@ -109,7 +98,9 @@ export async function GET(request: Request) {
           direct_matches_count: 0,
           sector_matches_count: 0,
           cached: fetchResult.isCached,
-          provider: 'newsdata',
+          provider: providerLabel,
+          providers_used: fetchResult.providersUsed,
+          provider_breakdown: fetchResult.providerBreakdown,
           last_updated: new Date().toISOString(),
           portfolio_symbols_count: portfolioSymbols.length,
         },
@@ -162,7 +153,9 @@ export async function GET(request: Request) {
         direct_matches_count: directCount,
         sector_matches_count: sectorCount,
         cached: fetchResult.isCached,
-        provider: 'newsdata',
+        provider: providerLabel,
+        providers_used: fetchResult.providersUsed,
+        provider_breakdown: fetchResult.providerBreakdown,
         last_updated: new Date().toISOString(),
         portfolio_symbols_count: portfolioSymbols.length,
         next_page: fetchResult.nextPage || null,
@@ -183,7 +176,7 @@ export async function GET(request: Request) {
           direct_matches_count: 0,
           sector_matches_count: 0,
           cached: false,
-          provider: 'newsdata',
+          provider: 'news_aggregator',
           last_updated: new Date().toISOString(),
           portfolio_symbols_count: 0,
         },
