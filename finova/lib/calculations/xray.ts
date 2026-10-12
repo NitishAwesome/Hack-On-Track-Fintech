@@ -17,7 +17,8 @@ import type {
   Exchange,
 } from '../../types/portfolio.ts';
 import { roundCurrency, roundPercent, roundQuantity } from './portfolio.ts';
-import { isPriceStale } from './risk.ts';
+import { isPriceStale, buildRiskMetrics, computeHHI } from './risk.ts';
+import { formatIndianCurrency } from '../utils.ts';
 
 export type MatchConfidence = 'CONFIRMED' | 'AMBIGUOUS';
 export type MatchBasis = 'ISIN' | 'CANONICAL_SYMBOL' | 'NAME_FALLBACK';
@@ -80,6 +81,26 @@ export interface CrossBrokerOverlapItem {
   }>;
 }
 
+export interface RiskReductionAction {
+  id: string;
+  priority: 'HIGH_PRIORITY' | 'REVIEW' | 'EXPLORE_LEARN';
+  priority_label: 'High Priority' | 'Review' | 'Explore / Learn';
+  category: 'single_stock' | 'sector' | 'asset_class' | 'data_quality' | 'broker_overlap';
+  title: string;
+  observation: string;
+  recommended_step: string;
+  educational_link?: string;
+  action_trigger: string;
+}
+
+export interface PortfolioInterpretation {
+  composition_summary: string;
+  strengths: string[];
+  primary_concerns: string[];
+  data_limitations: string[];
+  research_priorities: string[];
+}
+
 export interface UnifiedXRayAnalysis {
   summary: {
     tracked_brokers_count: number;
@@ -87,14 +108,36 @@ export interface UnifiedXRayAnalysis {
     total_positions_count: number;
     total_invested_capital: number;
     market_valued_capital: number | null;
+    valued_subset_invested_capital: number;
+    valued_subset_unrealized_pnl: number | null;
+    valued_subset_unrealized_pnl_pct: number | null;
+    is_valuation_complete: boolean;
+    valuation_completeness_message: string;
     priced_positions_count: number;
     unpriced_positions_count: number;
     quote_coverage_pct: number;
     unrealized_pnl: number | null;
     unrealized_pnl_pct: number | null;
+    whole_portfolio_pnl: number | null;
+    whole_portfolio_pnl_pct: number | null;
     cross_broker_overlaps_count: number;
     cross_broker_overlap_value: number;
     cross_broker_overlap_valued_pct: number;
+    top_holding_name?: string;
+    top_holding_symbol?: string;
+    top_holding_weight: number;
+    top_2_holdings_weight: number;
+    top_3_holdings_weight: number;
+    top_5_holdings_weight: number;
+    hhi: number;
+    hhi_label: 'Low Concentration' | 'Moderate Concentration' | 'High Concentration';
+    risk_score: number;
+    risk_label: 'Conservative' | 'Moderate' | 'Aggressive';
+    top_sector: string | null;
+    top_sector_weight: number;
+    top_asset_class: string;
+    top_asset_class_weight: number;
+    single_broker_notice?: string | null;
   };
   overlaps: CrossBrokerOverlapItem[];
   consolidated_instruments: ConsolidatedInstrumentExposure[];
@@ -124,6 +167,13 @@ export interface UnifiedXRayAnalysis {
     percentage_of_valued: number;
     instruments_count: number;
     is_classified: boolean;
+    largest_holding?: {
+      symbol: string;
+      name: string;
+      value: number | null;
+    } | null;
+    concentration_observation?: string;
+    constituent_symbols: string[];
   }>;
   data_quality: {
     total_positions: number;
@@ -132,7 +182,13 @@ export interface UnifiedXRayAnalysis {
     stale_quotes_count: number;
     positions_without_isin: number;
     positions_unclassified_sector: number;
+    positions_without_cost_basis: number;
+    quote_coverage_pct: number;
+    is_fully_reliable: boolean;
+    freshness_note: string;
   };
+  risk_reduction_actions: RiskReductionAction[];
+  portfolio_interpretation: PortfolioInterpretation;
 }
 
 /**
@@ -243,7 +299,7 @@ export function computeUnifiedXRay(
         symbol: normalizeSymbol(h.symbol) || h.symbol,
         name: h.name || h.symbol,
         isin: h.isin || null,
-        asset_class: h.asset_class,
+        asset_class: h.asset_class || 'equity',
         exchange: h.exchange || null,
         sector: h.sector || null,
         match_confidence: confidence,
@@ -267,6 +323,7 @@ export function computeUnifiedXRay(
 
   // 2. Compute total portfolio valuation figures
   let totalInvested = 0;
+  let valuedSubsetInvested = 0;
   let totalValuedMarket = 0;
   let hasAnyPriced = false;
   let pricedPositionsCount = 0;
@@ -274,12 +331,18 @@ export function computeUnifiedXRay(
   let staleQuotesCount = 0;
   let positionsWithoutIsin = 0;
   let positionsUnclassifiedSector = 0;
+  let positionsWithoutCostBasis = 0;
 
   for (const h of holdings) {
     totalInvested += h.invested_value;
+    if (h.invested_value <= 0 || h.avg_buy_price <= 0) {
+      positionsWithoutCostBasis += 1;
+    }
+
     if (typeof h.current_price === 'number' && h.current_price > 0 && h.current_value !== null) {
       hasAnyPriced = true;
       totalValuedMarket += h.current_value;
+      valuedSubsetInvested += h.invested_value;
       pricedPositionsCount += 1;
     } else {
       unpricedPositionsCount += 1;
@@ -299,19 +362,31 @@ export function computeUnifiedXRay(
   }
 
   totalInvested = roundCurrency(totalInvested);
+  valuedSubsetInvested = roundCurrency(valuedSubsetInvested);
   const marketValuedCapital = hasAnyPriced ? roundCurrency(totalValuedMarket) : null;
   const quoteCoveragePct =
     holdings.length > 0 ? roundPercent((pricedPositionsCount / holdings.length) * 100) : 0;
+  const isValuationComplete = holdings.length > 0 && unpricedPositionsCount === 0;
 
+  // Partial valuation correctness: P&L is calculated strictly across the valued subset
   const unrealizedPnL =
     hasAnyPriced && marketValuedCapital !== null
-      ? roundCurrency(marketValuedCapital - totalInvested)
+      ? roundCurrency(marketValuedCapital - valuedSubsetInvested)
       : null;
 
   const unrealizedPnLPct =
-    unrealizedPnL !== null && totalInvested > 0
-      ? roundPercent((unrealizedPnL / totalInvested) * 100)
+    unrealizedPnL !== null && valuedSubsetInvested > 0
+      ? roundPercent((unrealizedPnL / valuedSubsetInvested) * 100)
       : null;
+
+  const wholePortfolioPnL = isValuationComplete ? unrealizedPnL : null;
+  const wholePortfolioPnLPct = isValuationComplete ? unrealizedPnLPct : null;
+
+  const valuationCompletenessMessage = isValuationComplete
+    ? 'Complete portfolio valuation active across 100% of holdings.'
+    : hasAnyPriced
+    ? `Unrealized P&L calculated for ${pricedPositionsCount} of ${holdings.length} valued positions. Complete portfolio valuation unavailable.`
+    : 'No active market quotes available. Valuation and unrealized P&L cannot be computed.';
 
   // 3. Build consolidated instruments list
   const consolidatedInstruments: ConsolidatedInstrumentExposure[] = [];
@@ -418,7 +493,7 @@ export function computeUnifiedXRay(
 
     consolidatedInstruments.push(consolidatedItem);
 
-    // Cross-broker overlap check: instrument appears in > 1 broker accounts!
+    // Cross-broker overlap check: instrument appears in > 1 broker accounts
     if (distinctBrokers.size > 1) {
       if (instValued !== null) {
         crossBrokerOverlapValuedTotal += instValued;
@@ -515,8 +590,8 @@ export function computeUnifiedXRay(
           : 0;
 
       return {
-        asset_class: cls,
-        display_name: ASSET_CLASS_DISPLAY_NAMES[cls] || cls.toUpperCase(),
+        asset_class: cls || 'equity',
+        display_name: (cls && ASSET_CLASS_DISPLAY_NAMES[cls]) || (cls ? cls.toUpperCase() : 'Direct Equities'),
         invested_value: roundCurrency(data.invested),
         current_value: currentVal,
         percentage_of_valued: sharePct,
@@ -595,6 +670,8 @@ export function computeUnifiedXRay(
       hasValued: boolean;
       count: number;
       isClassified: boolean;
+      constituentSymbols: string[];
+      largestHolding: { symbol: string; name: string; value: number | null } | null;
     }
   >();
 
@@ -612,14 +689,27 @@ export function computeUnifiedXRay(
         hasValued: false,
         count: 0,
         isClassified,
+        constituentSymbols: [],
+        largestHolding: null,
       });
     }
     const sec = sectorMap.get(sectorName)!;
     sec.invested += inst.total_invested_value;
     sec.count += 1;
+    sec.constituentSymbols.push(inst.symbol);
+
     if (inst.current_value !== null) {
       sec.valued += inst.current_value;
       sec.hasValued = true;
+    }
+
+    const instValue = inst.current_value ?? inst.total_invested_value;
+    if (!sec.largestHolding || instValue > (sec.largestHolding.value ?? 0)) {
+      sec.largestHolding = {
+        symbol: inst.symbol,
+        name: inst.name,
+        value: inst.current_value,
+      };
     }
   }
 
@@ -631,6 +721,13 @@ export function computeUnifiedXRay(
           ? roundPercent((currentVal / marketValuedCapital) * 100)
           : 0;
 
+      let concentrationObservation: string | undefined;
+      if (sharePct >= 40) {
+        concentrationObservation = `${sector} represents ${sharePct.toFixed(1)}% of your valued portfolio. An industry downturn could affect a large portion of your capital.`;
+      } else if (sharePct >= 25) {
+        concentrationObservation = `${sector} represents an elevated allocation (${sharePct.toFixed(1)}% of valued assets).`;
+      }
+
       return {
         sector,
         invested_value: roundCurrency(data.invested),
@@ -638,10 +735,12 @@ export function computeUnifiedXRay(
         percentage_of_valued: sharePct,
         instruments_count: data.count,
         is_classified: data.isClassified,
+        largest_holding: data.largestHolding,
+        concentration_observation: concentrationObservation,
+        constituent_symbols: data.constituentSymbols,
       };
     })
     .sort((a, b) => {
-      // Keep Unclassified towards the end if others exist
       if (a.sector === 'Unclassified') return 1;
       if (b.sector === 'Unclassified') return -1;
       return (b.current_value ?? b.invested_value) - (a.current_value ?? a.invested_value);
@@ -652,6 +751,249 @@ export function computeUnifiedXRay(
     holdings.map((h) => h.broker_account_id).filter(Boolean)
   ).size;
 
+  // 7. Concentration Metrics & HHI (Defensible denominator: market valued capital if present, else invested)
+  const valuationBase =
+    marketValuedCapital && marketValuedCapital > 0 ? marketValuedCapital : totalInvested;
+  const valuedInsts = consolidatedInstruments.filter(
+    (i) => i.current_value !== null && i.current_value > 0
+  );
+  const targetInsts = valuedInsts.length > 0 ? valuedInsts : consolidatedInstruments;
+
+  const top1Inst = targetInsts[0];
+  const top1Val = top1Inst ? (top1Inst.current_value ?? top1Inst.total_invested_value) : 0;
+  const topHoldingWeight =
+    valuationBase > 0 ? roundPercent((top1Val / valuationBase) * 100) / 100 : 0;
+
+  const top2Val = targetInsts
+    .slice(0, 2)
+    .reduce((sum, i) => sum + (i.current_value ?? i.total_invested_value), 0);
+  const top2HoldingsWeight =
+    valuationBase > 0 ? roundPercent((top2Val / valuationBase) * 100) / 100 : 0;
+
+  const top3Val = targetInsts
+    .slice(0, 3)
+    .reduce((sum, i) => sum + (i.current_value ?? i.total_invested_value), 0);
+  const top3HoldingsWeight =
+    valuationBase > 0 ? roundPercent((top3Val / valuationBase) * 100) / 100 : 0;
+
+  const top5Val = targetInsts
+    .slice(0, 5)
+    .reduce((sum, i) => sum + (i.current_value ?? i.total_invested_value), 0);
+  const top5HoldingsWeight =
+    valuationBase > 0 ? roundPercent((top5Val / valuationBase) * 100) / 100 : 0;
+
+  const shares = targetInsts.map((i) => {
+    const v = i.current_value ?? i.total_invested_value;
+    return valuationBase > 0 ? v / valuationBase : 0;
+  });
+  const hhi = computeHHI(shares);
+  const hhiLabel: 'Low Concentration' | 'Moderate Concentration' | 'High Concentration' =
+    hhi < 0.15 ? 'Low Concentration' : hhi < 0.25 ? 'Moderate Concentration' : 'High Concentration';
+
+  // 8. Shared Risk Screening Engine (guaranteeing X-Ray and Risk Radar never disagree)
+  const riskMetrics = buildRiskMetrics(holdings);
+
+  const topSector = riskMetrics.top_sector;
+  const topSectorWeight = riskMetrics.top_sector_weight;
+  const topAssetClass = riskMetrics.top_asset_class;
+  const topAssetClassWeight = riskMetrics.top_asset_class_weight;
+
+  const singleBrokerNotice =
+    distinctBrokerAccountsCount <= 1
+      ? 'Cross-broker overlap cannot be assessed across multiple accounts yet.'
+      : null;
+
+  const isFullyReliable =
+    isValuationComplete && staleQuotesCount === 0 && positionsWithoutCostBasis === 0;
+
+  const freshnessNote =
+    unpricedPositionsCount > 0
+      ? `${unpricedPositionsCount} holding(s) lack active price quotes.`
+      : staleQuotesCount > 0
+      ? `${staleQuotesCount} holding quote(s) are older than 48 hours. Valuations may reflect previous market closes or weekend pricing.`
+      : 'All holding quotes are verified and updated within active market thresholds.';
+
+  // 9. Generate Prioritized Risk-Reduction Actions (Phase 11)
+  const riskReductionActions: RiskReductionAction[] = [];
+
+  // Action 1: Single-stock concentration
+  if (topHoldingWeight >= 0.35 && top1Inst) {
+    const pctStr = (topHoldingWeight * 100).toFixed(1);
+    riskReductionActions.push({
+      id: 'act-single-stock',
+      priority: 'HIGH_PRIORITY',
+      priority_label: 'High Priority',
+      category: 'single_stock',
+      title: `Review Single-Stock Allocation (${top1Inst.name})`,
+      observation: `${top1Inst.name} accounts for ${pctStr}% of your valued portfolio.`,
+      recommended_step:
+        'Review whether this position size aligns with your risk tolerance. Consider directing future capital toward broad index funds or complementary sectors to reduce single-company volatility.',
+      action_trigger: `Single-stock concentration (${pctStr}%) exceeds conservative 35% screening threshold.`,
+    });
+  }
+
+  // Action 2: Sector concentration
+  if (topSectorWeight >= 0.40 && topSector) {
+    const secPct = (topSectorWeight * 100).toFixed(1);
+    riskReductionActions.push({
+      id: 'act-sector-concentration',
+      priority: 'REVIEW',
+      priority_label: 'Review',
+      category: 'sector',
+      title: `Evaluate ${topSector} Sector Exposure`,
+      observation: `${topSector} accounts for ${secPct}% of your valued investments.`,
+      recommended_step:
+        'Research diversification across economically distinct sectors (e.g. Healthcare, Consumer Goods, IT) rather than adding more stocks from the same sector.',
+      educational_link: '/explore',
+      action_trigger: `Sector concentration (${secPct}%) exceeds 40% threshold.`,
+    });
+  }
+
+  // Action 3: Asset-class concentration (e.g. 100% equity)
+  if (riskMetrics.equity_weight >= 0.90) {
+    riskReductionActions.push({
+      id: 'act-equity-only',
+      priority: 'EXPLORE_LEARN',
+      priority_label: 'Explore / Learn',
+      category: 'asset_class',
+      title: 'Explore Multi-Asset Allocation',
+      observation: 'Your portfolio is invested almost entirely in equities, with no defensive fixed-income or gold buffers.',
+      recommended_step:
+        'Learn how non-correlated asset classes like Government Securities (Bonds), Sovereign Gold Bonds, and REITs can provide yield and cushion market pullbacks.',
+      educational_link: '/bonds',
+      action_trigger: '100% equity allocation with zero debt/hybrid asset exposure.',
+    });
+  }
+
+  // Action 4: Incomplete Valuation
+  if (unpricedPositionsCount > 0) {
+    riskReductionActions.push({
+      id: 'act-incomplete-valuation',
+      priority: 'REVIEW',
+      priority_label: 'Review',
+      category: 'data_quality',
+      title: 'Verify Quotes for Unpriced Positions',
+      observation: `Current market quotes are unavailable for ${unpricedPositionsCount} holding(s).`,
+      recommended_step:
+        'Confirm active exchange ticker symbols and ensure symbols are correctly tagged before relying on overall P&L or asset weights.',
+      educational_link: '/investments',
+      action_trigger: `${unpricedPositionsCount} unquoted positions exclude partial assets from market valuation.`,
+    });
+  }
+
+  // Action 5: Cross-broker overlap
+  if (overlapsList.length > 0) {
+    riskReductionActions.push({
+      id: 'act-cross-broker-overlap',
+      priority: 'REVIEW',
+      priority_label: 'Review',
+      category: 'broker_overlap',
+      title: `Consolidate ${overlapsList.length} Overlapping Securities`,
+      observation: `${overlapsList.length} security(ies) are held across multiple broker accounts, totaling ${formatIndianCurrency(crossBrokerOverlapValuedTotal)}.`,
+      recommended_step:
+        'Holding identical instruments across multiple brokers multiplies transaction and tracking overhead without adding true diversification.',
+      educational_link: '/brokers',
+      action_trigger: `${overlapsList.length} securities duplicated across multiple tracked brokers.`,
+    });
+  }
+
+  // Default educational action if few triggers fired
+  if (riskReductionActions.length < 3) {
+    riskReductionActions.push({
+      id: 'act-rebalance-discipline',
+      priority: 'EXPLORE_LEARN',
+      priority_label: 'Explore / Learn',
+      category: 'single_stock',
+      title: 'Establish Periodic Portfolio Review Cadence',
+      observation: 'Disciplined review schedules ensure allocations remain aligned with your long-term goals.',
+      recommended_step:
+        'Schedule a quarterly portfolio check-in to verify that winners have not grown to dominate your risk budget without your deliberate choice.',
+      educational_link: '/learn',
+      action_trigger: 'Proactive portfolio maintenance best practice.',
+    });
+  }
+
+  // 10. Generate Portfolio Interpretation (Phase 10: "Your Portfolio Explained")
+  const classifiedSectorsCount = sectorBreakdown.filter((s) => s.is_classified).length;
+  const assetClassesCount = assetClassBreakdown.length;
+
+  const strengthsList: string[] = [];
+  if (quoteCoveragePct === 100) {
+    strengthsList.push('100% active price quote coverage across all portfolio holdings.');
+  }
+  if (distinctBrokerAccountsCount > 1 && overlapsList.length === 0) {
+    strengthsList.push('Multi-broker setup with zero duplicate security overlap.');
+  }
+  if (classifiedSectorsCount >= 3) {
+    strengthsList.push(`Broad economic representation across ${classifiedSectorsCount} classified sectors.`);
+  }
+  if (topHoldingWeight <= 0.20 && top1Inst) {
+    strengthsList.push('Well-contained single-stock concentration (largest holding is under 20% of valued assets).');
+  }
+  if (assetClassesCount >= 2) {
+    strengthsList.push(`Multi-asset diversification across ${assetClassesCount} distinct asset categories.`);
+  }
+  if (strengthsList.length === 0) {
+    strengthsList.push('Holdings are clearly cataloged and tracked with known cost basis.');
+  }
+
+  const concernsList: string[] = [];
+  if (topHoldingWeight >= 0.35 && top1Inst) {
+    concernsList.push(`${top1Inst.name} dominates ${(topHoldingWeight * 100).toFixed(1)}% of valued capital.`);
+  }
+  if (topSectorWeight >= 0.40 && topSector) {
+    concernsList.push(`${topSector} accounts for ${(topSectorWeight * 100).toFixed(1)}% of your investments.`);
+  }
+  if (riskMetrics.equity_weight >= 0.95) {
+    concernsList.push('100% equity exposure with no fixed-income or defensive cushion.');
+  }
+  if (overlapsList.length > 0) {
+    concernsList.push(`${overlapsList.length} duplicated securities held across multiple brokers.`);
+  }
+  if (concernsList.length === 0) {
+    concernsList.push('No extreme concentration thresholds triggered; monitor position drift over time.');
+  }
+
+  const limitationsList: string[] = [];
+  if (unpricedPositionsCount > 0) {
+    limitationsList.push(`${unpricedPositionsCount} holding(s) lack active market quotes. Unrealized P&L represents only the valued subset.`);
+  }
+  if (staleQuotesCount > 0) {
+    limitationsList.push(`${staleQuotesCount} quote(s) are older than 48 hours.`);
+  }
+  if (positionsWithoutIsin > 0) {
+    limitationsList.push(`${positionsWithoutIsin} position(s) lack official ISIN identifiers.`);
+  }
+  if (positionsUnclassifiedSector > 0) {
+    limitationsList.push(`${positionsUnclassifiedSector} position(s) lack industry sector classifications.`);
+  }
+  if (distinctBrokerAccountsCount <= 1) {
+    limitationsList.push('Single broker account tracked: cross-broker overlap cannot be assessed across multiple accounts yet.');
+  }
+
+  const researchPrioritiesList: string[] = [];
+  if (top1Inst) {
+    researchPrioritiesList.push(`Monitor upcoming earnings and filings for top holding ${top1Inst.name} (${top1Inst.symbol}).`);
+  }
+  if (topSector) {
+    researchPrioritiesList.push(`Assess macroeconomic policy and interest rate sensitivity for the ${topSector} sector.`);
+  }
+  if (unpricedPositionsCount > 0) {
+    researchPrioritiesList.push('Obtain current market price quotes for unpriced positions.');
+  }
+  researchPrioritiesList.push('Review overall asset allocation against your stated investment horizon and risk budget.');
+
+  const compositionSummary =
+    `Your portfolio contains ${groupingMap.size} distinct instrument(s) across ${assetClassesCount} asset class(es) and ${classifiedSectorsCount} classified sector(s), tracked across ${Math.max(distinctBrokerAccountsCount, 1)} broker account(s). Total capital invested is ${formatIndianCurrency(totalInvested)}, with valued market capital of ${marketValuedCapital !== null ? formatIndianCurrency(marketValuedCapital) : 'partially available'}.`;
+
+  const portfolioInterpretation: PortfolioInterpretation = {
+    composition_summary: compositionSummary,
+    strengths: strengthsList,
+    primary_concerns: concernsList,
+    data_limitations: limitationsList,
+    research_priorities: researchPrioritiesList,
+  };
+
   return {
     summary: {
       tracked_brokers_count: Math.max(distinctBrokerAccountsCount, brokerAccounts.length, 1),
@@ -659,14 +1001,36 @@ export function computeUnifiedXRay(
       total_positions_count: holdings.length,
       total_invested_capital: totalInvested,
       market_valued_capital: marketValuedCapital,
+      valued_subset_invested_capital: valuedSubsetInvested,
+      valued_subset_unrealized_pnl: unrealizedPnL,
+      valued_subset_unrealized_pnl_pct: unrealizedPnLPct,
+      is_valuation_complete: isValuationComplete,
+      valuation_completeness_message: valuationCompletenessMessage,
       priced_positions_count: pricedPositionsCount,
       unpriced_positions_count: unpricedPositionsCount,
       quote_coverage_pct: quoteCoveragePct,
       unrealized_pnl: unrealizedPnL,
       unrealized_pnl_pct: unrealizedPnLPct,
+      whole_portfolio_pnl: wholePortfolioPnL,
+      whole_portfolio_pnl_pct: wholePortfolioPnLPct,
       cross_broker_overlaps_count: overlapsList.length,
       cross_broker_overlap_value: roundCurrency(crossBrokerOverlapValuedTotal),
       cross_broker_overlap_valued_pct: crossBrokerOverlapValuedPct,
+      top_holding_name: top1Inst?.name,
+      top_holding_symbol: top1Inst?.symbol,
+      top_holding_weight: roundPercent(topHoldingWeight * 100),
+      top_2_holdings_weight: roundPercent(top2HoldingsWeight * 100),
+      top_3_holdings_weight: roundPercent(top3HoldingsWeight * 100),
+      top_5_holdings_weight: roundPercent(top5HoldingsWeight * 100),
+      hhi: Math.round(hhi * 10000),
+      hhi_label: hhiLabel,
+      risk_score: riskMetrics.risk_score,
+      risk_label: riskMetrics.risk_label,
+      top_sector: topSector,
+      top_sector_weight: roundPercent(topSectorWeight * 100),
+      top_asset_class: topAssetClass,
+      top_asset_class_weight: roundPercent(topAssetClassWeight * 100),
+      single_broker_notice: singleBrokerNotice,
     },
     overlaps: overlapsList,
     consolidated_instruments: consolidatedInstruments,
@@ -680,6 +1044,12 @@ export function computeUnifiedXRay(
       stale_quotes_count: staleQuotesCount,
       positions_without_isin: positionsWithoutIsin,
       positions_unclassified_sector: positionsUnclassifiedSector,
+      positions_without_cost_basis: positionsWithoutCostBasis,
+      quote_coverage_pct: quoteCoveragePct,
+      is_fully_reliable: isFullyReliable,
+      freshness_note: freshnessNote,
     },
+    risk_reduction_actions: riskReductionActions,
+    portfolio_interpretation: portfolioInterpretation,
   };
 }
