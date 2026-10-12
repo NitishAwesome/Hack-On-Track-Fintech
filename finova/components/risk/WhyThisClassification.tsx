@@ -19,11 +19,18 @@ export function WhyThisClassification({
 }: WhyThisClassificationProps) {
   const [isMethodologyExpanded, setIsMethodologyExpanded] = useState(false);
 
+  const riskDisplayCategory =
+    baseMetrics.risk_label === 'Conservative'
+      ? 'Lower Observed Exposure Risk'
+      : baseMetrics.risk_label === 'Moderate'
+      ? 'Moderate Observed Exposure Risk'
+      : 'Higher Observed Exposure Risk';
+
   return (
     <div className="card p-5 space-y-4 border border-border">
       <div className="border-b border-border/60 pb-3">
         <h3 className="text-base font-bold text-foreground">
-          Why Is My Portfolio Classified as {baseMetrics.risk_label}?
+          Why Is My Portfolio Categorized as {riskDisplayCategory}?
         </h3>
         <p className="text-xs text-muted mt-0.5">
           Deterministic explanation generated directly from your portfolio’s observable math.

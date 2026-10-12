@@ -47,6 +47,13 @@ export function RiskOverviewCard({
       ? 'bg-warning/10 text-warning border-warning/20'
       : 'bg-loss/10 text-loss border-loss/20';
 
+  const riskDisplayCategory =
+    baseMetrics.risk_label === 'Conservative'
+      ? 'Lower observed exposure risk'
+      : baseMetrics.risk_label === 'Moderate'
+      ? 'Moderate observed exposure risk'
+      : 'Higher observed exposure risk';
+
   return (
     <div className="card p-6 relative overflow-hidden border border-border">
       {/* Background radial highlight */}
@@ -122,9 +129,9 @@ export function RiskOverviewCard({
         <div className="flex-1 space-y-3 text-center lg:text-left">
           <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5">
             <span
-              className={`px-3 py-1 rounded-full text-xs font-bold border tracking-wide uppercase ${labelBadgeClass}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold border tracking-wide ${labelBadgeClass}`}
             >
-              {baseMetrics.risk_label} Profile
+              {riskDisplayCategory}
             </span>
 
             <span

@@ -29,7 +29,7 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
         <span className="text-[11px] text-muted">Active context: {symbol}</span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {/* Link 1: Investment X-Ray */}
         <Link
           href="/analysis"
@@ -53,30 +53,7 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
           </div>
         </Link>
 
-        {/* Link 2: Future Lab */}
-        <Link
-          href="/future-lab"
-          className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-cyan-500/40 transition group flex flex-col justify-between"
-        >
-          <div>
-            <div className="flex items-center justify-between text-muted group-hover:text-cyan-400 transition">
-              <Compass className="w-4 h-4 text-cyan-400" />
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </div>
-            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-cyan-400 transition">
-              Future Lab
-            </h5>
-            <p className="text-[11px] text-muted mt-1 leading-snug">
-              Simulate hypothetical capital allocation strategies before committing live funds.
-            </p>
-          </div>
-          <div className="mt-3 text-[10px] font-semibold text-cyan-400 flex items-center gap-0.5">
-            <span>Simulate Allocation</span>
-            <ChevronRight className="w-3 h-3" />
-          </div>
-        </Link>
-
-        {/* Link 3: Risk Radar */}
+        {/* Link 2: Risk Radar */}
         <Link
           href="/risk"
           className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-amber-500/40 transition group flex flex-col justify-between"
@@ -90,18 +67,64 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
               Risk Radar
             </h5>
             <p className="text-[11px] text-muted mt-1 leading-snug">
-              Evaluate portfolio Value at Risk (VaR), beta sensitivity, and macro stress scenarios.
+              Evaluate portfolio concentration risk, beta sensitivity, and stress scenarios.
             </p>
           </div>
           <div className="mt-3 text-[10px] font-semibold text-amber-400 flex items-center gap-0.5">
-            <span>Understand Risk</span>
+            <span>Analyze Portfolio Risk</span>
             <ChevronRight className="w-3 h-3" />
           </div>
         </Link>
 
-        {/* Link 4: Market News */}
+        {/* Link 3: Future Lab */}
         <Link
-          href="/news"
+          href="/future-lab"
+          className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-cyan-500/40 transition group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between text-muted group-hover:text-cyan-400 transition">
+              <Compass className="w-4 h-4 text-cyan-400" />
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </div>
+            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-cyan-400 transition">
+              Future Lab
+            </h5>
+            <p className="text-[11px] text-muted mt-1 leading-snug">
+              Simulate hypothetical capital allocation strategies before committing funds.
+            </p>
+          </div>
+          <div className="mt-3 text-[10px] font-semibold text-cyan-400 flex items-center gap-0.5">
+            <span>Explore Scenario</span>
+            <ChevronRight className="w-3 h-3" />
+          </div>
+        </Link>
+
+        {/* Link 4: FINOVA Intelligence */}
+        <Link
+          href={`/insights?q=${encodeURIComponent(symbol)}`}
+          className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-rose-500/40 transition group flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center justify-between text-muted group-hover:text-rose-400 transition">
+              <Compass className="w-4 h-4 text-rose-400" />
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </div>
+            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-rose-400 transition">
+              FINOVA Intelligence
+            </h5>
+            <p className="text-[11px] text-muted mt-1 leading-snug">
+              Ask AI about risk drivers, business moat, earnings catalysts, and sector outlook.
+            </p>
+          </div>
+          <div className="mt-3 text-[10px] font-semibold text-rose-400 flex items-center gap-0.5">
+            <span>Ask FINOVA</span>
+            <ChevronRight className="w-3 h-3" />
+          </div>
+        </Link>
+
+        {/* Link 5: Market News */}
+        <Link
+          href={`/news?symbol=${encodeURIComponent(symbol)}`}
           className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-violet-500/40 transition group flex flex-col justify-between"
         >
           <div>
@@ -110,14 +133,14 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
               <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
             <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-violet-400 transition">
-              Financial News Feed
+              News & Market
             </h5>
             <p className="text-[11px] text-muted mt-1 leading-snug">
-              Read verified macroeconomic, RBI policy, and sector headlines across 3 news feeds.
+              Read verified macroeconomic, RBI policy, and sector headlines across connected feeds.
             </p>
           </div>
           <div className="mt-3 text-[10px] font-semibold text-violet-400 flex items-center gap-0.5">
-            <span>Explore Market News</span>
+            <span>Related News</span>
             <ChevronRight className="w-3 h-3" />
           </div>
         </Link>

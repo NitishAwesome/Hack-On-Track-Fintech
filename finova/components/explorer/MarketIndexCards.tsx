@@ -1,64 +1,28 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import type { MarketIndex, MarketDataResponse } from '@/types/market';
+import React from 'react';
+import type { MarketIndex } from '@/types/market';
 import { TrendingUp, TrendingDown, Clock, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
+import { useSharedMarketIndices } from '@/lib/market/sharedMarketStore';
 
 interface MarketIndexCardsProps {
   selectedIndex?: string;
   onSelectIndex: (symbol: string, name: string) => void;
 }
 
+// Canonical Shared Market Store (Single source of truth for NIFTY, SENSEX, BANK NIFTY):
+// - Central poller: interval delay = 2500 ms when market is open
+// - Error backoff: backoffCountRef.current exponential backoff
+// - Closed market stop: pauses polling when marketStatus && marketStatus !== 'OPEN'
 export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCardsProps) {
-  const [data, setData] = useState<MarketDataResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    async function load() {
-      try {
-        const res = await fetch('/api/market/indices');
-        if (!res.ok) {
-          throw new Error(`Failed to fetch market indices (status ${res.status})`);
-        }
-        const json: MarketDataResponse = await res.json();
-        if (isMounted) {
-          setData(json);
-          setError(null);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Market indices temporarily unavailable');
-          setLoading(false);
-        }
-      }
-    }
-
-    load();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const handleManualRefresh = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/market/indices?force=true');
-      if (!res.ok) {
-        throw new Error(`Failed to fetch market indices (status ${res.status})`);
-      }
-      const json: MarketDataResponse = await res.json();
-      setData(json);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Market indices temporarily unavailable');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data,
+    loading,
+    isRefreshing,
+    marketStatus,
+    error,
+    refreshNow: handleManualRefresh,
+  } = useSharedMarketIndices();
 
   const formatISTTime = (isoString?: string) => {
     if (!isoString) return '—';
@@ -115,21 +79,39 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-foreground tracking-tight">Major Indian Indices</h2>
-          {data?.marketStatus && getStatusBadge(data.marketStatus)}
+          {marketStatus && getStatusBadge(marketStatus)}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted flex items-center gap-1">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted font-mono">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                marketStatus === 'OPEN'
+                  ? isRefreshing
+                    ? 'bg-amber-400 animate-pulse'
+                    : 'bg-emerald-400'
+                  : 'bg-zinc-500'
+              }`}
+            />
+            <span>
+              {marketStatus === 'OPEN'
+                ? isRefreshing
+                  ? 'Updating…'
+                  : 'Updated just now'
+                : 'Market Closed — Previous Close'}
+            </span>
+          </div>
+          <span className="text-xs text-muted hidden md:flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            Yahoo Finance Feed
+            Yahoo Finance
           </span>
           <button
             onClick={handleManualRefresh}
-            disabled={loading}
+            disabled={loading || isRefreshing}
             title="Refresh indices"
             className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-zinc-800/60 transition disabled:opacity-50"
             aria-label="Refresh index data"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>

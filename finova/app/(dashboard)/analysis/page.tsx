@@ -25,6 +25,7 @@ import {
   RefreshCw,
   ExternalLink,
   AlertTriangle,
+  Shield,
 } from 'lucide-react';
 import { SkeletonCard } from '@/components/shared/Skeletons';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -161,6 +162,15 @@ export default function InvestmentXRayPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
             <span>{isFetching ? 'Refreshing...' : 'Refresh X-Ray'}</span>
           </button>
+
+          <Link
+            href="/risk"
+            className="btn-secondary text-xs inline-flex items-center gap-1.5 py-2 px-3"
+            title="Investigate risk factors in Risk Radar"
+          >
+            <Shield className="w-3.5 h-3.5 text-amber-500" />
+            <span>Risk Radar</span>
+          </Link>
 
           <Link
             href="/investments"

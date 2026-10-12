@@ -301,8 +301,8 @@ function NewsAndMarketContent() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'rgb(var(--foreground))' }}>
-              NEWS & MARKET
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              News & Market
             </h1>
             <span
               className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5"

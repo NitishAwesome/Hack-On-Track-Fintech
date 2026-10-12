@@ -26,6 +26,7 @@ import {
   Layers,
   Sparkles,
   X,
+  FlaskConical,
 } from 'lucide-react';
 import { SkeletonCard } from '@/components/shared/Skeletons';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -145,7 +146,7 @@ export default function RiskRadarPage() {
       <div className="page-container py-12">
         <EmptyState
           icon={<Shield className="w-10 h-10 text-brand-500" />}
-          title="No Portfolio Holdings"
+          title="Not Assessed — No Active Holdings"
           description="Add holdings across your broker accounts to calculate deterministic concentration and risk radar metrics."
           action={
             <Link href="/investments" className="btn-primary text-xs py-2 px-3">
@@ -196,6 +197,15 @@ export default function RiskRadarPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
             <span>{isFetching ? 'Refreshing...' : 'Refresh Radar'}</span>
           </button>
+
+          <Link
+            href="/future-lab"
+            className="btn-secondary text-xs inline-flex items-center gap-1.5 py-2 px-3"
+            title="Simulate rebalancing in Future Lab"
+          >
+            <FlaskConical className="w-3.5 h-3.5 text-purple-400" />
+            <span>Future Lab</span>
+          </Link>
 
           <Link
             href="/analysis"

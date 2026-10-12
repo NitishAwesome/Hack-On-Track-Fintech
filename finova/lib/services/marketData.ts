@@ -77,13 +77,13 @@ interface QuoteCacheEntry {
 
 /**
  * Server-Side In-Memory Cache Durations:
- * Open market: 60s
+ * Open market: 2.5s (2500ms auto-refresh)
  * Closed market (EOD): 5m (300s)
- * Negative cache (not found/404): 60s
+ * Negative / error cache (rate limit/failure backoff): 15s
  */
-const CACHE_TTL_OPEN_MS = 60 * 1000;
+const CACHE_TTL_OPEN_MS = 2500;
 const CACHE_TTL_CLOSED_MS = 5 * 60 * 1000;
-const CACHE_TTL_NEGATIVE_MS = 60 * 1000;
+const CACHE_TTL_NEGATIVE_MS = 15 * 1000;
 
 let indexMemoryCache: IndexCacheEntry | null = null;
 const quoteMemoryCache = new Map<string, QuoteCacheEntry>();
@@ -154,7 +154,7 @@ export class MarketDataService {
       if (!indices || indices.length === 0) {
         if (indexMemoryCache?.lastSuccessfulIndices && indexMemoryCache.lastSuccessfulIndices.length > 0) {
           const staleIndices = indexMemoryCache.lastSuccessfulIndices;
-          return {
+          const staleResponse: MarketDataResponse = {
             success: true,
             status: 'STALE',
             freshnessState: 'CACHED_STALE',
@@ -167,6 +167,13 @@ export class MarketDataService {
             lastUpdated: staleIndices[0]?.timestamp || new Date(indexMemoryCache.lastSuccessfulAt || now).toISOString(),
             source: `${this.provider.sourceLabel} (Cached / Stale)`,
           };
+          indexMemoryCache = {
+            response: staleResponse,
+            expiresAt: now + CACHE_TTL_NEGATIVE_MS,
+            lastSuccessfulIndices: staleIndices,
+            lastSuccessfulAt: indexMemoryCache.lastSuccessfulAt,
+          };
+          return staleResponse;
         }
 
         return {
@@ -208,7 +215,7 @@ export class MarketDataService {
     } catch {
       if (indexMemoryCache?.lastSuccessfulIndices && indexMemoryCache.lastSuccessfulIndices.length > 0) {
         const staleIndices = indexMemoryCache.lastSuccessfulIndices;
-        return {
+        const staleResponse: MarketDataResponse = {
           success: true,
           status: 'STALE',
           freshnessState: 'CACHED_STALE',
@@ -221,6 +228,13 @@ export class MarketDataService {
           lastUpdated: staleIndices[0]?.timestamp || new Date(indexMemoryCache.lastSuccessfulAt || now).toISOString(),
           source: `${this.provider.sourceLabel} (Cached / Stale)`,
         };
+        indexMemoryCache = {
+          response: staleResponse,
+          expiresAt: now + CACHE_TTL_NEGATIVE_MS,
+          lastSuccessfulIndices: staleIndices,
+          lastSuccessfulAt: indexMemoryCache.lastSuccessfulAt,
+        };
+        return staleResponse;
       }
 
       return {

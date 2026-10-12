@@ -82,6 +82,12 @@ export async function POST(request: Request) {
     const isDelayedFeed = Boolean(article.is_delayed_feed);
     const timestampDisplay = typeof article.timestamp_display === 'string' ? sanitizeUntrustedInput(article.timestamp_display) : articlePubDate;
 
+    // Optional stock-specific context (e.g. from dedicated stock detail page)
+    const stockInput = body.stock && typeof body.stock === 'object' ? body.stock : null;
+    const stockSymbol = stockInput && typeof stockInput.symbol === 'string' ? sanitizeUntrustedInput(stockInput.symbol, 15) : '';
+    const stockName = stockInput && typeof stockInput.name === 'string' ? sanitizeUntrustedInput(stockInput.name, 60) : '';
+    const stockSector = stockInput && typeof stockInput.sector === 'string' ? sanitizeUntrustedInput(stockInput.sector, 40) : '';
+
     // Check if article matches any holding in user's verified portfolio
     let verifiedMatchedHolding: {
       symbol: string;
@@ -148,7 +154,34 @@ export async function POST(request: Request) {
 
         let prompt = '';
 
-        if (topic === 'news_article' || topic === 'news_relevance') {
+        if (stockSymbol) {
+          prompt = `You are FINOVA's AI Financial Intelligence Assistant explaining news developments for a specific Indian equity.
+Strict Regulatory & Safety Rules:
+1. Provide neutral, educational explanations grounded ONLY in the verified facts and news excerpts provided below.
+2. NEVER generate, invent, or predict stock prices, target prices, or historical chart data.
+3. NEVER generate financial calculation values, fundamentals, or market status. Those are supplied strictly by deterministic market providers.
+4. NEVER provide financial advice, buy/sell recommendations, or price targets.
+5. Emphasize Indian corporate context (NSE/BSE, SEBI regulations, quarterly earnings cycles).
+6. Delayed articles (~12-hour delayed feed) must NEVER be described as breaking news or real-time alerts.
+7. GDELT indexing timestamps represent indexing/discovery time, not guaranteed publication time.
+8. Keep the explanation under 3-4 concise, professional sentences.
+
+Target Company Context:
+- Company: ${stockName || stockSymbol} (${stockSymbol})
+- Sector: ${stockSector || 'Indian Equity'}
+${verifiedMatchedHolding ? `- Investor Portfolio Position: Held in user's portfolio (${verifiedMatchedHolding.weight_pct}% weight)` : '- Investor Portfolio Position: Researched equity from FINOVA verified universe'}
+
+Verified Article Context:
+- Headline: "${articleTitle}"
+- Publisher: ${articleSource}
+- Publication / Indexing Time: ${timestampDisplay || articlePubDate}
+- Feed Timing Status: ${isDelayedFeed ? 'DELAYED FEED (~12-hour delay from NewsData.io Free). Treat as broader contextual background.' : 'Fresh / Aggregated Feed.'}
+- Excerpt: "${articleDesc.slice(0, 300)}"
+
+${customQuery ? `User Question: "${customQuery}"` : `Explain: What is this verified development concerning ${stockName || stockSymbol}, why does it matter to an investor researching this company, and what key public filings or factors should they evaluate next?`}
+
+Deliver a concise, educational, structured explanation.`;
+        } else if (topic === 'news_article' || topic === 'news_relevance') {
           prompt = `You are FINOVA's AI News Intelligence Assistant explaining financial news to an Indian retail investor.
 Strict Regulatory & Safety Rules:
 1. Provide neutral, educational explanations grounded ONLY in the verified facts provided below.
@@ -229,6 +262,9 @@ Deliver a concise, educational, structured explanation.`;
           explanation: text,
           model: successfulModel,
           grounded_context: {
+            stock_symbol: stockSymbol || verifiedMatchedHolding?.symbol || null,
+            stock_name: stockName || verifiedMatchedHolding?.name || null,
+            stock_sector: stockSector || verifiedMatchedHolding?.sector || null,
             article_title: articleTitle,
             publisher: articleSource,
             matched_symbol: verifiedMatchedHolding?.symbol || null,
@@ -238,7 +274,7 @@ Deliver a concise, educational, structured explanation.`;
           },
           source: 'gemini',
           disclaimer:
-            'AI-generated educational explanation based on verified server portfolio context. Not SEBI-registered financial advice.',
+            'AI-generated educational explanation based on verified company and news context. Not SEBI-registered financial advice. Stock prices and financial metrics are provided by deterministic market data providers.',
         });
       } catch (aiErr) {
         console.warn('[API /api/ai/explain] Gemini error, falling back to curated answer:', aiErr);
@@ -248,7 +284,9 @@ Deliver a concise, educational, structured explanation.`;
     // Curated deterministic fallback
     let fallbackText = CURATED_EXPLANATIONS[topic] || CURATED_EXPLANATIONS.custom;
 
-    if (topic === 'news_article' || topic === 'news_relevance') {
+    if (stockSymbol) {
+      fallbackText = `This coverage discusses verified developments concerning ${stockName || stockSymbol} (${stockSymbol})${stockSector ? ` in the ${stockSector} sector` : ''}. Retail investors researching this company should verify material business impacts through official corporate disclosures on NSE/BSE and quarterly investor presentations.`;
+    } else if (topic === 'news_article' || topic === 'news_relevance') {
       if (verifiedMatchedHolding) {
         fallbackText = `This article directly mentions ${verifiedMatchedHolding.name} (${verifiedMatchedHolding.symbol}), which represents approximately ${verifiedMatchedHolding.weight_pct}% of your tracked portfolio. Consider reviewing official exchange disclosures on NSE/BSE to evaluate the business impact.`;
       } else {
@@ -265,6 +303,9 @@ Deliver a concise, educational, structured explanation.`;
       type: topic,
       explanation: fallbackText,
       grounded_context: {
+        stock_symbol: stockSymbol || verifiedMatchedHolding?.symbol || null,
+        stock_name: stockName || verifiedMatchedHolding?.name || null,
+        stock_sector: stockSector || verifiedMatchedHolding?.sector || null,
         article_title: articleTitle,
         publisher: articleSource,
         matched_symbol: verifiedMatchedHolding?.symbol || null,
@@ -273,7 +314,7 @@ Deliver a concise, educational, structured explanation.`;
         is_held_in_portfolio: Boolean(verifiedMatchedHolding),
       },
       source: 'deterministic_fallback',
-      disclaimer: 'Curated financial educational explanation based on deterministic portfolio figures. Not financial advice.',
+      disclaimer: 'Curated financial educational explanation based on deterministic figures. Not financial advice.',
     });
   } catch (err: unknown) {
     console.error('[API /api/ai/explain] Exception:', err);

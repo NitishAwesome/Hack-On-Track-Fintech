@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { MarketDataService } from '@/lib/services/marketData';
+import { MarketDataService, getIndianMarketStatus } from '@/lib/services/marketData';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,10 +32,14 @@ export async function GET(request: Request) {
       quotes[sym] = q && q.isValid ? q : null;
     }
 
+    const marketInfo = getIndianMarketStatus();
+
     return NextResponse.json(
       {
         success: true,
         quotes,
+        marketStatus: marketInfo.status,
+        marketStatusLabel: marketInfo.label,
         source: 'Yahoo Finance / yfinance',
         lastUpdated: new Date().toISOString(),
       },
