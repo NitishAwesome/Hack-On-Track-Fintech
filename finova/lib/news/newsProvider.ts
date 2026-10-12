@@ -15,6 +15,7 @@ import type {
   NormalizedNewsArticle,
   NewsFreshness,
   NewsProviderStatus,
+  SafeProviderDiagnostic,
 } from '../../types/news.ts';
 
 interface CacheEntry {
@@ -162,6 +163,7 @@ export interface FetchNewsResult {
   isCached: boolean;
   message?: string;
   nextPage?: string | null;
+  diagnostics?: SafeProviderDiagnostic;
 }
 
 /**
@@ -186,6 +188,14 @@ export async function fetchIndianFinancialNews(options?: {
       providerStatus: 'NOT_CONFIGURED',
       isCached: false,
       message: 'NEWSDATA_API_KEY is not configured in the server environment. Please set NEWSDATA_API_KEY to access live Indian financial news.',
+      diagnostics: {
+        provider: 'newsdata',
+        status: 'NOT_CONFIGURED',
+        articles_count: 0,
+        is_cached: false,
+        message: 'NEWSDATA_API_KEY not configured in server environment.',
+        last_attempted_at: new Date().toISOString(),
+      },
     };
   }
 
@@ -206,9 +216,18 @@ export async function fetchIndianFinancialNews(options?: {
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
       return {
         articles: cached.articles,
-        providerStatus: 'ACTIVE',
+        providerStatus: cached.articles.length > 0 ? 'ACTIVE' : 'EMPTY',
         isCached: true,
         nextPage: cached.nextPage,
+        diagnostics: {
+          provider: 'newsdata',
+          status: cached.articles.length > 0 ? 'ACTIVE' : 'EMPTY',
+          articles_count: cached.articles.length,
+          is_cached: true,
+          http_category: '2xx',
+          message: 'Served from in-memory cache.',
+          last_attempted_at: new Date(cached.timestamp).toISOString(),
+        },
       };
     }
   }
@@ -244,6 +263,17 @@ export async function fetchIndianFinancialNews(options?: {
           providerStatus: 'RATE_LIMITED',
           isCached: true,
           message: 'Daily news quota reached. Displaying previously fetched verified articles.',
+          diagnostics: {
+            provider: 'newsdata',
+            status: 'RATE_LIMITED',
+            articles_count: previousCached.articles.length,
+            is_cached: true,
+            http_status: 429,
+            http_category: '4xx',
+            rate_limited: true,
+            message: 'NewsData.io quota reached (HTTP 429). Serving cached articles.',
+            last_attempted_at: new Date().toISOString(),
+          },
         };
       }
       return {
@@ -251,24 +281,57 @@ export async function fetchIndianFinancialNews(options?: {
         providerStatus: 'RATE_LIMITED',
         isCached: false,
         message: 'NewsData.io daily rate limit reached (HTTP 429). Please wait before requesting new headlines.',
+        diagnostics: {
+          provider: 'newsdata',
+          status: 'RATE_LIMITED',
+          articles_count: 0,
+          is_cached: false,
+          http_status: 429,
+          http_category: '4xx',
+          rate_limited: true,
+          message: 'NewsData.io daily rate limit reached (HTTP 429).',
+          last_attempted_at: new Date().toISOString(),
+        },
       };
     }
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
+      const errCat = response.status >= 500 ? '5xx' : '4xx';
+      const status: NewsProviderStatus = response.status >= 500 ? 'UNAVAILABLE' : 'ERROR';
       if (previousCached && previousCached.articles.length > 0) {
         return {
           articles: previousCached.articles,
-          providerStatus: response.status >= 500 ? 'UNAVAILABLE' : 'ERROR',
+          providerStatus: status,
           isCached: true,
           message: `News provider returned HTTP ${response.status}. Displaying previously fetched verified articles.`,
+          diagnostics: {
+            provider: 'newsdata',
+            status,
+            articles_count: previousCached.articles.length,
+            is_cached: true,
+            http_status: response.status,
+            http_category: errCat,
+            message: `News provider returned HTTP ${response.status}. Serving cached articles.`,
+            last_attempted_at: new Date().toISOString(),
+          },
         };
       }
       return {
         articles: [],
-        providerStatus: response.status >= 500 ? 'UNAVAILABLE' : 'ERROR',
+        providerStatus: status,
         isCached: false,
         message: `NewsData.io request returned HTTP ${response.status}: ${errText.slice(0, 100)}`,
+        diagnostics: {
+          provider: 'newsdata',
+          status,
+          articles_count: 0,
+          is_cached: false,
+          http_status: response.status,
+          http_category: errCat,
+          message: `HTTP ${response.status}`,
+          last_attempted_at: new Date().toISOString(),
+        },
       };
     }
 
@@ -281,6 +344,15 @@ export async function fetchIndianFinancialNews(options?: {
           providerStatus: 'ERROR',
           isCached: true,
           message: 'Invalid response from news provider. Displaying previously fetched verified articles.',
+          diagnostics: {
+            provider: 'newsdata',
+            status: 'ERROR',
+            articles_count: previousCached.articles.length,
+            is_cached: true,
+            http_category: '5xx',
+            message: 'Invalid JSON response from news provider. Serving cached articles.',
+            last_attempted_at: new Date().toISOString(),
+          },
         };
       }
       return {
@@ -288,28 +360,60 @@ export async function fetchIndianFinancialNews(options?: {
         providerStatus: 'ERROR',
         isCached: false,
         message: 'Invalid JSON response from news provider.',
+        diagnostics: {
+          provider: 'newsdata',
+          status: 'ERROR',
+          articles_count: 0,
+          is_cached: false,
+          http_category: '5xx',
+          message: 'Invalid JSON response from news provider.',
+          last_attempted_at: new Date().toISOString(),
+        },
       };
     }
 
     // Check upstream status
     if (data.status === 'error') {
       const errorCode = data.results?.code || '';
-      const isRateLimit = errorCode.toLowerCase().includes('ratelimit');
+      const isRateLimit = typeof errorCode === 'string' && errorCode.toLowerCase().includes('ratelimit');
+      const provStatus: NewsProviderStatus = isRateLimit ? 'RATE_LIMITED' : 'ERROR';
       if (previousCached && previousCached.articles.length > 0) {
         return {
           articles: previousCached.articles,
-          providerStatus: isRateLimit ? 'RATE_LIMITED' : 'ERROR',
+          providerStatus: provStatus,
           isCached: true,
           message: isRateLimit
             ? 'Daily news quota reached. Displaying previously fetched verified articles.'
             : 'Upstream news provider returned an error. Displaying previously fetched verified articles.',
+          diagnostics: {
+            provider: 'newsdata',
+            status: provStatus,
+            articles_count: previousCached.articles.length,
+            is_cached: true,
+            http_status: 200,
+            http_category: '2xx',
+            rate_limited: isRateLimit,
+            message: isRateLimit ? 'Daily quota reached.' : (data.results?.message || 'Upstream provider error'),
+            last_attempted_at: new Date().toISOString(),
+          },
         };
       }
       return {
         articles: [],
-        providerStatus: isRateLimit ? 'RATE_LIMITED' : 'ERROR',
+        providerStatus: provStatus,
         isCached: false,
         message: data.results?.message || 'Upstream provider returned an error.',
+        diagnostics: {
+          provider: 'newsdata',
+          status: provStatus,
+          articles_count: 0,
+          is_cached: false,
+          http_status: 200,
+          http_category: '2xx',
+          rate_limited: isRateLimit,
+          message: isRateLimit ? 'Daily quota reached.' : (data.results?.message || 'Upstream provider error'),
+          last_attempted_at: new Date().toISOString(),
+        },
       };
     }
 
@@ -334,15 +438,29 @@ export async function fetchIndianFinancialNews(options?: {
       nextPage,
     });
 
+    const finalStatus: NewsProviderStatus = finalArticles.length > 0 ? 'ACTIVE' : 'EMPTY';
+
     return {
       articles: finalArticles,
-      providerStatus: finalArticles.length > 0 ? 'ACTIVE' : 'EMPTY',
+      providerStatus: finalStatus,
       isCached: false,
       message: finalArticles.length === 0 ? 'No matching news articles found for query.' : undefined,
       nextPage,
+      diagnostics: {
+        provider: 'newsdata',
+        status: finalStatus,
+        articles_count: finalArticles.length,
+        is_cached: false,
+        http_status: 200,
+        http_category: '2xx',
+        rate_limited: false,
+        message: finalArticles.length === 0 ? 'Query matched 0 articles in NewsData.io.' : 'OK',
+        last_attempted_at: new Date().toISOString(),
+      },
     };
   } catch (err: unknown) {
     const isAbort = err instanceof Error && err.name === 'AbortError';
+    const cat = isAbort ? 'timeout' : 'network_error';
     const previousCached = newsCache.get(cacheKey);
     if (previousCached && previousCached.articles.length > 0) {
       return {
@@ -352,6 +470,15 @@ export async function fetchIndianFinancialNews(options?: {
         message: isAbort
           ? 'News provider timed out. Displaying previously fetched verified articles.'
           : 'Network connection issue with news provider. Displaying previously fetched verified articles.',
+        diagnostics: {
+          provider: 'newsdata',
+          status: 'UNAVAILABLE',
+          articles_count: previousCached.articles.length,
+          is_cached: true,
+          http_category: cat,
+          message: isAbort ? 'Request timed out after 8 seconds.' : 'Network connection failure.',
+          last_attempted_at: new Date().toISOString(),
+        },
       };
     }
     return {
@@ -361,6 +488,15 @@ export async function fetchIndianFinancialNews(options?: {
       message: isAbort
         ? 'NewsData.io request timed out after 8 seconds.'
         : `Network connection error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      diagnostics: {
+        provider: 'newsdata',
+        status: 'UNAVAILABLE',
+        articles_count: 0,
+        is_cached: false,
+        http_category: cat,
+        message: isAbort ? 'Request timed out after 8 seconds.' : 'Network connection failure.',
+        last_attempted_at: new Date().toISOString(),
+      },
     };
   }
 }

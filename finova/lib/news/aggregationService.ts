@@ -13,6 +13,7 @@
 import type {
   NormalizedNewsArticle,
   NewsProviderStatus,
+  SafeProviderDiagnostic,
 } from '../../types/news.ts';
 import { fetchIndianFinancialNews } from './newsProvider.ts';
 import { fetchMarketAuxNews } from './providers/marketAuxProvider.ts';
@@ -31,6 +32,7 @@ export interface AggregatedNewsResult {
   providerStatus: NewsProviderStatus;
   providersUsed: string[];
   providerBreakdown: Record<string, number>;
+  providerDiagnostics: Record<string, SafeProviderDiagnostic>;
   isCached: boolean;
   message?: string;
   nextPage?: string | null;
@@ -255,30 +257,76 @@ export async function getAggregatedFinancialNews(
   const providerArticles = new Map<string, NormalizedNewsArticle[]>();
   const providersUsed: string[] = [];
   const providerBreakdown: Record<string, number> = {};
+  const providerDiagnostics: Record<string, SafeProviderDiagnostic> = {};
   let anyCached = false;
 
   // Process NewsData.io
-  if (newsDataRes.status === 'fulfilled' && newsDataRes.value.articles.length > 0) {
-    providerArticles.set('newsdata', newsDataRes.value.articles);
-    providersUsed.push('NewsData.io');
-    providerBreakdown['newsdata'] = newsDataRes.value.articles.length;
-    if (newsDataRes.value.isCached) anyCached = true;
+  if (newsDataRes.status === 'fulfilled') {
+    if (newsDataRes.value.diagnostics) {
+      providerDiagnostics['newsdata'] = newsDataRes.value.diagnostics;
+    }
+    if (newsDataRes.value.articles.length > 0) {
+      providerArticles.set('newsdata', newsDataRes.value.articles);
+      providersUsed.push('NewsData.io');
+      providerBreakdown['newsdata'] = newsDataRes.value.articles.length;
+      if (newsDataRes.value.isCached) anyCached = true;
+    }
+  } else {
+    providerDiagnostics['newsdata'] = {
+      provider: 'newsdata',
+      status: 'UNAVAILABLE',
+      articles_count: 0,
+      is_cached: false,
+      http_category: 'network_error',
+      message: 'Promise rejected during execution.',
+      last_attempted_at: new Date().toISOString(),
+    };
   }
 
   // Process MarketAux
-  if (marketAuxRes.status === 'fulfilled' && marketAuxRes.value.articles.length > 0) {
-    providerArticles.set('marketaux', marketAuxRes.value.articles);
-    providersUsed.push('MarketAux');
-    providerBreakdown['marketaux'] = marketAuxRes.value.articles.length;
-    if (marketAuxRes.value.isCached) anyCached = true;
+  if (marketAuxRes.status === 'fulfilled') {
+    if (marketAuxRes.value.diagnostics) {
+      providerDiagnostics['marketaux'] = marketAuxRes.value.diagnostics;
+    }
+    if (marketAuxRes.value.articles.length > 0) {
+      providerArticles.set('marketaux', marketAuxRes.value.articles);
+      providersUsed.push('MarketAux');
+      providerBreakdown['marketaux'] = marketAuxRes.value.articles.length;
+      if (marketAuxRes.value.isCached) anyCached = true;
+    }
+  } else {
+    providerDiagnostics['marketaux'] = {
+      provider: 'marketaux',
+      status: 'UNAVAILABLE',
+      articles_count: 0,
+      is_cached: false,
+      http_category: 'network_error',
+      message: 'Promise rejected during execution.',
+      last_attempted_at: new Date().toISOString(),
+    };
   }
 
   // Process GDELT 2.0
-  if (gdeltRes.status === 'fulfilled' && gdeltRes.value.articles.length > 0) {
-    providerArticles.set('gdelt', gdeltRes.value.articles);
-    providersUsed.push('GDELT');
-    providerBreakdown['gdelt'] = gdeltRes.value.articles.length;
-    if (gdeltRes.value.isCached) anyCached = true;
+  if (gdeltRes.status === 'fulfilled') {
+    if (gdeltRes.value.diagnostics) {
+      providerDiagnostics['gdelt'] = gdeltRes.value.diagnostics;
+    }
+    if (gdeltRes.value.articles.length > 0) {
+      providerArticles.set('gdelt', gdeltRes.value.articles);
+      providersUsed.push('GDELT');
+      providerBreakdown['gdelt'] = gdeltRes.value.articles.length;
+      if (gdeltRes.value.isCached) anyCached = true;
+    }
+  } else {
+    providerDiagnostics['gdelt'] = {
+      provider: 'gdelt',
+      status: 'UNAVAILABLE',
+      articles_count: 0,
+      is_cached: false,
+      http_category: 'network_error',
+      message: 'Promise rejected during execution.',
+      last_attempted_at: new Date().toISOString(),
+    };
   }
 
   // 2. Interleave and deduplicate across all returned articles
@@ -308,12 +356,20 @@ export async function getAggregatedFinancialNews(
 
     const anyRateLimited =
       (newsDataRes.status === 'fulfilled' && newsDataRes.value.providerStatus === 'RATE_LIMITED') ||
-      (marketAuxRes.status === 'fulfilled' && marketAuxRes.value.providerStatus === 'RATE_LIMITED');
+      (marketAuxRes.status === 'fulfilled' && marketAuxRes.value.providerStatus === 'RATE_LIMITED') ||
+      (gdeltRes.status === 'fulfilled' && gdeltRes.value.providerStatus === 'RATE_LIMITED');
+
+    const allUnavailable =
+      (newsDataRes.status === 'rejected' || (newsDataRes.status === 'fulfilled' && ['UNAVAILABLE', 'ERROR'].includes(newsDataRes.value.providerStatus))) &&
+      (marketAuxRes.status === 'rejected' || (marketAuxRes.status === 'fulfilled' && ['UNAVAILABLE', 'ERROR'].includes(marketAuxRes.value.providerStatus))) &&
+      (gdeltRes.status === 'rejected' || (gdeltRes.status === 'fulfilled' && ['UNAVAILABLE', 'ERROR'].includes(gdeltRes.value.providerStatus)));
 
     if (allNotConfigured) {
       compositeStatus = 'NOT_CONFIGURED';
     } else if (anyRateLimited) {
       compositeStatus = 'RATE_LIMITED';
+    } else if (allUnavailable) {
+      compositeStatus = 'UNAVAILABLE';
     } else {
       compositeStatus = 'EMPTY';
     }
@@ -330,6 +386,7 @@ export async function getAggregatedFinancialNews(
     providerStatus: compositeStatus,
     providersUsed,
     providerBreakdown,
+    providerDiagnostics,
     isCached: anyCached,
     message: deduped.length === 0 ? 'No matching financial news found across providers.' : undefined,
     nextPage,

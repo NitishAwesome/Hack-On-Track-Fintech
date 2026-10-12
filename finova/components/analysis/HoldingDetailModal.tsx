@@ -370,9 +370,6 @@ export function HoldingDetailModal({
                           <span className="px-1 py-0.2 rounded bg-muted/20 text-foreground font-mono">
                             {art.provider}
                           </span>
-                          {art.is_delayed_feed && (
-                            <span className="text-warning">({art.delay_note || 'delayed feed'})</span>
-                          )}
                           {art.is_cached && (
                             <span className="text-muted">(cached)</span>
                           )}

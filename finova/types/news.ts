@@ -23,6 +23,20 @@ export type NewsProviderStatus =
   | 'EMPTY'
   | 'ERROR';
 
+export interface SafeProviderDiagnostic {
+  provider: 'newsdata' | 'marketaux' | 'gdelt';
+  status: NewsProviderStatus;
+  articles_count: number;
+  is_cached: boolean;
+  http_status?: number;
+  http_category?: '2xx' | '4xx' | '5xx' | 'timeout' | 'network_error';
+  rate_limited?: boolean;
+  cooldown_remaining_sec?: number;
+  used_fallback?: boolean;
+  message?: string;
+  last_attempted_at: string;
+}
+
 export type TimestampType = 'published' | 'indexed' | 'unavailable';
 
 export interface ArticleTemporalInfo {
@@ -130,6 +144,7 @@ export interface NewsApiResponse {
     provider: string;
     providers_used?: string[];
     provider_breakdown?: Record<string, number>;
+    provider_diagnostics?: Record<string, SafeProviderDiagnostic>;
     last_updated: string;
     portfolio_symbols_count: number;
     next_page?: string | null;

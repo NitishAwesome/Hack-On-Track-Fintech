@@ -40,10 +40,225 @@ const ASSET_LABELS: Record<string, string> = {
   gold: 'Gold', sgb: 'Sovereign Gold', cash: 'Cash / Other',
 };
 
-// Substantially increased chart dimensions — bold, prominent & responsive
-const CHART_SIZE = 220;
-const INNER_RADIUS = 64;
-const OUTER_RADIUS = 96;
+// Perfectly proportioned chart dimensions for side-by-side Dual-Wave alignment
+const CHART_SIZE = 195;
+const INNER_RADIUS = 56;
+const OUTER_RADIUS = 86;
+
+interface DualWaveLineGraphProps {
+  items: Array<{
+    name?: string;
+    value: number;
+    percent: number;
+    color: string;
+  }>;
+  activeIndex: number | null;
+  onHoverIndex: (index: number | null) => void;
+}
+
+function DualWaveLineGraph({ items, activeIndex, onHoverIndex }: DualWaveLineGraphProps) {
+  const item1 = items[0] || null;
+  const item2 = items[1] || null;
+
+  const color1 = item1?.color || '#38bdf8';
+  const color2 = item2?.color || '#a855f7';
+
+  const pct1 = item1 ? item1.percent : 0;
+  const pct2 = item2 ? item2.percent : 0;
+
+  // Compute smooth curve y positions dynamically based on percentage
+  const normPct1 = Math.min(100, Math.max(10, pct1));
+  const yEnd1 = Math.max(32, Math.min(60, Math.round(70 - (normPct1 / 100) * 40)));
+  const yPeak1 = Math.max(26, yEnd1 - 5);
+  const yDip1 = Math.min(98, yEnd1 + 36);
+
+  const normPct2 = Math.min(50, Math.max(4, pct2));
+  const yEnd2 = Math.max(yEnd1 + 26, Math.min(96, Math.round(104 - (normPct2 / 50) * 22)));
+  const yPeak2 = Math.max(yPeak1 + 22, yEnd2 - 4);
+  const yDip2 = Math.min(108, yEnd2 + 18);
+
+  const baselineY = 116;
+
+  // Seamless C1-continuous cubic bezier spline paths
+  const d1 = `M 14 ${baselineY} L 62 ${baselineY} C 92 ${baselineY}, 114 ${yPeak1}, 138 ${yPeak1} C 160 ${yPeak1}, 170 ${yDip1}, 188 ${yDip1} C 215 ${yDip1}, 242 ${yEnd1}, 268 ${yEnd1}`;
+  const d1Area = `${d1} L 268 ${baselineY} L 14 ${baselineY} Z`;
+
+  const d2 = `M 14 ${baselineY} L 62 ${baselineY} C 92 ${baselineY}, 114 ${yPeak2}, 138 ${yPeak2} C 160 ${yPeak2}, 170 ${yDip2}, 188 ${yDip2} C 215 ${yDip2}, 242 ${yEnd2}, 268 ${yEnd2}`;
+  const d2Area = `${d2} L 268 ${baselineY} L 14 ${baselineY} Z`;
+
+  const isHov1 = activeIndex === 0;
+  const isHov2 = activeIndex === 1;
+
+  return (
+    <div className="flex-1 w-full min-w-0 flex flex-col justify-center">
+      <div className="relative w-full aspect-[22/10] sm:aspect-[24/11] max-h-[165px]">
+        <svg
+          viewBox="0 0 335 138"
+          className="w-full h-full overflow-visible select-none"
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <defs>
+            <linearGradient id="wave1Stroke" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor={color1} stopOpacity="0.25" />
+              <stop offset="35%" stopColor={color1} stopOpacity="0.85" />
+              <stop offset="100%" stopColor={color1} stopOpacity="1" />
+            </linearGradient>
+            <linearGradient id="wave1Fill" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={color1} stopOpacity={isHov1 ? "0.38" : "0.24"} />
+              <stop offset="85%" stopColor={color1} stopOpacity="0.03" />
+              <stop offset="100%" stopColor={color1} stopOpacity="0.0" />
+            </linearGradient>
+
+            <linearGradient id="wave2Stroke" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor={color2} stopOpacity="0.2" />
+              <stop offset="35%" stopColor={color2} stopOpacity="0.8" />
+              <stop offset="100%" stopColor={color2} stopOpacity="1" />
+            </linearGradient>
+            <linearGradient id="wave2Fill" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={color2} stopOpacity={isHov2 ? "0.32" : "0.18"} />
+              <stop offset="85%" stopColor={color2} stopOpacity="0.02" />
+              <stop offset="100%" stopColor={color2} stopOpacity="0.0" />
+            </linearGradient>
+
+            <filter id="glowWave1" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color1} floodOpacity={isHov1 ? "0.95" : "0.65"} />
+            </filter>
+            <filter id="glowWave2" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color2} floodOpacity={isHov2 ? "0.95" : "0.65"} />
+            </filter>
+          </defs>
+
+          {/* Background Grid Lines */}
+          <line x1="12" y1={baselineY} x2="325" y2={baselineY} stroke="rgb(var(--border) / 0.55)" strokeWidth="1" />
+          <line x1="12" y1="70" x2="325" y2="70" stroke="rgb(var(--border) / 0.22)" strokeWidth="1" strokeDasharray="3 3" />
+
+          {/* Left Category Labels (as positioned in the design) */}
+          {item1 && (
+            <g
+              transform="translate(14, 46)"
+              className="cursor-pointer transition-opacity"
+              onMouseEnter={() => onHoverIndex(0)}
+              onMouseLeave={() => onHoverIndex(null)}
+              opacity={activeIndex === null || isHov1 ? 1 : 0.45}
+            >
+              <circle cx="4" cy="4" r="3.5" fill={color1} />
+              <text x="13" y="7.5" fill="rgb(var(--foreground))" fontSize="11" fontWeight="600" letterSpacing="-0.1px">
+                {item1.name || 'Asset 1'}
+              </text>
+            </g>
+          )}
+
+          {item2 && (
+            <g
+              transform="translate(14, 70)"
+              className="cursor-pointer transition-opacity"
+              onMouseEnter={() => onHoverIndex(1)}
+              onMouseLeave={() => onHoverIndex(null)}
+              opacity={activeIndex === null || isHov2 ? 1 : 0.45}
+            >
+              <circle cx="4" cy="4" r="3.5" fill={color2} />
+              <text x="13" y="7.5" fill="rgb(var(--foreground))" fontSize="11" fontWeight="600" letterSpacing="-0.1px">
+                {item2.name || 'Asset 2'}
+              </text>
+            </g>
+          )}
+
+          {/* Secondary Wave Area & Path (Wave 2) */}
+          {item2 && (
+            <g
+              className="cursor-pointer transition-all duration-200"
+              onMouseEnter={() => onHoverIndex(1)}
+              onMouseLeave={() => onHoverIndex(null)}
+              opacity={activeIndex === null || isHov2 ? 1 : 0.35}
+            >
+              <path d={d2Area} fill="url(#wave2Fill)" />
+              <path
+                d={d2}
+                fill="none"
+                stroke="url(#wave2Stroke)"
+                strokeWidth={isHov2 ? 3 : 2.2}
+                strokeLinecap="round"
+                filter="url(#glowWave2)"
+              />
+              <circle cx="268" cy={yEnd2} r="3.5" fill={color2} />
+              <circle cx="268" cy={yEnd2} r={isHov2 ? 6.5 : 5} fill="none" stroke={color2} strokeWidth="1" opacity="0.45" />
+              <text
+                x="278"
+                y={yEnd2 + 4}
+                fill={color2}
+                fontSize="11"
+                fontWeight="700"
+                letterSpacing="-0.2px"
+              >
+                {item2.percent.toFixed(1)}%
+              </text>
+            </g>
+          )}
+
+          {/* Primary Wave Area & Path (Wave 1) */}
+          {item1 && (
+            <g
+              className="cursor-pointer transition-all duration-200"
+              onMouseEnter={() => onHoverIndex(0)}
+              onMouseLeave={() => onHoverIndex(null)}
+              opacity={activeIndex === null || isHov1 ? 1 : 0.35}
+            >
+              <path d={d1Area} fill="url(#wave1Fill)" />
+              <path
+                d={d1}
+                fill="none"
+                stroke="url(#wave1Stroke)"
+                strokeWidth={isHov1 ? 3 : 2.4}
+                strokeLinecap="round"
+                filter="url(#glowWave1)"
+              />
+              <circle cx="268" cy={yEnd1} r="4" fill={color1} />
+              <circle cx="268" cy={yEnd1} r={isHov1 ? 7.5 : 5.5} fill="none" stroke={color1} strokeWidth="1" opacity="0.5" />
+              <text
+                x="278"
+                y={yEnd1 + 4}
+                fill={color1}
+                fontSize="11"
+                fontWeight="700"
+                letterSpacing="-0.2px"
+              >
+                {item1.percent.toFixed(1)}%
+              </text>
+            </g>
+          )}
+        </svg>
+      </div>
+
+      {/* Pill Chips for remaining/all categories if > 2 */}
+      {items.length > 2 && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-1.5 px-1 max-h-[52px] overflow-y-auto no-scrollbar">
+          {items.map((item, idx) => {
+            const isActive = activeIndex === idx;
+            return (
+              <button
+                key={item.name || idx}
+                type="button"
+                onMouseEnter={() => onHoverIndex(idx)}
+                onMouseLeave={() => onHoverIndex(null)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all flex items-center gap-1 border cursor-pointer ${
+                  isActive
+                    ? 'bg-surface-raised border-border text-foreground shadow-2xs'
+                    : 'border-transparent text-muted hover:text-foreground hover:bg-surface-raised/50'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="truncate max-w-[80px]">{item.name || 'Other'}</span>
+                <span className="font-bold tabular-nums" style={{ color: item.color }}>
+                  {item.percent.toFixed(1)}%
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PortfolioOverviewCard({
   allocations, holdings, brokers, totalValue, isLoading,
@@ -234,42 +449,12 @@ export function PortfolioOverviewCard({
               </div>
             </div>
 
-            {/* Legend List */}
-            <div className="flex-1 w-full space-y-1 overflow-y-auto max-h-[190px] no-scrollbar">
-              {currentData.slice(0, 6).map((item, idx) => {
-                const isActive = activeIndex === idx;
-                return (
-                  <div key={item.name}
-                    onMouseEnter={() => setActiveIndex(idx)}
-                    onMouseLeave={() => setActiveIndex(null)}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all ${
-                      isActive ? 'bg-surface-raised' : 'hover:bg-surface-raised/60'
-                    }`}>
-                    {/* Color swatch */}
-                    <span className="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
-                      style={{ backgroundColor: item.color }} />
-                    {/* Name */}
-                    <span className="flex-1 text-[11px] font-semibold text-foreground truncate min-w-0">
-                      {item.name}
-                    </span>
-                    {/* Mini bar + % */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <div className="w-12 h-1 rounded-full bg-surface-raised overflow-hidden hidden xl:block">
-                        <div className="h-full rounded-full" style={{
-                          width: `${Math.max(item.percent, 3)}%`,
-                          backgroundColor: item.color,
-                          opacity: 0.85,
-                        }} />
-                      </div>
-                      <span className="text-[11px] font-bold tabular-nums w-10 text-right"
-                        style={{ color: item.color }}>
-                        {item.percent.toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {/* Right: Dual-Wave Line Graph */}
+            <DualWaveLineGraph
+              items={currentData}
+              activeIndex={activeIndex}
+              onHoverIndex={setActiveIndex}
+            />
           </div>
 
           {/* Bottom Summary Strip */}

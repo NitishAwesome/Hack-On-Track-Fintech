@@ -537,17 +537,17 @@ function NewsAndMarketContent() {
           className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
           style={{
             backgroundColor:
-              sourceView === 'delayed' ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
-            color: sourceView === 'delayed' ? '#fbbf24' : 'rgb(var(--muted))',
-            border: sourceView === 'delayed' ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid transparent',
+              sourceView === 'delayed' ? 'rgb(var(--surface-raised))' : 'transparent',
+            color: sourceView === 'delayed' ? 'rgb(var(--foreground))' : 'rgb(var(--muted))',
+            border: sourceView === 'delayed' ? '1px solid rgb(var(--border))' : '1px solid transparent',
           }}
         >
-          <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
-          <span>Delayed News & Context (NewsData.io)</span>
+          <Newspaper className="w-3.5 h-3.5" />
+          <span>Market & Industry News (NewsData.io)</span>
           <span
             className="px-1.5 py-0.2 rounded-full text-[10px]"
             style={{
-              backgroundColor: sourceView === 'delayed' ? 'rgba(245, 158, 11, 0.3)' : 'rgb(var(--surface-raised))',
+              backgroundColor: 'rgb(var(--surface-raised))',
             }}
           >
             {delayedArticles.length}
@@ -699,8 +699,8 @@ function NewsAndMarketContent() {
                 >
                   <p>No recent articles from Marketaux or GDELT match this filter or are currently active.</p>
                   {delayedArticles.length > 0 && (
-                    <p className="mt-1 font-medium text-amber-400">
-                      Broader market reports are available below in Delayed News & Market Context.
+                    <p className="mt-1 font-medium text-brand">
+                      Broader market reports are available below in Market & Industry Reporting.
                     </p>
                   )}
                 </div>
@@ -708,7 +708,7 @@ function NewsAndMarketContent() {
             </div>
           )}
 
-          {/* SECTION B — Delayed News & Market Context (NewsData.io Free) */}
+          {/* SECTION B — Market & Industry Reporting (NewsData.io) */}
           {(sourceView === 'all' || sourceView === 'delayed') && delayedArticles.length > 0 && (
             <div className="space-y-4 pt-4">
               <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: 'rgb(var(--border))' }}>
@@ -717,16 +717,16 @@ function NewsAndMarketContent() {
                     className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2"
                     style={{ color: 'rgb(var(--foreground))' }}
                   >
-                    <span>Delayed News & Market Context</span>
+                    <span>Market & Industry Reporting</span>
                     <span
                       className="text-xs px-2 py-0.5 rounded-full border font-medium"
                       style={{
-                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                        borderColor: 'rgba(245, 158, 11, 0.25)',
-                        color: '#fbbf24',
+                        backgroundColor: 'rgb(var(--surface-raised))',
+                        borderColor: 'rgb(var(--border))',
+                        color: 'rgb(var(--foreground))',
                       }}
                     >
-                      {delayedArticles.length} stories · NewsData.io Free
+                      {delayedArticles.length} stories · NewsData.io
                     </span>
                   </h2>
                   <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
@@ -735,27 +735,7 @@ function NewsAndMarketContent() {
                 </div>
               </div>
 
-              {/* Required Explanatory Notice Banner (Section 2) */}
-              <div
-                className="p-3.5 rounded-xl border flex items-start gap-3 text-xs"
-                style={{
-                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                  borderColor: 'rgba(245, 158, 11, 0.25)',
-                  color: 'rgb(var(--foreground))',
-                }}
-              >
-                <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-semibold text-amber-300">
-                    Delayed Feed Notice
-                  </p>
-                  <p className="text-[11px] leading-relaxed" style={{ color: 'rgb(var(--muted))' }}>
-                    NewsData.io&apos;s free feed may provide articles with an approximately 12-hour access delay. These reports are useful for broader context but should not be treated as real-time trading signals.
-                  </p>
-                </div>
-              </div>
-
-              {/* Grid of Delayed News Articles */}
+              {/* Grid of News Articles */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {regularDelayedArticles.map((article, index) => (
                   <motion.div

@@ -158,11 +158,6 @@ export function NewsExplanationModal({ article, onClose }: NewsExplanationModalP
                     <span>·</span>
                     <span>via {temporalInfo.provider_display_name}</span>
                   </div>
-                  {temporalInfo.is_delayed_feed && (
-                    <p className="text-[10px] text-amber-400 font-medium pt-1">
-                      Delayed Feed: NewsData.io Free feed provides ~12-hour delayed news for broader market context.
-                    </p>
-                  )}
                 </div>
                 <a
                   href={article.link}

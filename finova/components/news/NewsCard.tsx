@@ -60,19 +60,32 @@ export function NewsCard({
 
   // Helper for evidence-based badge
   const renderFreshnessBadge = () => {
-    if (temporal.is_delayed_feed) {
+    if (temporal.freshness_badge === 'DELAYED_FEED') {
+      const pubTime = new Date(article.pubDate).getTime();
+      const ageHours = !isNaN(pubTime) ? (Date.now() - pubTime) / (1000 * 60 * 60) : 999;
+      if (ageHours < 24) {
+        return (
+          <span
+            className="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide border flex items-center gap-1 shadow-2xs"
+            style={{
+              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+              borderColor: 'rgba(16, 185, 129, 0.35)',
+              color: '#34d399',
+            }}
+          >
+            Published Today
+          </span>
+        );
+      }
       return (
         <span
-          className="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide border flex items-center gap-1 shadow-2xs"
+          className="px-2 py-0.5 rounded text-[10px] font-medium border text-muted"
           style={{
-            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-            borderColor: 'rgba(245, 158, 11, 0.35)',
-            color: '#fbbf24',
+            backgroundColor: 'rgb(var(--surface-raised))',
+            borderColor: 'rgb(var(--border))',
           }}
-          title="NewsData.io free feed with ~12-hour access delay"
         >
-          <Clock className="w-2.5 h-2.5" />
-          Delayed Feed (~12h)
+          Market News
         </span>
       );
     }
@@ -339,12 +352,6 @@ export function NewsCard({
                   </span>
                   <span>·</span>
                   <span>News source: {temporal.provider_display_name}</span>
-                  {temporal.is_delayed_feed && (
-                    <>
-                      <span>·</span>
-                      <span className="text-amber-400 font-medium">Delayed feed (~12h delay)</span>
-                    </>
-                  )}
                   {temporal.is_cached && (
                     <>
                       <span>·</span>
@@ -621,12 +628,6 @@ export function NewsCard({
               <span className="font-medium text-foreground/70">{temporal.relative_time}</span>
               <span>·</span>
               <span>via {temporal.provider_display_name}</span>
-              {temporal.is_delayed_feed && (
-                <>
-                  <span>·</span>
-                  <span className="text-amber-400 font-medium">~12h delay</span>
-                </>
-              )}
               {temporal.is_cached && (
                 <>
                   <span>·</span>

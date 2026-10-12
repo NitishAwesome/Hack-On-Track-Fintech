@@ -210,13 +210,6 @@ export function StockNewsSection({
   };
 
   const getFeedFreshnessBadge = (isDelayed?: boolean, isCached?: boolean) => {
-    if (isDelayed) {
-      return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-          Delayed Feed (~12h)
-        </span>
-      );
-    }
     if (isCached) {
       return (
         <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-raised text-muted border border-border">
@@ -226,7 +219,7 @@ export function StockNewsSection({
     }
     return (
       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-        Fresh Feed
+        Verified Feed
       </span>
     );
   };
