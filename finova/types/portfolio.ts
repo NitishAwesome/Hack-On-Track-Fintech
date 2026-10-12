@@ -199,6 +199,22 @@ export interface RiskMetrics {
   diversification_observations: string[];
   positive_observations: string[];
   data_quality_warnings: string[];
+  hhi_scaled?: number;          // 0–10,000 standard financial Herfindahl Index
+  risk_factors?: Array<{
+    id: string;
+    name: string;
+    score: number;
+    weightPct: number;
+    contribution: number;
+    status: 'low' | 'moderate' | 'elevated' | 'high';
+    calculatedValue: string;
+    description: string;
+  }>;
+  operational_risk?: {
+    broker_count: number;
+    is_single_broker: boolean;
+    notice: string;
+  };
 }
 
 export interface PerformanceDataPoint {

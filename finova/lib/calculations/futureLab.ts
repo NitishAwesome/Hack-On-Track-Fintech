@@ -537,3 +537,482 @@ export function calculateGoalContributionProjection(
       'Zero-Growth Contribution Illustration: Assumes 0% investment return to isolate your exact savings requirement. Does not represent a forecast of future asset performance or inflation.',
   };
 }
+
+// ============================================================
+// FUTURE LAB 2.0: SMART INVESTMENT STRATEGY SIMULATOR ENGINE
+// ============================================================
+
+export type StrategyId = 'conservative' | 'balanced' | 'aggressive';
+
+export interface StrategyTemplateItem {
+  id: StrategyId;
+  name: string;
+  tagline: string;
+  description: string;
+  allocations: Record<AssetClass, number>;
+  equityExposurePct: number;
+  defensiveExposurePct: number;
+  goldExposurePct: number;
+  alternativesExposurePct: number;
+  riskProfileLabel: string;
+  volatilityDescription: string;
+  shortTermFluctuations: string;
+  guaranteedReturns: 'None';
+  illustrativeAssetGroups: string[];
+  rationalePerCategory: Record<AssetClass, string>;
+  keyRiskConsiderations: string[];
+}
+
+export const STRATEGY_TEMPLATES: Record<StrategyId, StrategyTemplateItem> = {
+  conservative: {
+    id: 'conservative',
+    name: 'Conservative Strategy',
+    tagline: 'Stability, Capital Preservation & Liquidity',
+    description:
+      'Lower market-risk exposure with an emphasis on capital stability and liquidity. Designed to buffer against broad market downturns.',
+    allocations: {
+      bond: 50,
+      mf: 25,
+      sgb: 15,
+      etf: 10,
+      equity: 0,
+      reit: 0,
+      invit: 0,
+    },
+    equityExposurePct: 25, // via diversified equity/hybrid mutual funds
+    defensiveExposurePct: 60, // 50% bonds + 10% liquid/debt ETFs
+    goldExposurePct: 15,
+    alternativesExposurePct: 0,
+    riskProfileLabel: 'Generally Lower Volatility',
+    volatilityDescription:
+      'Lower sensitivity to equity market drawdowns; portfolio value is anchored by debt coupon stability and gold inflation hedging.',
+    shortTermFluctuations: 'Still possible due to interest rate cycle shifts or gold price volatility.',
+    guaranteedReturns: 'None',
+    illustrativeAssetGroups: [
+      'High-quality fixed income (50%)',
+      'Diversified equity mutual funds (25%)',
+      'Gold & Sovereign Gold Bonds (15%)',
+      'Liquid instruments & liquid ETFs (10%)',
+    ],
+    rationalePerCategory: {
+      bond: 'Provides contractual coupon yield and dampens equity market drawdowns.',
+      mf: 'Allows participation in long-term economic expansion through diversified professional management.',
+      sgb: 'Acts as a monetary store of value and macro inflation hedge.',
+      etf: 'Liquid and low-duration debt instruments maintain cash liquidity for emergencies or future opportunities.',
+      equity: 'Direct single-stock exposure is omitted in conservative templates to avoid idiosyncratic business risk.',
+      reit: 'Real estate yields have interest rate sensitivity; omitted in conservative templates.',
+      invit: 'Infrastructure trusts omitted in conservative templates to minimize sector concentration.',
+    },
+    keyRiskConsiderations: [
+      'Inflation Risk: Fixed-coupon debt may underperform headline inflation during sharp CPI spikes.',
+      'Interest Rate Risk: Bond prices decline when the Reserve Bank of India (RBI) hikes benchmark repo rates.',
+      'No Capital Guarantee: Mutual funds and gold are subject to market volatility; capital is not guaranteed.',
+    ],
+  },
+  balanced: {
+    id: 'balanced',
+    name: 'Balanced Strategy',
+    tagline: 'Long-Term Growth with Defensive Cushion',
+    description:
+      'A calibrated mix of long-term capital growth exposure and defensive asset classes to balance compounding and drawdown resilience.',
+    allocations: {
+      equity: 35,
+      bond: 30,
+      mf: 15,
+      sgb: 10,
+      reit: 10,
+      etf: 0,
+      invit: 0,
+    },
+    equityExposurePct: 50, // 35% direct equities + 15% diversified mutual funds
+    defensiveExposurePct: 30, // 30% bonds
+    goldExposurePct: 10,
+    alternativesExposurePct: 10, // 10% REITs
+    riskProfileLabel: 'Intermediate Volatility',
+    volatilityDescription:
+      'Moderate drawdowns during market corrections; coupon income, real estate distributions, and gold dampen equity swings.',
+    shortTermFluctuations: 'Possible and expected during periodic market corrections.',
+    guaranteedReturns: 'None',
+    illustrativeAssetGroups: [
+      'Diversified equities & individual stocks (35%)',
+      'Quality fixed income & corporate bonds (30%)',
+      'Diversified equity mutual funds (15%)',
+      'Gold & Sovereign Gold Bonds (10%)',
+      'Real Estate Investment Trusts (REITs) (10%)',
+    ],
+    rationalePerCategory: {
+      equity: 'Drives primary compounding through ownership of profitable domestic enterprises.',
+      bond: 'Stabilizes portfolio volatility and provides predictable semi-annual coupon cash flows.',
+      mf: 'Broadens exposure across mid/large-cap sectors beyond individual stock holdings.',
+      sgb: 'Provides non-correlated macro hedge against currency depreciation and geopolitical uncertainty.',
+      reit: 'Offers mandatory 90% NDCF distribution yield backed by commercial real estate assets.',
+      etf: 'Included optionally or substituted for broad index tracking.',
+      invit: 'Can complement REIT allocation for infrastructure utility yield.',
+    },
+    keyRiskConsiderations: [
+      'Cyclical Equity Volatility: Equities (50% combined) will experience temporary 10–20% pullbacks in market corrections.',
+      'Commercial Real Estate Demand: REIT distributions depend on commercial lease occupancy and tenant retention.',
+      'Credit Risk: Corporate debt instruments carry credit default and rating downgrade risks.',
+    ],
+  },
+  aggressive: {
+    id: 'aggressive',
+    name: 'Aggressive Strategy',
+    tagline: 'Maximum Capital Appreciation Focus',
+    description:
+      'Higher equity exposure tailored for investors with long investment horizons and greater willingness to tolerate market drawdown cycles.',
+    allocations: {
+      equity: 60,
+      mf: 20,
+      bond: 10,
+      reit: 5,
+      sgb: 5,
+      etf: 0,
+      invit: 0,
+    },
+    equityExposurePct: 80, // 60% direct stocks + 20% mutual funds
+    defensiveExposurePct: 10, // 10% bonds
+    goldExposurePct: 5,
+    alternativesExposurePct: 5, // 5% REITs
+    riskProfileLabel: 'Generally Higher Volatility',
+    volatilityDescription:
+      'High sensitivity to broader equity market movements; high potential compounding with significant interim drawdowns.',
+    shortTermFluctuations: 'Potentially substantial during bear markets and economic recessions.',
+    guaranteedReturns: 'None',
+    illustrativeAssetGroups: [
+      'Individual equities & leading sector stocks (60%)',
+      'High-growth equity mutual funds / mid-cap funds (20%)',
+      'Quality fixed income cushion (10%)',
+      'Real estate investment trusts (5%)',
+      'Gold & SGBs (5%)',
+    ],
+    rationalePerCategory: {
+      equity: 'Maximizes long-term capital compounding by taking direct business ownership stakes.',
+      mf: 'Provides thematic or multi-cap diversification to complement direct stock bets.',
+      bond: 'Maintains a minimal liquidity cushion to deploy during major market dips.',
+      reit: 'Generates quarterly yields to reinvest into high-conviction growth opportunities.',
+      sgb: 'Small gold hedge preserves purchasing power during currency shocks.',
+      etf: 'Optional index tracking vehicle.',
+      invit: 'Alternative utility yield exposure.',
+    },
+    keyRiskConsiderations: [
+      'Steep Market Drawdowns: 80% equity exposure can experience 20–40% temporary portfolio value declines in severe bear markets.',
+      'Company Idiosyncratic Risk: Individual stock concentration requires ongoing fundamental monitoring of corporate governance and earnings.',
+      'Horizon Dependency: Capital required in under 3 years should not be deployed in this strategy.',
+    ],
+  },
+};
+
+export interface AllocatedCategory {
+  assetClass: AssetClass;
+  displayName: string;
+  percentage: number;
+  allocatedRupees: number;
+  rationale: string;
+}
+
+export interface StrategyAllocationResult {
+  strategyId: StrategyId;
+  strategyName: string;
+  totalAmount: number;
+  categories: AllocatedCategory[];
+  reconciledTotal: number;
+  exposures: {
+    equityPct: number;
+    equityRupees: number;
+    defensivePct: number;
+    defensiveRupees: number;
+    goldPct: number;
+    goldRupees: number;
+    alternativesPct: number;
+    alternativesRupees: number;
+  };
+  narrativeExplanation: string;
+  keyRiskConsiderations: string[];
+}
+
+/**
+ * Calculates exact rupee allocations for an investment amount based on the chosen strategy template.
+ * Guarantees that the sum of allocated rupees strictly reconciles to the input amount down to the last paisa.
+ */
+export function calculateStrategyAllocation(
+  amount: number,
+  strategyId: StrategyId
+): StrategyAllocationResult {
+  if (typeof amount !== 'number' || isNaN(amount) || amount <= 0 || !isFinite(amount)) {
+    throw new Error('Please enter a valid positive investment amount.');
+  }
+
+  const template = STRATEGY_TEMPLATES[strategyId];
+  if (!template) {
+    throw new Error(`Unknown strategy template: ${strategyId}`);
+  }
+
+  // Active categories from template (where percentage > 0)
+  const activeEntries = Object.entries(template.allocations).filter(([, pct]) => pct > 0) as [
+    AssetClass,
+    number,
+  ][];
+
+  // Calculate raw rupees and round
+  let sumRupees = 0;
+  const categories: AllocatedCategory[] = activeEntries.map(([assetClass, pct]) => {
+    const rupees = roundCurrency((pct / 100) * amount);
+    sumRupees = roundCurrency(sumRupees + rupees);
+    return {
+      assetClass,
+      displayName:
+        CANONICAL_SIMULATION_ASSET_CLASSES.find((c) => c.id === assetClass)?.label ||
+        assetClass.toUpperCase(),
+      percentage: pct,
+      allocatedRupees: rupees,
+      rationale: template.rationalePerCategory[assetClass] || '',
+    };
+  });
+
+  // Reconcile residual difference (if any, due to float rounding) to the largest category
+  const residual = roundCurrency(amount - sumRupees);
+  if (residual !== 0 && categories.length > 0) {
+    const largestCat = categories.reduce(
+      (max, c) => (c.allocatedRupees > max.allocatedRupees ? c : max),
+      categories[0]
+    );
+    largestCat.allocatedRupees = roundCurrency(largestCat.allocatedRupees + residual);
+  }
+
+  // Calculate broad group exposures
+  const equityRupees = categories
+    .filter((c) => c.assetClass === 'equity' || c.assetClass === 'mf')
+    .reduce((sum, c) => roundCurrency(sum + c.allocatedRupees), 0);
+  const defensiveRupees = categories
+    .filter((c) => c.assetClass === 'bond' || c.assetClass === 'etf')
+    .reduce((sum, c) => roundCurrency(sum + c.allocatedRupees), 0);
+  const goldRupees = categories
+    .filter((c) => c.assetClass === 'sgb')
+    .reduce((sum, c) => roundCurrency(sum + c.allocatedRupees), 0);
+  const alternativesRupees = categories
+    .filter((c) => c.assetClass === 'reit' || c.assetClass === 'invit')
+    .reduce((sum, c) => roundCurrency(sum + c.allocatedRupees), 0);
+
+  const narrativeExplanation = `Allocating ₹${amount.toLocaleString('en-IN')} across the ${template.name} divides your capital into ${template.equityExposurePct}% equities & funds, ${template.defensiveExposurePct}% defensive debt & liquid assets, and ${template.goldExposurePct}% gold hedges. This educational template demonstrates how multi-asset diversification distributes risk across distinct economic cycles.`;
+
+  return {
+    strategyId,
+    strategyName: template.name,
+    totalAmount: amount,
+    categories,
+    reconciledTotal: amount,
+    exposures: {
+      equityPct: template.equityExposurePct,
+      equityRupees,
+      defensivePct: template.defensiveExposurePct,
+      defensiveRupees,
+      goldPct: template.goldExposurePct,
+      goldRupees,
+      alternativesPct: template.alternativesExposurePct,
+      alternativesRupees,
+    },
+    narrativeExplanation,
+    keyRiskConsiderations: template.keyRiskConsiderations,
+  };
+}
+
+export interface PortfolioBeforeAfterResult {
+  hasHoldings: boolean;
+  baseline: {
+    valuationBase: number;
+    isMarketValued: boolean;
+    quoteCoveragePct: number;
+    equityWeightPct: number;
+    assetClassBreakdown: Array<{
+      assetClass: AssetClass;
+      displayName: string;
+      value: number;
+      percentage: number;
+    }>;
+    riskScore: number;
+    riskLabel: string;
+  };
+  simulated: {
+    additionalAmount: number;
+    newTotalValuation: number;
+    equityWeightPct: number;
+    assetClassBreakdown: Array<{
+      assetClass: AssetClass;
+      displayName: string;
+      value: number;
+      percentage: number;
+      deltaValue: number;
+      deltaPercentage: number;
+    }>;
+    provisionalRiskNotice: string;
+  };
+  observations: string[];
+}
+
+/**
+ * Computes deterministic Before-versus-After comparison grounded on the user's real portfolio.
+ * Discloses that category-level simulations do not invent stock-level risk or HHI scores.
+ */
+export function calculatePortfolioBeforeAfter(
+  holdings: HoldingWithMetrics[],
+  brokerAccounts: BrokerAccount[] = [],
+  investmentAmount: number,
+  strategyId: StrategyId
+): PortfolioBeforeAfterResult {
+  const allocation = calculateStrategyAllocation(investmentAmount, strategyId);
+
+  // 1. If empty portfolio
+  if (!holdings || holdings.length === 0) {
+    const simBreakdown = allocation.categories.map((c) => ({
+      assetClass: c.assetClass,
+      displayName: c.displayName,
+      value: c.allocatedRupees,
+      percentage: c.percentage,
+      deltaValue: c.allocatedRupees,
+      deltaPercentage: c.percentage,
+    }));
+
+    return {
+      hasHoldings: false,
+      baseline: {
+        valuationBase: 0,
+        isMarketValued: true,
+        quoteCoveragePct: 100,
+        equityWeightPct: 0,
+        assetClassBreakdown: [],
+        riskScore: 0,
+        riskLabel: 'Conservative',
+      },
+      simulated: {
+        additionalAmount: investmentAmount,
+        newTotalValuation: investmentAmount,
+        equityWeightPct: allocation.exposures.equityPct,
+        assetClassBreakdown: simBreakdown,
+        provisionalRiskNotice:
+          'Provisional: Category-level simulation only. Specific securities not designated. Insufficient information to calculate a security-level post-investment risk score.',
+      },
+      observations: [
+        `You currently have zero recorded holdings. Deploying ₹${investmentAmount.toLocaleString('en-IN')} across the ${allocation.strategyName} establishes an initial multi-asset portfolio with ${allocation.exposures.equityPct}% equity and ${allocation.exposures.defensivePct}% defensive assets.`,
+      ],
+    };
+  }
+
+  // 2. Compute baseline via unified X-Ray
+  const xray = computeUnifiedXRay(holdings, brokerAccounts);
+  const isMarketValued =
+    xray.summary.market_valued_capital !== null && xray.summary.market_valued_capital > 0;
+  const baselineValuationBase = isMarketValued
+    ? xray.summary.market_valued_capital!
+    : xray.summary.total_invested_capital;
+
+  // Build baseline asset map
+  const baselineMap = new Map<AssetClass, number>();
+  for (const item of CANONICAL_SIMULATION_ASSET_CLASSES) {
+    baselineMap.set(item.id, 0);
+  }
+  for (const inst of xray.consolidated_instruments) {
+    const val = isMarketValued
+      ? (inst.current_value ?? inst.total_invested_value)
+      : inst.total_invested_value;
+    baselineMap.set(inst.asset_class, (baselineMap.get(inst.asset_class) || 0) + val);
+  }
+
+  const baselineBreakdown = CANONICAL_SIMULATION_ASSET_CLASSES.map((item) => {
+    const val = roundCurrency(baselineMap.get(item.id) || 0);
+    const pct = baselineValuationBase > 0 ? roundPercent((val / baselineValuationBase) * 100) : 0;
+    return {
+      assetClass: item.id,
+      displayName: item.label,
+      value: val,
+      percentage: pct,
+    };
+  }).filter((b) => b.value > 0);
+
+  const baselineEquityVal =
+    (baselineMap.get('equity') || 0) +
+    (baselineMap.get('etf') || 0) +
+    (baselineMap.get('mf') || 0);
+  const baselineEquityPct =
+    baselineValuationBase > 0 ? roundPercent((baselineEquityVal / baselineValuationBase) * 100) : 0;
+
+  // 3. Compute Simulated Post-Scenario Portfolio
+  const newTotalValuation = roundCurrency(baselineValuationBase + investmentAmount);
+  const simulatedMap = new Map<AssetClass, number>(baselineMap);
+
+  for (const cat of allocation.categories) {
+    simulatedMap.set(
+      cat.assetClass,
+      roundCurrency((simulatedMap.get(cat.assetClass) || 0) + cat.allocatedRupees)
+    );
+  }
+
+  const simulatedBreakdown = CANONICAL_SIMULATION_ASSET_CLASSES.map((item) => {
+    const baseVal = roundCurrency(baselineMap.get(item.id) || 0);
+    const basePct = baselineValuationBase > 0 ? roundPercent((baseVal / baselineValuationBase) * 100) : 0;
+    const simVal = roundCurrency(simulatedMap.get(item.id) || 0);
+    const simPct = newTotalValuation > 0 ? roundPercent((simVal / newTotalValuation) * 100) : 0;
+
+    return {
+      assetClass: item.id,
+      displayName: item.label,
+      value: simVal,
+      percentage: simPct,
+      deltaValue: roundCurrency(simVal - baseVal),
+      deltaPercentage: roundPercent(simPct - basePct),
+    };
+  }).filter((b) => b.value > 0);
+
+  const simEquityVal =
+    (simulatedMap.get('equity') || 0) +
+    (simulatedMap.get('etf') || 0) +
+    (simulatedMap.get('mf') || 0);
+  const simEquityPct =
+    newTotalValuation > 0 ? roundPercent((simEquityVal / newTotalValuation) * 100) : 0;
+
+  // 4. Generate grounded observations
+  const observations: string[] = [];
+
+  if (baselineEquityPct >= 90 && simEquityPct < baselineEquityPct) {
+    observations.push(
+      `Your current portfolio is heavily tilted toward equities (${baselineEquityPct.toFixed(1)}%). Adding ₹${investmentAmount.toLocaleString('en-IN')} via the ${allocation.strategyName} would introduce non-equity defensive assets, bringing your overall equity weight down to ${simEquityPct.toFixed(1)}%.`
+    );
+  } else if (simEquityPct > baselineEquityPct) {
+    observations.push(
+      `This scenario increases your overall equity exposure from ${baselineEquityPct.toFixed(1)}% to ${simEquityPct.toFixed(1)}%, prioritizing higher compounding potential while increasing vulnerability to market corrections.`
+    );
+  } else {
+    observations.push(
+      `Adding ₹${investmentAmount.toLocaleString('en-IN')} reinforces a balanced multi-asset profile, maintaining equity exposure at ${simEquityPct.toFixed(1)}% alongside fixed income and gold cushions.`
+    );
+  }
+
+  if (allocation.exposures.defensiveRupees > 0) {
+    observations.push(
+      `Fixed income and debt instruments would receive ₹${allocation.exposures.defensiveRupees.toLocaleString('en-IN')} in this simulation, dampening drawdown volatility during periods of market stress.`
+    );
+  }
+
+  return {
+    hasHoldings: true,
+    baseline: {
+      valuationBase: baselineValuationBase,
+      isMarketValued,
+      quoteCoveragePct: xray.summary.quote_coverage_pct,
+      equityWeightPct: baselineEquityPct,
+      assetClassBreakdown: baselineBreakdown,
+      riskScore: xray.summary.risk_score,
+      riskLabel: xray.summary.risk_label,
+    },
+    simulated: {
+      additionalAmount: investmentAmount,
+      newTotalValuation,
+      equityWeightPct: simEquityPct,
+      assetClassBreakdown: simulatedBreakdown,
+      provisionalRiskNotice:
+        'Provisional: Category simulation only. Specific instruments not designated. Insufficient information to calculate a security-level post-investment risk score.',
+    },
+    observations,
+  };
+}
+
