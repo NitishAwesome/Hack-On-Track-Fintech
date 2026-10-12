@@ -325,11 +325,12 @@ export async function generatePortfolioIntelligence(
     const genAI = new GoogleGenerativeAI(apiKey!);
     const candidateModels = [
       process.env.GEMINI_MODEL,
-      'gemini-flash-lite-latest',
-      'gemini-flash-latest',
-      'gemini-3.8-flash',
-      'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash-lite',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+      'gemini-3.8-flash',
       'gemini-1.5-flash',
     ].filter(Boolean) as string[];
 
