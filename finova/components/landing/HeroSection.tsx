@@ -55,7 +55,7 @@ export function HeroSection() {
                 className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm font-semibold border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition-colors text-center"
               >
                 <Compass className="w-4 h-4 text-amber-500" />
-                <span>Explore Demo Portfolio</span>
+                <span>Explore Guest Preview</span>
               </Link>
             </div>
 

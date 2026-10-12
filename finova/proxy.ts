@@ -20,6 +20,8 @@ const PUBLIC_PREFIXES = [
   '/auth',
   '/api/market',
   '/api/instruments',
+  '/api/news',
+  '/api/ai',
   '/learn',
   '/explore',
   '/demo',

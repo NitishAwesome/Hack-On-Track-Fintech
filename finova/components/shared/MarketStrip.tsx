@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React from 'react';
 import { TrendingUp, TrendingDown, RefreshCw, AlertCircle } from 'lucide-react';
-import type { MarketDataResponse, MarketIndex } from '@/types/market';
+import type { MarketIndex } from '@/types/market';
 import { cn } from '@/lib/utils';
+
+import { useSharedMarketIndices } from '@/lib/market/sharedMarketStore';
 
 interface MarketStripProps {
   className?: string;
@@ -23,77 +25,22 @@ const EXPECTED_INDICES: ExpectedIndexConfig[] = [
 ];
 
 export function MarketStrip({ className, showDisclosure = true }: MarketStripProps) {
-  const [data, setData] = useState<MarketDataResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data,
+    loading,
+    isRefreshing: refreshing,
+    marketStatus,
+    error,
+    refreshNow: fetchQuotes,
+  } = useSharedMarketIndices();
 
-  const fetchQuotes = useCallback(async (force = false) => {
-    if (force) {
-      setRefreshing(true);
-    }
-    setError(null);
-
-    try {
-      const url = force ? '/api/market/indices?force=true' : '/api/market/indices';
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) {
-        throw new Error('Market data temporarily unavailable');
-      }
-      const json: MarketDataResponse = await res.json();
-      setData(json);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Market data temporarily unavailable';
-      setError(msg);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadData() {
-      try {
-        const res = await fetch('/api/market/indices', { cache: 'no-store' });
-        if (!res.ok) {
-          throw new Error('Market data temporarily unavailable');
-        }
-        const json: MarketDataResponse = await res.json();
-        if (active) {
-          setData(json);
-        }
-      } catch (err: unknown) {
-        if (active) {
-          const msg = err instanceof Error ? err.message : 'Market data temporarily unavailable';
-          setError(msg);
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadData();
-
-    // Controlled 60s background update (respecting cache TTL)
-    const intervalId = setInterval(loadData, 60 * 1000);
-
-    return () => {
-      active = false;
-      clearInterval(intervalId);
-    };
-  }, []);
-
-  const marketStatus = data?.marketStatus || 'UNKNOWN';
   const isMarketOpen = marketStatus === 'OPEN';
   const isPreOpen = marketStatus === 'PRE_OPEN';
 
   // Format timestamp concisely based on actual data
   const formattedTime = data?.lastUpdated
     ? new Date(data.lastUpdated).toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
@@ -261,7 +208,7 @@ export function MarketStrip({ className, showDisclosure = true }: MarketStripPro
                 </div>
                 <button
                   type="button"
-                  onClick={() => fetchQuotes(true)}
+                  onClick={() => fetchQuotes()}
                   className="text-xs font-semibold text-brand hover:underline ml-2"
                 >
                   Retry
@@ -275,7 +222,7 @@ export function MarketStrip({ className, showDisclosure = true }: MarketStripPro
                 <span>{error}</span>
                 <button
                   type="button"
-                  onClick={() => fetchQuotes(true)}
+                  onClick={() => fetchQuotes()}
                   className="font-semibold underline hover:no-underline ml-2"
                 >
                   Retry
@@ -322,7 +269,7 @@ export function MarketStrip({ className, showDisclosure = true }: MarketStripPro
             {/* Compact Refresh Button */}
             <button
               type="button"
-              onClick={() => fetchQuotes(true)}
+              onClick={() => fetchQuotes()}
               disabled={loading || refreshing}
               className="p-1 rounded hover:bg-surface-raised text-muted hover:text-foreground transition-colors disabled:opacity-50"
               title="Refresh quotes"

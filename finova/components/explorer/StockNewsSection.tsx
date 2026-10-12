@@ -8,21 +8,43 @@ import {
   Clock,
   AlertCircle,
   RefreshCw,
+  Sparkles,
+  Bot,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface StockNewsSectionProps {
   symbol: string;
+  companyName?: string;
+  sector?: string;
 }
 
-export function StockNewsSection({ symbol }: StockNewsSectionProps) {
+interface ArticleAiExplanation {
+  loading: boolean;
+  text?: string;
+  model?: string;
+  source?: string;
+  error?: string;
+}
+
+export function StockNewsSection({
+  symbol,
+  companyName,
+  sector,
+}: StockNewsSectionProps) {
   const [articles, setArticles] = useState<PersonalizedNewsArticle[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeArticleId, setActiveArticleId] = useState<string | null>(null);
+  const [aiExplanations, setAiExplanations] = useState<Record<string, ArticleAiExplanation>>({});
 
   useEffect(() => {
     let isMounted = true;
     async function load() {
       if (!symbol) return;
+      setLoading(true);
+      setError(null);
       try {
         const url = `/api/news?symbol=${encodeURIComponent(symbol)}`;
         const res = await fetch(url);
@@ -68,6 +90,78 @@ export function StockNewsSection({ symbol }: StockNewsSectionProps) {
     }
   };
 
+  const handleExplainArticle = async (article: PersonalizedNewsArticle, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    const id = article.article_id;
+    if (activeArticleId === id) {
+      setActiveArticleId(null);
+      return;
+    }
+
+    setActiveArticleId(id);
+
+    // If already fetched, don't refetch
+    if (aiExplanations[id]?.text) {
+      return;
+    }
+
+    setAiExplanations((prev) => ({
+      ...prev,
+      [id]: { loading: true },
+    }));
+
+    try {
+      const res = await fetch('/api/ai/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'news_article',
+          stock: {
+            symbol,
+            name: companyName || symbol,
+            sector: sector || undefined,
+          },
+          article: {
+            title: article.title,
+            source_name: article.source_name,
+            pubDate: article.pubDate,
+            description: article.description,
+            is_delayed_feed: article.temporal_info?.is_delayed_feed,
+            timestamp_display: article.temporal_info?.display_label || formatArticleTime(article.pubDate),
+            link: article.link,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`AI explanation request failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      setAiExplanations((prev) => ({
+        ...prev,
+        [id]: {
+          loading: false,
+          text: data.explanation || 'No explanation available.',
+          model: data.model || 'Gemini 2.5',
+          source: data.source || 'gemini',
+        },
+      }));
+    } catch (err) {
+      setAiExplanations((prev) => ({
+        ...prev,
+        [id]: {
+          loading: false,
+          error: err instanceof Error ? err.message : 'AI analysis temporarily unavailable.',
+          text: `This verified development concerns ${companyName || symbol} (${symbol}). Review official disclosures on NSE/BSE to verify material business and financial impact.`,
+          source: 'deterministic_fallback',
+        },
+      }));
+    }
+  };
+
   const formatArticleTime = (isoString?: string) => {
     if (!isoString) return '—';
     try {
@@ -89,28 +183,50 @@ export function StockNewsSection({ symbol }: StockNewsSectionProps) {
     const p = (provider || '').toLowerCase();
     if (p.includes('marketaux')) {
       return (
-        <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
           Marketaux
         </span>
       );
     }
     if (p.includes('gdelt')) {
       return (
-        <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
           GDELT 2.0
         </span>
       );
     }
     if (p.includes('newsdata')) {
       return (
-        <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
           NewsData.io
         </span>
       );
     }
     return (
-      <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700">
+      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700">
         Aggregated Feed
+      </span>
+    );
+  };
+
+  const getFeedFreshnessBadge = (isDelayed?: boolean, isCached?: boolean) => {
+    if (isDelayed) {
+      return (
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          Delayed Feed (~12h)
+        </span>
+      );
+    }
+    if (isCached) {
+      return (
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700">
+          Cached
+        </span>
+      );
+    }
+    return (
+      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        Fresh Feed
       </span>
     );
   };
@@ -124,7 +240,7 @@ export function StockNewsSection({ symbol }: StockNewsSectionProps) {
           <h3 className="text-base font-bold text-foreground tracking-tight">
             Relevant News & Coverage
           </h3>
-          <span className="text-xs text-muted">for {symbol}</span>
+          <span className="text-xs text-muted">for {companyName || symbol}</span>
         </div>
 
         <button
@@ -133,6 +249,7 @@ export function StockNewsSection({ symbol }: StockNewsSectionProps) {
           disabled={loading}
           className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-zinc-800 transition disabled:opacity-50"
           aria-label="Refresh company news"
+          title="Refresh company news"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
         </button>
@@ -141,7 +258,10 @@ export function StockNewsSection({ symbol }: StockNewsSectionProps) {
       {loading && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-zinc-900/40 border border-border/40 rounded-xl animate-pulse p-3" />
+            <div key={i} className="h-24 bg-zinc-900/40 border border-border/40 rounded-xl animate-pulse p-4 space-y-2">
+              <div className="h-4 bg-zinc-800 rounded w-3/4" />
+              <div className="h-3 bg-zinc-800/60 rounded w-1/2" />
+            </div>
           ))}
         </div>
       )}
@@ -154,47 +274,111 @@ export function StockNewsSection({ symbol }: StockNewsSectionProps) {
       )}
 
       {!loading && !error && articles.length === 0 && (
-        <div className="p-6 text-center text-xs text-muted bg-zinc-900/30 rounded-xl border border-border/20">
-          No recent stories found for <strong className="text-foreground">{symbol}</strong> across connected feeds (Marketaux, GDELT 2.0, NewsData.io).
+        <div className="p-8 text-center text-xs text-muted bg-zinc-900/30 rounded-xl border border-border/20 space-y-1">
+          <p className="font-semibold text-zinc-300">
+            No sufficiently recent relevant news available for this stock.
+          </p>
+          <p className="text-[11px] text-zinc-500">
+            Verified connected feeds (Marketaux, GDELT 2.0, NewsData.io) have no active coverage matches for {companyName || symbol}.
+          </p>
         </div>
       )}
 
       {!loading && articles.length > 0 && (
         <div className="space-y-3">
-          {articles.slice(0, 5).map((article) => (
-            <a
-              key={article.article_id}
-              href={article.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-3.5 rounded-xl bg-zinc-900/50 hover:bg-zinc-850 border border-border/50 hover:border-zinc-700 transition block group"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1 min-w-0">
-                  <h4 className="text-sm font-semibold text-foreground group-hover:text-emerald-400 transition leading-snug line-clamp-2">
-                    {article.title}
-                  </h4>
-                  {article.description && (
-                    <p className="text-xs text-muted line-clamp-2 leading-relaxed">
-                      {article.description}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-zinc-500">
-                    <span className="font-medium text-zinc-300">{article.source_name}</span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {formatArticleTime(article.pubDate)}
-                    </span>
-                    <span>•</span>
-                    {getProviderBadge(article.source_provider)}
+          {articles.slice(0, 6).map((article) => {
+            const isAiExpanded = activeArticleId === article.article_id;
+            const aiData = aiExplanations[article.article_id];
+
+            return (
+              <div
+                key={article.article_id}
+                className="p-4 rounded-xl bg-zinc-900/50 hover:bg-zinc-850/80 border border-border/50 hover:border-zinc-700 transition block group space-y-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1.5 min-w-0 flex-1">
+                    <a
+                      href={article.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-semibold text-foreground hover:text-emerald-400 transition leading-snug line-clamp-2 inline-flex items-baseline gap-1"
+                    >
+                      <span>{article.title}</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-muted shrink-0 inline translate-y-0.5" />
+                    </a>
+
+                    {article.description && (
+                      <p className="text-xs text-muted line-clamp-2 leading-relaxed">
+                        {article.description}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-zinc-400">
+                      <span className="font-medium text-zinc-200">{article.source_name}</span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1 font-mono text-zinc-400">
+                        <Clock className="w-3 h-3 text-zinc-500" />
+                        {article.temporal_info?.display_label || formatArticleTime(article.pubDate)}
+                      </span>
+                      <span>•</span>
+                      {getProviderBadge(article.source_provider)}
+                      <span>•</span>
+                      {getFeedFreshnessBadge(
+                        article.temporal_info?.is_delayed_feed,
+                        article.temporal_info?.is_cached
+                      )}
+                    </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleExplainArticle(article, e)}
+                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition shadow-sm"
+                    title="Explain story with FINOVA AI"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">AI Analysis</span>
+                    {isAiExpanded ? (
+                      <ChevronUp className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
+                    )}
+                  </button>
                 </div>
 
-                <ExternalLink className="w-4 h-4 text-muted group-hover:text-emerald-400 shrink-0 mt-0.5 transition" />
+                {/* AI Explanation Drawer */}
+                {isAiExpanded && (
+                  <div className="pt-2 border-t border-border/40 mt-2 space-y-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                        <Bot className="w-3.5 h-3.5" />
+                        <span>FINOVA Intelligence (Gemini AI)</span>
+                      </div>
+                      {aiData?.model && (
+                        <span className="font-mono text-[10px] text-zinc-500">
+                          {aiData.model}
+                        </span>
+                      )}
+                    </div>
+
+                    {aiData?.loading ? (
+                      <div className="p-3 bg-zinc-950/60 rounded-lg border border-border/40 animate-pulse space-y-1.5">
+                        <div className="h-3 bg-zinc-800 rounded w-5/6" />
+                        <div className="h-3 bg-zinc-800/60 rounded w-4/6" />
+                      </div>
+                    ) : aiData?.text ? (
+                      <div className="p-3 bg-zinc-950/80 rounded-lg border border-emerald-500/20 text-xs text-zinc-300 leading-relaxed space-y-1.5">
+                        <p>{aiData.text}</p>
+                        <p className="text-[10px] text-zinc-500 pt-1 border-t border-zinc-800/50">
+                          AI educational summary grounded in verified news text. Stock prices and fundamentals are deterministic.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
-            </a>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

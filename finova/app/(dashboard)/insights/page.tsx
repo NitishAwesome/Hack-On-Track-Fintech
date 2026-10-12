@@ -9,7 +9,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ExternalLink, Newspaper } from 'lucide-react';
+import { ExternalLink, Newspaper, BarChart3, Shield, FlaskConical, Compass } from 'lucide-react';
 import { PortfolioIntelligenceHub } from '@/components/insights/PortfolioIntelligenceHub';
 import { SkeletonCard } from '@/components/shared/Skeletons';
 import { formatDate } from '@/lib/utils';
@@ -41,13 +41,47 @@ export default function InsightsPage() {
 
   return (
     <div className="page-container space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'rgb(var(--foreground))' }}>
-          Portfolio Intelligence & Insights
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'rgb(var(--muted))' }}>
-          Deterministic risk calculations, sector concentrations, and AI-powered portfolio synthesis
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            FINOVA Intelligence
+          </h1>
+          <p className="text-sm mt-1 text-muted">
+            Deterministic risk calculations, sector concentrations, and AI-powered portfolio synthesis
+          </p>
+        </div>
+
+        {/* Cross-Page Navigation Quick Links */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/analysis"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-surface hover:bg-surface-raised transition-colors text-foreground"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-brand" />
+            <span>Investment X-Ray</span>
+          </Link>
+          <Link
+            href="/risk"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-surface hover:bg-surface-raised transition-colors text-foreground"
+          >
+            <Shield className="w-3.5 h-3.5 text-amber-500" />
+            <span>Risk Radar</span>
+          </Link>
+          <Link
+            href="/future-lab"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-surface hover:bg-surface-raised transition-colors text-foreground"
+          >
+            <FlaskConical className="w-3.5 h-3.5 text-purple-400" />
+            <span>Future Lab</span>
+          </Link>
+          <Link
+            href="/explore"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-surface hover:bg-surface-raised transition-colors text-foreground"
+          >
+            <Compass className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Investment Explorer</span>
+          </Link>
+        </div>
       </div>
 
       {/* Primary Section: Complete AI Portfolio Intelligence & Risk Diagnostics Hub */}
@@ -66,7 +100,7 @@ export default function InsightsPage() {
             href="/news"
             className="text-xs text-brand font-semibold hover:underline flex items-center gap-1"
           >
-            <span>Open News & Market Intelligence</span>
+            <span>Open News & Market</span>
             <ExternalLink className="w-3 h-3" />
           </Link>
         </div>
@@ -77,7 +111,7 @@ export default function InsightsPage() {
             style={{ backgroundColor: 'rgb(var(--warning-bg))', borderColor: 'rgb(var(--warning))' }}
           >
             <p style={{ color: 'rgb(var(--warning))' }}>
-              Add <code className="font-mono text-xs font-bold">NEWSDATA_API_KEY</code> to your .env.local to enable real-time financial news integration.
+              Add <code className="font-mono text-xs font-bold">NEWSDATA_API_KEY</code> to your .env.local to enable automated financial news integration.
             </p>
           </div>
         )}

@@ -125,7 +125,7 @@ export function KeyRiskIndicatorsGrid({
       id: 'kpi-overlap',
       label: 'Cross-Broker Overlap',
       value: isSingleBroker
-        ? 'Not Assessable'
+        ? 'N/A'
         : `${xraySummary.cross_broker_overlap_valued_pct.toFixed(1)}%`,
       sub: isSingleBroker
         ? 'Single broker tracked'
@@ -136,7 +136,7 @@ export function KeyRiskIndicatorsGrid({
           ? 'warning'
           : 'healthy',
       tooltip: isSingleBroker
-        ? 'Cross-broker overlap cannot be assessed across multiple accounts yet.'
+        ? 'With only one tracked broker, cross-broker overlap is not assessable.'
         : 'Duplicate identical holdings held across different broker accounts.',
     },
   ];

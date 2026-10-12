@@ -24,7 +24,7 @@ export default function ExplorePage() {
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
               <Sparkles className="w-3 h-3" />
-              Live Discovery
+              Market Discovery
             </span>
           </div>
           <p className="text-sm text-muted mt-1.5 max-w-3xl">

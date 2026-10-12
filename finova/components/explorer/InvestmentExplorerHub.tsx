@@ -2,49 +2,27 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { EXPANDED_NSE_STOCKS } from '@/lib/market/stockCatalog';
-import type { MarketQuote } from '@/lib/services/marketData';
 
 import { MarketIndexCards } from './MarketIndexCards';
+import { RecentlyViewedStocks } from './RecentlyViewedStocks';
 import { StockSearchInput } from './StockSearchInput';
-import { InteractiveStockChart } from './InteractiveStockChart';
-import { PriceRangeBar } from './PriceRangeBar';
-import { CompanyOverviewCard } from './CompanyOverviewCard';
 import { TrackedMoversSection } from './TrackedMoversSection';
+import { BrowseStocksSection } from './BrowseStocksSection';
 import { SectorDiscoverySection } from './SectorDiscoverySection';
 import { CommoditiesOverview } from './CommoditiesOverview';
 import { IpoDiscoverySection } from './IpoDiscoverySection';
-import { StockCrossFeatureLinks } from './StockCrossFeatureLinks';
-import { StockNewsSection } from './StockNewsSection';
 import { AlternativeInvestmentExplorer } from './AlternativeInvestmentExplorer';
 
 import {
   TrendingUp,
+  Search,
   Layers,
   Coins,
   Building,
   BookOpen,
 } from 'lucide-react';
 
-export type ExplorerTab = 'stocks' | 'sectors' | 'commodities' | 'alts' | 'ipo';
-
-interface SelectedStockState {
-  symbol: string;
-  name: string;
-  exchange: string;
-  isin: string;
-  sector: string;
-  industry: string;
-}
-
-const DEFAULT_STOCK: SelectedStockState = {
-  symbol: 'RELIANCE',
-  name: 'Reliance Industries Ltd',
-  exchange: 'NSE',
-  isin: 'INE002A01018',
-  sector: 'Energy',
-  industry: 'Oil & Gas Refining & Marketing',
-};
+export type ExplorerTab = 'stocks' | 'browse' | 'sectors' | 'commodities' | 'alts' | 'ipo';
 
 export function InvestmentExplorerHub() {
   const searchParams = useSearchParams();
@@ -53,118 +31,23 @@ export function InvestmentExplorerHub() {
   const initialTabParam = searchParams.get('tab') as ExplorerTab;
   const initialSymbolParam = searchParams.get('symbol');
 
+  // Backwards-compatibility: If a user enters /explore?symbol=RELIANCE, forward them to /explore/stocks/RELIANCE
+  useEffect(() => {
+    if (initialSymbolParam && initialSymbolParam.trim().length > 0) {
+      router.replace(`/explore/stocks/${encodeURIComponent(initialSymbolParam.trim().toUpperCase())}`);
+    }
+  }, [initialSymbolParam, router]);
+
   const [activeTab, setActiveTab] = useState<ExplorerTab>(
-    ['stocks', 'sectors', 'commodities', 'alts', 'ipo'].includes(initialTabParam)
+    ['stocks', 'browse', 'sectors', 'commodities', 'alts', 'ipo'].includes(initialTabParam)
       ? initialTabParam
       : 'stocks'
   );
 
-  const [selectedStock, setSelectedStock] = useState<SelectedStockState>(() => {
-    if (initialSymbolParam) {
-      const match = EXPANDED_NSE_STOCKS.find(
-        (s) => s.symbol.toUpperCase() === initialSymbolParam.toUpperCase()
-      );
-      if (match) {
-        return {
-          symbol: match.symbol,
-          name: match.name,
-          exchange: 'NSE',
-          isin: match.isin,
-          sector: match.sector,
-          industry: match.industry,
-        };
-      }
-      return {
-        symbol: initialSymbolParam.toUpperCase(),
-        name: initialSymbolParam.toUpperCase(),
-        exchange: initialSymbolParam.startsWith('^') ? 'INDEX' : 'NSE',
-        isin: '',
-        sector: '',
-        industry: '',
-      };
-    }
-    return DEFAULT_STOCK;
-  });
-
-  const [quote, setQuote] = useState<MarketQuote | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    async function loadQuote() {
-      try {
-        const res = await fetch(
-          `/api/market/quotes?symbol=${encodeURIComponent(selectedStock.symbol)}&exchange=${encodeURIComponent(
-            selectedStock.exchange
-          )}`
-        );
-        if (res.ok && isMounted) {
-          const json = await res.json();
-          const q = json.quotes?.[selectedStock.symbol] || json.quotes?.[selectedStock.symbol.toUpperCase()] || null;
-          setQuote(q);
-        }
-      } catch {
-        // Fallback cleanly
-      }
-    }
-
-    if (selectedStock.symbol) {
-      loadQuote();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedStock.symbol, selectedStock.exchange]);
-
-  // Handle stock selection from search, movers, or sectors
-  const handleSelectStock = (stock: {
-    symbol: string;
-    name: string;
-    exchange: string;
-    isin?: string;
-    sector?: string;
-    industry?: string;
-  }) => {
-    const catalogMatch = EXPANDED_NSE_STOCKS.find(
-      (s) => s.symbol.toUpperCase() === stock.symbol.toUpperCase()
-    );
-
-    setSelectedStock({
-      symbol: stock.symbol.toUpperCase(),
-      name: stock.name || catalogMatch?.name || stock.symbol,
-      exchange: stock.exchange || 'NSE',
-      isin: stock.isin || catalogMatch?.isin || '',
-      sector: stock.sector || catalogMatch?.sector || '',
-      industry: stock.industry || catalogMatch?.industry || '',
-    });
-
-    setActiveTab('stocks');
-
-    // Update URL query param smoothly without full page reload
-    const params = new URLSearchParams(window.location.search);
-    params.set('symbol', stock.symbol.toUpperCase());
-    params.set('tab', 'stocks');
-    router.replace(`/explore?${params.toString()}`, { scroll: false });
-  };
-
-  const handleSelectSymbolOnly = (symbol: string) => {
-    const match = EXPANDED_NSE_STOCKS.find((s) => s.symbol.toUpperCase() === symbol.toUpperCase());
-    if (match) {
-      handleSelectStock({
-        symbol: match.symbol,
-        name: match.name,
-        exchange: 'NSE',
-        isin: match.isin,
-        sector: match.sector,
-        industry: match.industry,
-      });
-    } else {
-      handleSelectStock({
-        symbol: symbol.toUpperCase(),
-        name: symbol.toUpperCase(),
-        exchange: symbol.startsWith('^') ? 'INDEX' : 'NSE',
-      });
-    }
+  // Navigate to dedicated stock research page
+  const navigateToStock = (symbol: string) => {
+    if (!symbol) return;
+    router.push(`/explore/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}`);
   };
 
   const handleTabChange = (tab: ExplorerTab) => {
@@ -179,7 +62,11 @@ export function InvestmentExplorerHub() {
       {/* Universal Search Bar */}
       <div className="bg-gradient-to-r from-card/80 via-zinc-900/90 to-card/80 border border-border/80 rounded-2xl p-4 shadow-xl backdrop-blur-md">
         <div className="max-w-2xl mx-auto">
-          <StockSearchInput onSelectStock={handleSelectStock} />
+          <StockSearchInput
+            onSelectStock={(stock) => {
+              navigateToStock(stock.symbol);
+            }}
+          />
         </div>
       </div>
 
@@ -196,6 +83,19 @@ export function InvestmentExplorerHub() {
         >
           <TrendingUp className="w-4 h-4" />
           <span>Stocks & Market</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange('browse')}
+          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+            activeTab === 'browse'
+              ? 'bg-zinc-800 text-emerald-400 border border-emerald-500/30 shadow-md ring-1 ring-emerald-500/20'
+              : 'text-muted hover:text-foreground hover:bg-zinc-900/80 border border-transparent'
+          }`}
+        >
+          <Search className="w-4 h-4" />
+          <span>Browse Stocks</span>
         </button>
 
         <button
@@ -251,97 +151,67 @@ export function InvestmentExplorerHub() {
         </button>
       </div>
 
-      {/* Tab 1: Stocks & Market Experience */}
+      {/* Tab 1: Stocks & Market Experience (Groww-style discovery flow) */}
       {activeTab === 'stocks' && (
         <div className="space-y-6">
-          {/* Section A: Indian Market Index Cards */}
+          {/* 1. Major Indian Indices */}
           <MarketIndexCards
-            selectedIndex={selectedStock.symbol}
-            onSelectIndex={(indexSym, indexName) => {
-              handleSelectStock({
-                symbol: indexSym,
-                name: indexName,
-                exchange: 'INDEX',
-                sector: 'Benchmark Index',
-              });
+            onSelectIndex={(indexSym) => {
+              navigateToStock(indexSym);
             }}
           />
 
-          {/* Section B: Selected Stock Detail & Interactive Chart */}
-          <div className="space-y-6">
-            {/* Interactive Price Graph with 1D-MAX intervals */}
-            <InteractiveStockChart
-              symbol={selectedStock.symbol}
-              exchange={selectedStock.exchange}
-              companyName={selectedStock.name}
-              defaultRange="1M"
-            />
+          {/* 2. Recently Viewed Stocks (Directly below indices) */}
+          <RecentlyViewedStocks
+            onSelectStock={(sym) => {
+              navigateToStock(sym);
+            }}
+          />
 
-            {/* Price Performance Range Bars (Intraday & 52-Week) */}
-            <PriceRangeBar
-              currentPrice={quote?.price ?? 0}
-              currency={quote?.currency ?? 'INR'}
-              dayLow={quote?.previousClose ? Math.min(quote.price, quote.previousClose) * 0.995 : null}
-              dayHigh={quote?.previousClose ? Math.max(quote.price, quote.previousClose) * 1.005 : null}
-              fiftyTwoWeekLow={quote?.low_52w ?? null}
-              fiftyTwoWeekHigh={quote?.high_52w ?? null}
-            />
+          {/* 3. Market Movers (Gainers, Losers, Most Active) */}
+          <TrackedMoversSection
+            onSelectStock={(sym) => {
+              navigateToStock(sym);
+            }}
+          />
 
-            {/* Company Fundamentals and Business Profile */}
-            <CompanyOverviewCard
-              symbol={selectedStock.symbol}
-              name={selectedStock.name}
-              exchange={selectedStock.exchange}
-              currentPrice={quote?.price ?? null}
-              dayChange={quote?.day_change ?? null}
-              dayChangePercent={quote?.day_change_pct ?? null}
-              previousClose={quote?.previousClose ?? null}
-              dayHigh={quote?.previousClose ? Math.max(quote.price, quote.previousClose) * 1.005 : null}
-              dayLow={quote?.previousClose ? Math.min(quote.price, quote.previousClose) * 0.995 : null}
-              fiftyTwoWeekHigh={quote?.high_52w ?? null}
-              fiftyTwoWeekLow={quote?.low_52w ?? null}
-              volume={quote?.volume ?? null}
-              sector={selectedStock.sector}
-              industry={selectedStock.industry}
-              isin={selectedStock.isin}
-              currency={quote?.currency ?? 'INR'}
-            />
-
-            {/* Cross-Feature Links (X-Ray, Future Lab, Risk Radar, News) */}
-            <StockCrossFeatureLinks
-              symbol={selectedStock.symbol}
-            />
-
-            {/* Stock Specific News */}
-            <StockNewsSection
-              symbol={selectedStock.symbol}
-            />
-          </div>
-
-          {/* Section C: Tracked Movers */}
-          <TrackedMoversSection onSelectStock={handleSelectSymbolOnly} />
+          {/* 4. Browse Supported Stocks Catalog Section */}
+          <BrowseStocksSection
+            onSelectStock={(sym) => {
+              navigateToStock(sym);
+            }}
+          />
         </div>
+      )}
+
+      {/* Tab 1b: Dedicated Browse Stocks Tab */}
+      {activeTab === 'browse' && (
+        <BrowseStocksSection
+          onSelectStock={(sym) => {
+            navigateToStock(sym);
+          }}
+        />
       )}
 
       {/* Tab 2: Sector Discovery */}
       {activeTab === 'sectors' && (
-        <SectorDiscoverySection onSelectStock={handleSelectStock} />
+        <SectorDiscoverySection
+          onSelectStock={(stock) => {
+            navigateToStock(stock.symbol);
+          }}
+        />
       )}
 
       {/* Tab 3: Gold & Silver */}
       {activeTab === 'commodities' && (
         <CommoditiesOverview
-          onSelectInstrument={(sym, name) => {
-            handleSelectStock({
-              symbol: sym,
-              name: name,
-              exchange: sym.endsWith('.NS') ? 'NSE' : 'COMMODITY',
-            });
+          onSelectInstrument={(sym) => {
+            navigateToStock(sym);
           }}
         />
       )}
 
-      {/* Tab 4: Alternative Assets (Preserved 100% of REITs, InvITs, and Bonds) */}
+      {/* Tab 4: Alternative Assets (REITs, InvITs, and Bonds) */}
       {activeTab === 'alts' && (
         <div className="space-y-4">
           <div className="p-4 rounded-xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300">

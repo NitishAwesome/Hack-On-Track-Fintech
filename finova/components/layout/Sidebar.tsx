@@ -56,7 +56,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/analysis', label: 'Investment X-Ray', icon: BarChart3 },
       { href: '/risk', label: 'Risk Radar', icon: Shield },
       { href: '/future-lab', label: 'Future Lab', icon: FlaskConical },
-      { href: '/insights', label: 'AI Intelligence', icon: Sparkles },
+      { href: '/insights', label: 'FINOVA Intelligence', icon: Sparkles },
       { href: '/news', label: 'News & Market', icon: Newspaper },
       { href: '/explore', label: 'Investment Explorer', icon: Compass },
     ],

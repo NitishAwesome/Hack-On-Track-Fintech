@@ -11,6 +11,7 @@
 // ============================================================
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   Sparkles,
   ExternalLink,
@@ -22,6 +23,7 @@ import {
   Newspaper,
   Clock,
   ShieldCheck,
+  Compass,
 } from 'lucide-react';
 import type { PersonalizedNewsArticle } from '@/types/news';
 import { resolveArticleTemporalInfo } from '@/lib/news/temporalUtils';
@@ -464,7 +466,22 @@ export function NewsCard({
                 </span>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {(article.matched_holding?.symbol || article.symbols?.[0]) && (
+                  <Link
+                    href={`/explore/stocks/${encodeURIComponent(article.matched_holding?.symbol || article.symbols![0])}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all hover:bg-surface-raised text-emerald-400"
+                    style={{
+                      borderColor: 'rgb(var(--border))',
+                      backgroundColor: 'rgb(var(--surface))',
+                    }}
+                  >
+                    <Compass className="w-3.5 h-3.5" />
+                    <span>Research {article.matched_holding?.symbol || article.symbols![0]}</span>
+                  </Link>
+                )}
+
                 <button
                   type="button"
                   onClick={(e) => {
@@ -714,24 +731,42 @@ export function NewsCard({
 
       {/* Footer Action Buttons */}
       <div
-        className="p-4 pt-2 border-t flex items-center justify-between gap-2 text-xs"
+        className="p-4 pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-xs"
         style={{ borderColor: 'rgb(var(--border))' }}
       >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onExplainAi(article);
-          }}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all hover:bg-surface-raised text-brand cursor-pointer"
-          style={{
-            borderColor: 'rgb(var(--border))',
-            backgroundColor: 'rgb(var(--surface))',
-          }}
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>AI Smart Insight</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {(article.matched_holding?.symbol || article.symbols?.[0]) && (
+            <Link
+              href={`/explore/stocks/${encodeURIComponent(article.matched_holding?.symbol || article.symbols![0])}`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border transition-all hover:bg-surface-raised text-emerald-400 cursor-pointer"
+              style={{
+                borderColor: 'rgb(var(--border))',
+                backgroundColor: 'rgb(var(--surface))',
+              }}
+              title={`Research ${article.matched_holding?.symbol || article.symbols![0]} in Investment Explorer`}
+            >
+              <Compass className="w-3 h-3" />
+              <span>Research</span>
+            </Link>
+          )}
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onExplainAi(article);
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all hover:bg-surface-raised text-brand cursor-pointer"
+            style={{
+              borderColor: 'rgb(var(--border))',
+              backgroundColor: 'rgb(var(--surface))',
+            }}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>AI Smart Insight</span>
+          </button>
+        </div>
 
         <a
           href={article.link}

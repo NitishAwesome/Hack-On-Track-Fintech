@@ -91,7 +91,7 @@ export function RiskOverviewSection({ data }: RiskOverviewSectionProps) {
         </div>
 
         <Link
-          href="/radar"
+          href="/risk"
           className="text-xs font-semibold text-brand-500 hover:underline inline-flex items-center gap-1.5 self-start sm:self-auto"
         >
           <span>Open Full Risk Radar</span>

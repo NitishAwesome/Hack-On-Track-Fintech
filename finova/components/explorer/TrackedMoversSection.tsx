@@ -7,7 +7,6 @@ import {
   TrendingUp,
   TrendingDown,
   Activity,
-  History,
   ShieldAlert,
   ChevronRight,
   RefreshCw,
@@ -18,22 +17,9 @@ interface TrackedMoversSectionProps {
 }
 
 export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProps) {
-  const [activeTab, setActiveTab] = useState<'gainers' | 'losers' | 'active' | 'recent'>('gainers');
+  const [activeTab, setActiveTab] = useState<'gainers' | 'losers' | 'active'>('gainers');
   const [moversData, setMoversData] = useState<TrackedMoversResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const stored = localStorage.getItem('finova_recently_viewed_stocks');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch {
-      // Ignore
-    }
-    return [];
-  });
 
   useEffect(() => {
     let isMounted = true;
@@ -80,14 +66,6 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
 
   const handleStockClick = (symbol: string) => {
     onSelectStock(symbol);
-    // Update recently viewed
-    try {
-      const updated = [symbol, ...recentlyViewed.filter((s) => s !== symbol)].slice(0, 10);
-      setRecentlyViewed(updated);
-      localStorage.setItem('finova_recently_viewed_stocks', JSON.stringify(updated));
-    } catch {
-      // Ignore
-    }
   };
 
   const currentList: MarketQuote[] = (() => {
@@ -159,19 +137,6 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
 
           <button
             type="button"
-            onClick={() => setActiveTab('recent')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-              activeTab === 'recent'
-                ? 'bg-zinc-800 text-foreground border border-zinc-700 shadow-sm'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            Recent ({recentlyViewed.length})
-          </button>
-
-          <button
-            type="button"
             onClick={handleManualRefresh}
             disabled={loading}
             title="Refresh market movers"
@@ -200,31 +165,6 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
             <div key={i} className="h-20 bg-zinc-900/40 border border-border/40 rounded-xl animate-pulse p-3" />
           ))}
         </div>
-      ) : activeTab === 'recent' ? (
-        recentlyViewed.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
-            {recentlyViewed.map((sym) => (
-              <button
-                key={sym}
-                type="button"
-                onClick={() => handleStockClick(sym)}
-                className="p-3 text-left rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-emerald-500/40 transition group"
-              >
-                <div className="font-bold text-sm text-foreground group-hover:text-emerald-400 transition">
-                  {sym}
-                </div>
-                <div className="text-[10px] text-muted flex items-center justify-between mt-1">
-                  <span>NSE Equity</span>
-                  <ChevronRight className="w-3 h-3 text-zinc-500 group-hover:text-emerald-400 transition" />
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="p-8 text-center text-xs text-muted">
-            No recently viewed stocks yet. Search or select any stock above to begin tracking.
-          </div>
-        )
       ) : currentList.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {currentList.map((item) => {

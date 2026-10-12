@@ -98,9 +98,9 @@ export function LandingNavbar() {
             <>
               <Link
                 href="/demo"
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/25 hover:bg-amber-500/20 transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/25 hover:bg-amber-500/20 transition-colors"
               >
-                <span>Demo</span>
+                <span>Guest Preview</span>
               </Link>
 
               <Link
@@ -164,6 +164,13 @@ export function LandingNavbar() {
               </Link>
             ) : (
               <>
+                <Link
+                  href="/demo"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 text-sm font-semibold rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors"
+                >
+                  Explore Guest Preview
+                </Link>
                 <Link
                   href="/login"
                   onClick={() => setMobileMenuOpen(false)}

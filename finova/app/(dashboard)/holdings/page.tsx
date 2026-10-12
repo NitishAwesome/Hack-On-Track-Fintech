@@ -9,7 +9,7 @@ import {
   Plus, Upload, Search, X, Loader2,
   LineChart, Trash2, Download, Eye, Building2, Info, Edit2, Newspaper,
   AlertCircle, CheckCircle2, FileText, ArrowUpDown, Filter, ChevronRight, RefreshCw,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, BarChart3
 } from 'lucide-react';
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -376,6 +376,14 @@ export default function HoldingsPage() {
             <RefreshCw className={`w-4 h-4 text-emerald-400 ${isRefreshingQuotes ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh Quotes</span>
           </button>
+          <Link
+            href="/analysis"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-colors shadow-sm"
+            title="Open portfolio exposure analysis in Investment X-Ray"
+          >
+            <BarChart3 className="w-4 h-4 text-brand" />
+            <span className="hidden sm:inline">Investment X-Ray</span>
+          </Link>
           <button
             id="btn-import-csv"
             onClick={() => {

@@ -22,7 +22,16 @@ import { EXPANDED_NSE_STOCKS } from '../market/stockCatalog.ts';
 
 // Common stock aliases and company names for verified matching
 const KNOWN_COMPANY_ALIASES: Record<string, string[]> = {
-  RELIANCE: ['Reliance Industries', 'Reliance', 'RIL', 'Jio', 'Reliance Retail'],
+  RELIANCE: [
+    'Reliance Industries',
+    'Reliance Industries Limited',
+    'Reliance Industries Ltd',
+    'RIL',
+    'Reliance Retail',
+    'Reliance Jio',
+    'Jio Platforms',
+    'Mukesh Ambani',
+  ],
   TCS: ['Tata Consultancy Services', 'TCS', 'Tata Consultancy'],
   INFY: ['Infosys', 'Infosys Ltd', 'Infosys Limited'],
   HDFCBANK: ['HDFC Bank', 'HDFC Bank Ltd', 'HDFC'],

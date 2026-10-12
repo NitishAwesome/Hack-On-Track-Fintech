@@ -15,7 +15,12 @@
 import { NextResponse } from 'next/server';
 import { getAggregatedFinancialNews } from '@/lib/news/aggregationService';
 import { resolveServerPortfolioContext } from '@/lib/news/portfolioContextResolver';
-import { personalizeAndRankNews } from '@/lib/news/personalizationEngine';
+import {
+  personalizeAndRankNews,
+  matchesSymbolOrCompany,
+  matchesSector,
+} from '@/lib/news/personalizationEngine';
+import { EXPANDED_NSE_STOCKS } from '@/lib/market/stockCatalog';
 import type { NewsApiResponse, PersonalizedNewsArticle } from '@/types/news';
 
 export async function GET(request: Request) {
@@ -27,13 +32,24 @@ export async function GET(request: Request) {
     const forceRefresh = searchParams.get('refresh') === 'true';
     const pageToken = searchParams.get('page')?.trim() || undefined;
 
-    // 1. Resolve authenticated user portfolio context server-side
+    // 1. Resolve catalog stock if specificSymbol is provided
+    const catalogStock = specificSymbol
+      ? EXPANDED_NSE_STOCKS.find((s) => s.symbol.toUpperCase() === specificSymbol)
+      : null;
+
+    // 2. Resolve authenticated user portfolio context server-side
     const portfolio = await resolveServerPortfolioContext();
 
-    // 2. Fetch aggregated news across NewsData.io, MarketAux, and GDELT 2.0
+    // 3. Fetch aggregated news across NewsData.io, MarketAux, and GDELT 2.0
     const portfolioSymbols = portfolio.holdings.map((h) => h.symbol);
+    const targetQuery =
+      customQuery ||
+      (catalogStock
+        ? `"${catalogStock.name.replace(/\s+(Ltd|Limited)$/i, '')}"`
+        : specificSymbol || undefined);
+
     const fetchResult = await getAggregatedFinancialNews({
-      query: customQuery,
+      query: targetQuery,
       symbols: specificSymbol ? [specificSymbol] : portfolioSymbols,
       forceRefresh,
       page: pageToken,
@@ -108,39 +124,100 @@ export async function GET(request: Request) {
       return NextResponse.json(response);
     }
 
-    // 3. Personalize and rank all returned real articles against user's portfolio
-    const personalizedArticles = personalizeAndRankNews(fetchResult.articles, portfolio);
-
-    // 4. Apply optional filters
-    let filteredArticles: PersonalizedNewsArticle[] = personalizedArticles;
+    // 4. Personalize and rank all returned real articles
+    let filteredArticles: PersonalizedNewsArticle[] = [];
 
     if (specificSymbol) {
-      filteredArticles = filteredArticles.filter(
-        (a) => a.matched_holding?.symbol.toUpperCase() === specificSymbol
+      // Find user holding if present in portfolio
+      const userHolding = portfolio.holdings.find(
+        (h) => h.symbol.toUpperCase() === specificSymbol
       );
-    } else if (filter === 'portfolio') {
-      filteredArticles = filteredArticles.filter(
-        (a) =>
-          a.relevance_category === 'DIRECT_HOLDING' ||
-          a.relevance_category === 'SECTOR_RELEVANCE' ||
-          a.relevance_category === 'ASSET_CLASS'
-      );
-    } else if (filter === 'direct') {
-      filteredArticles = filteredArticles.filter(
-        (a) => a.relevance_category === 'DIRECT_HOLDING'
-      );
-    } else if (filter === 'sector') {
-      filteredArticles = filteredArticles.filter(
-        (a) => a.relevance_category === 'SECTOR_RELEVANCE'
-      );
-    } else if (filter === 'market') {
-      filteredArticles = filteredArticles.filter(
-        (a) => a.relevance_category === 'GENERAL_MARKET'
-      );
+
+      const directMatches: PersonalizedNewsArticle[] = [];
+      const sectorMatches: PersonalizedNewsArticle[] = [];
+
+      for (const art of fetchResult.articles) {
+        const fullText = `${art.title} ${art.description || ''}`;
+        const isDirect = matchesSymbolOrCompany(
+          fullText,
+          specificSymbol,
+          catalogStock?.name,
+          catalogStock?.isin
+        );
+
+        if (isDirect) {
+          directMatches.push({
+            ...art,
+            relevance_category: 'DIRECT_HOLDING',
+            relevance_score: 95,
+            investigation_prompts: [
+              `Direct company coverage for ${catalogStock?.name || specificSymbol}`,
+            ],
+            matched_holding: {
+              symbol: specificSymbol,
+              name: catalogStock?.name || specificSymbol,
+              weight_pct: userHolding?.current_value ? 5.0 : 0,
+              asset_class: 'equity',
+              sector: catalogStock?.sector || 'NSE Equity',
+              is_cross_broker: false,
+              broker_names: [],
+            },
+            explanation: `Verified reporting directly covering corporate, operational, or earnings developments for ${
+              catalogStock?.name || specificSymbol
+            }.`,
+          });
+        } else if (catalogStock?.sector && matchesSector(fullText, catalogStock.sector)) {
+          sectorMatches.push({
+            ...art,
+            relevance_category: 'SECTOR_RELEVANCE',
+            relevance_score: 65,
+            investigation_prompts: [
+              `Sector coverage (${catalogStock.sector}) relevant to ${specificSymbol}`,
+            ],
+            matched_holding: {
+              symbol: specificSymbol,
+              name: catalogStock.name,
+              weight_pct: userHolding?.current_value ? 5.0 : 0,
+              asset_class: 'equity',
+              sector: catalogStock.sector,
+              is_cross_broker: false,
+              broker_names: [],
+            },
+            explanation: `Industry developments affecting the ${catalogStock.sector} sector in India.`,
+          });
+        }
+      }
+
+      // Prioritize direct stock mentions, then relevant sector news
+      filteredArticles = directMatches.length > 0 ? directMatches : sectorMatches;
+    } else {
+      const personalizedArticles = personalizeAndRankNews(fetchResult.articles, portfolio);
+      filteredArticles = personalizedArticles;
+
+      if (filter === 'portfolio') {
+        filteredArticles = filteredArticles.filter(
+          (a) =>
+            a.relevance_category === 'DIRECT_HOLDING' ||
+            a.relevance_category === 'SECTOR_RELEVANCE' ||
+            a.relevance_category === 'ASSET_CLASS'
+        );
+      } else if (filter === 'direct') {
+        filteredArticles = filteredArticles.filter(
+          (a) => a.relevance_category === 'DIRECT_HOLDING'
+        );
+      } else if (filter === 'sector') {
+        filteredArticles = filteredArticles.filter(
+          (a) => a.relevance_category === 'SECTOR_RELEVANCE'
+        );
+      } else if (filter === 'market') {
+        filteredArticles = filteredArticles.filter(
+          (a) => a.relevance_category === 'GENERAL_MARKET'
+        );
+      }
     }
 
-    const directCount = personalizedArticles.filter((a) => a.relevance_category === 'DIRECT_HOLDING').length;
-    const sectorCount = personalizedArticles.filter((a) => a.relevance_category === 'SECTOR_RELEVANCE').length;
+    const directCount = filteredArticles.filter((a) => a.relevance_category === 'DIRECT_HOLDING').length;
+    const sectorCount = filteredArticles.filter((a) => a.relevance_category === 'SECTOR_RELEVANCE').length;
 
     const response: NewsApiResponse = {
       status: 'success',
