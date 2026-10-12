@@ -2,11 +2,18 @@ import type { MarketIndex, MarketDataResponse, MarketStatus } from '../../types/
 import {
   type MarketDataProvider,
   type MarketQuote,
+  type ChartRange,
+  type HistoricalChartResponse,
   YFinanceMarketDataProvider,
 } from '../market/providers/yfinanceProvider.ts';
 import { extractBaseSymbol } from '../market/symbolMapper.ts';
 
-export type { MarketQuote } from '../market/providers/yfinanceProvider.ts';
+export type {
+  MarketQuote,
+  ChartRange,
+  HistoricalChartPoint,
+  HistoricalChartResponse,
+} from '../market/providers/yfinanceProvider.ts';
 
 /**
  * Calculates official Indian Market (NSE/BSE) status based on IST (Asia/Kolkata).
@@ -80,6 +87,7 @@ const CACHE_TTL_NEGATIVE_MS = 60 * 1000;
 
 let indexMemoryCache: IndexCacheEntry | null = null;
 const quoteMemoryCache = new Map<string, QuoteCacheEntry>();
+const chartMemoryCache = new Map<string, { data: HistoricalChartResponse; expiresAt: number }>();
 
 /**
  * Server-Side MarketDataService
@@ -106,6 +114,7 @@ export class MarketDataService {
     this.provider = provider;
     indexMemoryCache = null;
     quoteMemoryCache.clear();
+    chartMemoryCache.clear();
   }
 
   public static getProvider(): MarketDataProvider {
@@ -115,6 +124,7 @@ export class MarketDataService {
   public static clearCache(): void {
     indexMemoryCache = null;
     quoteMemoryCache.clear();
+    chartMemoryCache.clear();
   }
 
   /**
@@ -432,4 +442,248 @@ export class MarketDataService {
 
     return resultMap;
   }
+
+  /**
+   * Retrieves historical chart series for an instrument or index.
+   * Leverages server-side in-memory caching with TTL (60s for 1D, 5m for others).
+   */
+  public static async getHistoricalChart(
+    symbol: string,
+    exchange: string = 'NSE',
+    range: ChartRange = '1M',
+    options?: { forceRefresh?: boolean }
+  ): Promise<HistoricalChartResponse | null> {
+    const cleanSym = symbol?.trim().toUpperCase();
+    if (!cleanSym) return null;
+
+    const cleanEx = (exchange || 'NSE').trim().toUpperCase();
+    const cleanRange = range?.trim().toUpperCase() as ChartRange;
+    const validRange: ChartRange = ['1D', '1W', '1M', '3M', '1Y', '5Y', 'MAX'].includes(cleanRange)
+      ? cleanRange
+      : '1M';
+
+    const cacheKey = `${cleanSym}|${cleanEx}|${validRange}`;
+    const now = Date.now();
+    const cached = chartMemoryCache.get(cacheKey);
+
+    if (!options?.forceRefresh && cached && cached.expiresAt > now) {
+      return cached.data;
+    }
+
+    try {
+      if (typeof this.provider.fetchHistoricalChart === 'function') {
+        const chartData = await this.provider.fetchHistoricalChart(cleanSym, cleanEx, validRange);
+        if (chartData && chartData.points.length > 0) {
+          const ttl = validRange === '1D' ? CACHE_TTL_OPEN_MS : CACHE_TTL_CLOSED_MS;
+          chartMemoryCache.set(cacheKey, {
+            data: chartData,
+            expiresAt: now + ttl,
+          });
+          return chartData;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fetches quotes for the 20 benchmark NSE equities and ranks them
+   * into Top Gainers, Top Losers, and Most Active.
+   * Explicitly discloses the limited tracking universe as required.
+   */
+  public static async getTrackedMovers(options?: {
+    forceRefresh?: boolean;
+  }): Promise<TrackedMoversResponse> {
+    const instruments = TRACKED_BENCHMARK_STOCKS.map((sym) => ({
+      symbol: sym,
+      exchange: 'NSE',
+    }));
+
+    const quotesMap = await this.getQuotes(instruments, options);
+    const validQuotes: MarketQuote[] = [];
+
+    for (const sym of TRACKED_BENCHMARK_STOCKS) {
+      const q = quotesMap.get(sym);
+      if (q && q.isValid && q.price > 0) {
+        validQuotes.push(q);
+      }
+    }
+
+    // Sort gainers (highest positive percentage change)
+    const gainers = [...validQuotes]
+      .filter((q) => (q.day_change_pct ?? 0) >= 0)
+      .sort((a, b) => (b.day_change_pct ?? 0) - (a.day_change_pct ?? 0));
+
+    // Sort losers (lowest / most negative percentage change)
+    const losers = [...validQuotes]
+      .filter((q) => (q.day_change_pct ?? 0) < 0)
+      .sort((a, b) => (a.day_change_pct ?? 0) - (b.day_change_pct ?? 0));
+
+    // Sort most active by trading volume
+    const mostActive = [...validQuotes]
+      .filter((q) => typeof q.volume === 'number' && q.volume > 0)
+      .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
+
+    return {
+      gainers: gainers.slice(0, 10),
+      losers: losers.slice(0, 10),
+      mostActive: mostActive.slice(0, 10),
+      trackedCount: validQuotes.length,
+      universeDisclosure:
+        'Top movers among tracked FINOVA universe (20 major NSE benchmark equities). Free-tier market data does not screen the entire 2,000+ NSE listed universe in real-time.',
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Fetches real commodity prices:
+   * - International Futures Benchmarks: GC=F (Gold COMEX Futures), SI=F (Silver COMEX Futures) in USD / troy oz.
+   * - Indian Market Instruments: GOLDBEES.NS (Nippon India ETF Gold BeES), SILVERBEES.NS (Nippon India ETF Silver BeES) in INR / unit.
+   */
+  public static async getCommoditiesData(options?: {
+    forceRefresh?: boolean;
+  }): Promise<CommoditiesResponse> {
+    const instruments = [
+      { symbol: 'GC=F', exchange: 'OTHER' },
+      { symbol: 'SI=F', exchange: 'OTHER' },
+      { symbol: 'GOLDBEES.NS', exchange: 'NSE' },
+      { symbol: 'SILVERBEES.NS', exchange: 'NSE' },
+    ];
+
+    const quotesMap = await this.getQuotes(instruments, options);
+    const nowIso = new Date().toISOString();
+
+    const goldBenchmarkQuote = quotesMap.get('GC=F');
+    const silverBenchmarkQuote = quotesMap.get('SI=F');
+    const goldEtfQuote = quotesMap.get('GOLDBEES.NS') || quotesMap.get('GOLDBEES');
+    const silverEtfQuote = quotesMap.get('SILVERBEES.NS') || quotesMap.get('SILVERBEES');
+
+    const benchmarks: CommodityItem[] = [
+      {
+        id: 'gold-futures',
+        name: 'Gold COMEX Futures',
+        symbol: 'GC=F',
+        providerTicker: 'GC=F',
+        category: 'benchmark',
+        currency: 'USD',
+        quotedUnit: 'USD / troy oz',
+        price: goldBenchmarkQuote?.price ?? null,
+        dayChange: goldBenchmarkQuote?.day_change ?? null,
+        dayChangePercent: goldBenchmarkQuote?.day_change_pct ?? null,
+        high52w: goldBenchmarkQuote?.high_52w ?? null,
+        low52w: goldBenchmarkQuote?.low_52w ?? null,
+        timestamp: goldBenchmarkQuote?.price_timestamp ?? nowIso,
+        source: goldBenchmarkQuote?.source ?? 'Yahoo Finance / yfinance',
+        disclaimer:
+          'International COMEX futures benchmark quoted in USD per troy ounce. Does not represent Indian retail gold spot rates (per 10 grams) or include Indian import customs duty.',
+      },
+      {
+        id: 'silver-futures',
+        name: 'Silver COMEX Futures',
+        symbol: 'SI=F',
+        providerTicker: 'SI=F',
+        category: 'benchmark',
+        currency: 'USD',
+        quotedUnit: 'USD / troy oz',
+        price: silverBenchmarkQuote?.price ?? null,
+        dayChange: silverBenchmarkQuote?.day_change ?? null,
+        dayChangePercent: silverBenchmarkQuote?.day_change_pct ?? null,
+        high52w: silverBenchmarkQuote?.high_52w ?? null,
+        low52w: silverBenchmarkQuote?.low_52w ?? null,
+        timestamp: silverBenchmarkQuote?.price_timestamp ?? nowIso,
+        source: silverBenchmarkQuote?.source ?? 'Yahoo Finance / yfinance',
+        disclaimer:
+          'International COMEX futures benchmark quoted in USD per troy ounce. Does not represent Indian retail silver spot rates (per 1 kg) or include Indian import customs duty.',
+      },
+    ];
+
+    const etfs: CommodityItem[] = [
+      {
+        id: 'goldbees-etf',
+        name: 'Nippon India ETF Gold BeES',
+        symbol: 'GOLDBEES',
+        providerTicker: 'GOLDBEES.NS',
+        category: 'etf',
+        currency: 'INR',
+        quotedUnit: 'INR / unit (NSE)',
+        price: goldEtfQuote?.price ?? null,
+        dayChange: goldEtfQuote?.day_change ?? null,
+        dayChangePercent: goldEtfQuote?.day_change_pct ?? null,
+        high52w: goldEtfQuote?.high_52w ?? null,
+        low52w: goldEtfQuote?.low_52w ?? null,
+        timestamp: goldEtfQuote?.price_timestamp ?? nowIso,
+        source: goldEtfQuote?.source ?? 'Yahoo Finance / yfinance',
+        disclaimer:
+          'NSE-listed Gold Exchange Traded Fund providing direct physical gold backing in INR for Indian retail investors.',
+      },
+      {
+        id: 'silverbees-etf',
+        name: 'Nippon India ETF Silver BeES',
+        symbol: 'SILVERBEES',
+        providerTicker: 'SILVERBEES.NS',
+        category: 'etf',
+        currency: 'INR',
+        quotedUnit: 'INR / unit (NSE)',
+        price: silverEtfQuote?.price ?? null,
+        dayChange: silverEtfQuote?.day_change ?? null,
+        dayChangePercent: silverEtfQuote?.day_change_pct ?? null,
+        high52w: silverEtfQuote?.high_52w ?? null,
+        low52w: silverEtfQuote?.low_52w ?? null,
+        timestamp: silverEtfQuote?.price_timestamp ?? nowIso,
+        source: silverEtfQuote?.source ?? 'Yahoo Finance / yfinance',
+        disclaimer:
+          'NSE-listed Silver Exchange Traded Fund tracking domestic spot silver price in INR for Indian retail investors.',
+      },
+    ];
+
+    return {
+      benchmarks,
+      etfs,
+      lastUpdated: nowIso,
+    };
+  }
 }
+
+export interface TrackedMoversResponse {
+  gainers: MarketQuote[];
+  losers: MarketQuote[];
+  mostActive: MarketQuote[];
+  trackedCount: number;
+  universeDisclosure: string;
+  lastUpdated: string;
+}
+
+export interface CommodityItem {
+  id: string;
+  name: string;
+  symbol: string;
+  providerTicker: string;
+  category: 'benchmark' | 'etf';
+  currency: string;
+  quotedUnit: string;
+  price: number | null;
+  dayChange: number | null;
+  dayChangePercent: number | null;
+  high52w?: number | null;
+  low52w?: number | null;
+  timestamp: string;
+  source: string;
+  disclaimer: string;
+}
+
+export interface CommoditiesResponse {
+  benchmarks: CommodityItem[];
+  etfs: CommodityItem[];
+  lastUpdated: string;
+}
+
+export const TRACKED_BENCHMARK_STOCKS = [
+  'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK',
+  'BHARTIARTL', 'ITC', 'SBIN', 'LT', 'HINDUNILVR',
+  'BAJFINANCE', 'MARUTI', 'SUNPHARMA', 'TATAMOTORS', 'TITAN',
+  'NTPC', 'COALINDIA', 'ZOMATO', 'TRENT', 'BEL'
+];
+
+export const TRACKED_BENCHMARK_UNIVERSE = TRACKED_BENCHMARK_STOCKS;

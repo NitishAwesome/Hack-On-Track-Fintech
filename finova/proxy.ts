@@ -21,6 +21,7 @@ const PUBLIC_PREFIXES = [
   '/api/market',
   '/api/instruments',
   '/learn',
+  '/explore',
   '/demo',
   '/icon.svg',
   '/favicon.ico',

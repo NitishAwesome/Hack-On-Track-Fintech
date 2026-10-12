@@ -35,6 +35,41 @@ export interface MarketQuote {
   lastSuccessfulRetrieval?: string;
 }
 
+export type ChartRange = '1D' | '1W' | '1M' | '3M' | '1Y' | '5Y' | 'MAX';
+
+export interface HistoricalChartPoint {
+  timestamp: number;
+  date: string;
+  close: number;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  volume?: number | null;
+}
+
+export interface HistoricalChartResponse {
+  symbol: string;
+  providerTicker: string;
+  exchange: string;
+  range: ChartRange;
+  interval: string;
+  currency: string;
+  points: HistoricalChartPoint[];
+  currentPrice: number;
+  previousClose?: number | null;
+  dayChange?: number | null;
+  dayChangePercent?: number | null;
+  periodChange?: number | null;
+  periodChangePercent?: number | null;
+  high_52w?: number | null;
+  low_52w?: number | null;
+  dayHigh?: number | null;
+  dayLow?: number | null;
+  volume?: number | null;
+  source: string;
+  lastUpdated: string;
+}
+
 export interface MarketDataProvider {
   readonly id: string;
   readonly name: string;
@@ -44,6 +79,11 @@ export interface MarketDataProvider {
   fetchQuotes(
     instruments: Array<{ symbol: string; exchange?: string }>
   ): Promise<Map<string, MarketQuote>>;
+  fetchHistoricalChart?(
+    symbol: string,
+    exchange?: string,
+    range?: ChartRange
+  ): Promise<HistoricalChartResponse | null>;
 }
 
 interface IndexConfig {
@@ -212,13 +252,19 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
       }
 
       // 2. Validate quote compliance
-      const validation = validateMarketQuote({
-        symbol: cleanSym,
-        price: metrics.currentPrice,
-        currency: meta.currency,
-        timestamp: meta.regularMarketTime ? meta.regularMarketTime * 1000 : null,
-        source: this.sourceLabel,
-      });
+      const isCommodityFuture = cleanSym.includes('=') || cleanSym === 'GC=F' || cleanSym === 'SI=F';
+      const expectedCurrency = isCommodityFuture ? (meta.currency || 'USD') : 'INR';
+
+      const validation = validateMarketQuote(
+        {
+          symbol: cleanSym,
+          price: metrics.currentPrice,
+          currency: meta.currency,
+          timestamp: meta.regularMarketTime ? meta.regularMarketTime * 1000 : null,
+          source: this.sourceLabel,
+        },
+        { expectedCurrency }
+      );
 
       if (!validation.isValid || validation.normalizedPrice === undefined) {
         return null;
@@ -288,5 +334,146 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
     }
 
     return quoteMap;
+  }
+
+  /**
+   * Fetches historical chart series for interactive financial graphs.
+   * Maps FINOVA ranges (1D, 1W, 1M, 3M, 1Y, 5Y, MAX) to validated Yahoo Finance range & interval pairs.
+   */
+  async fetchHistoricalChart(
+    symbol: string,
+    exchange: string = 'NSE',
+    range: ChartRange = '1M'
+  ): Promise<HistoricalChartResponse | null> {
+    const cleanSym = symbol?.trim().toUpperCase();
+    if (!cleanSym) return null;
+
+    const yahooTicker = resolveYahooFinanceSymbol(cleanSym, exchange);
+    if (!yahooTicker) return null;
+
+    const RANGE_MAP: Record<ChartRange, { range: string; interval: string }> = {
+      '1D': { range: '1d', interval: '5m' },
+      '1W': { range: '5d', interval: '15m' },
+      '1M': { range: '1mo', interval: '1d' },
+      '3M': { range: '3mo', interval: '1d' },
+      '1Y': { range: '1y', interval: '1d' },
+      '5Y': { range: '5y', interval: '1wk' },
+      'MAX': { range: 'max', interval: '1mo' },
+    };
+
+    const targetConfig = RANGE_MAP[range] || RANGE_MAP['1M'];
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7500);
+
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+        yahooTicker
+      )}?range=${targetConfig.range}&interval=${targetConfig.interval}`;
+
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+        },
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        return null;
+      }
+
+      const json = await res.json();
+      const chartResult = json?.chart?.result?.[0];
+      if (!chartResult) return null;
+
+      const meta = chartResult.meta;
+      const timestamps: number[] = chartResult.timestamp || [];
+      const quoteObj = chartResult.indicators?.quote?.[0] || {};
+      const opens: (number | null)[] = quoteObj.open || [];
+      const highs: (number | null)[] = quoteObj.high || [];
+      const lows: (number | null)[] = quoteObj.low || [];
+      const closes: (number | null)[] = quoteObj.close || [];
+      const volumes: (number | null)[] = quoteObj.volume || [];
+
+      const points: HistoricalChartPoint[] = [];
+
+      for (let i = 0; i < timestamps.length; i++) {
+        const ts = timestamps[i];
+        const c = closes[i] ?? opens[i];
+        if (typeof c === 'number' && !isNaN(c) && c > 0) {
+          points.push({
+            timestamp: ts * 1000,
+            date: new Date(ts * 1000).toISOString(),
+            close: Number(c.toFixed(2)),
+            open: typeof opens[i] === 'number' && !isNaN(opens[i]!) ? Number(opens[i]!.toFixed(2)) : null,
+            high: typeof highs[i] === 'number' && !isNaN(highs[i]!) ? Number(highs[i]!.toFixed(2)) : null,
+            low: typeof lows[i] === 'number' && !isNaN(lows[i]!) ? Number(lows[i]!.toFixed(2)) : null,
+            volume: typeof volumes[i] === 'number' && !isNaN(volumes[i]!) ? volumes[i]! : null,
+          });
+        }
+      }
+
+      if (points.length === 0) return null;
+
+      const firstPoint = points[0];
+      const lastPoint = points[points.length - 1];
+      const currentPrice = typeof meta?.regularMarketPrice === 'number' && meta.regularMarketPrice > 0
+        ? Number(meta.regularMarketPrice.toFixed(2))
+        : lastPoint.close;
+
+      const previousClose = typeof meta?.previousClose === 'number' && meta.previousClose > 0
+        ? Number(meta.previousClose.toFixed(2))
+        : typeof meta?.chartPreviousClose === 'number' && meta.chartPreviousClose > 0
+        ? Number(meta.chartPreviousClose.toFixed(2))
+        : null;
+
+      const dayChange = previousClose !== null
+        ? Number((currentPrice - previousClose).toFixed(2))
+        : null;
+
+      const dayChangePercent = previousClose !== null && previousClose > 0
+        ? Number(((currentPrice - previousClose) / previousClose * 100).toFixed(2))
+        : null;
+
+      const periodChange = Number((lastPoint.close - firstPoint.close).toFixed(2));
+      const periodChangePercent = firstPoint.close > 0
+        ? Number(((lastPoint.close - firstPoint.close) / firstPoint.close * 100).toFixed(2))
+        : 0;
+
+      const high52w = typeof meta?.fiftyTwoWeekHigh === 'number' ? Number(meta.fiftyTwoWeekHigh.toFixed(2)) : null;
+      const low52w = typeof meta?.fiftyTwoWeekLow === 'number' ? Number(meta.fiftyTwoWeekLow.toFixed(2)) : null;
+      const dayHigh = typeof meta?.regularMarketDayHigh === 'number' ? Number(meta.regularMarketDayHigh.toFixed(2)) : null;
+      const dayLow = typeof meta?.regularMarketDayLow === 'number' ? Number(meta.regularMarketDayLow.toFixed(2)) : null;
+      const volume = typeof meta?.regularMarketVolume === 'number' ? meta.regularMarketVolume : null;
+
+      return {
+        symbol: extractBaseSymbol(cleanSym),
+        providerTicker: yahooTicker,
+        exchange: exchange.toUpperCase(),
+        range,
+        interval: targetConfig.interval,
+        currency: meta?.currency || 'INR',
+        points,
+        currentPrice,
+        previousClose,
+        dayChange,
+        dayChangePercent,
+        periodChange,
+        periodChangePercent,
+        high_52w: high52w,
+        low_52w: low52w,
+        dayHigh,
+        dayLow,
+        volume,
+        source: this.sourceLabel,
+        lastUpdated: new Date().toISOString(),
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }

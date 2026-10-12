@@ -9,7 +9,7 @@ export type SupportedExchange = 'NSE' | 'BSE' | 'OTHER';
 /**
  * Standard index mappings for Indian markets
  */
-const KNOWN_INDICES: Record<string, string> = {
+export const KNOWN_INDICES: Record<string, string> = {
   NIFTY: '^NSEI',
   NIFTY50: '^NSEI',
   'NIFTY 50': '^NSEI',
@@ -22,6 +22,29 @@ const KNOWN_INDICES: Record<string, string> = {
   'NIFTY BANK': '^NSEBANK',
   '^NSEBANK': '^NSEBANK',
 };
+
+export const INDEX_NAME_TO_SYMBOL: Record<string, string> = {
+  'NIFTY 50': '^NSEI',
+  'SENSEX': '^BSESN',
+  'NIFTY BANK': '^NSEBANK',
+};
+
+export function getIndexDisplayName(symbol: string): string {
+  const s = symbol.trim().toUpperCase();
+  if (s === '^NSEI' || s === 'NIFTY 50' || s === 'NIFTY50' || s === 'NIFTY') return 'NIFTY 50';
+  if (s === '^BSESN' || s === 'SENSEX' || s === 'BSESN') return 'BSE SENSEX';
+  if (s === '^NSEBANK' || s === 'NIFTY BANK' || s === 'BANKNIFTY') return 'NIFTY BANK';
+  return s;
+}
+
+export function normalizeSymbol(symbol: string): string {
+  if (!symbol) return '';
+  return symbol.trim().toUpperCase();
+}
+
+export function isValidEquitySymbol(symbol: string): boolean {
+  return isIndianEquity(symbol);
+}
 
 /**
  * Resolves an Indian market symbol and exchange to the corresponding Yahoo Finance ticker.
@@ -47,8 +70,8 @@ export function resolveYahooFinanceSymbol(
     return KNOWN_INDICES[trimmed];
   }
 
-  // 2. Already formatted ticker
-  if (trimmed.startsWith('^') || trimmed.endsWith('.NS') || trimmed.endsWith('.BO')) {
+  // 2. Already formatted ticker or commodity futures (=F)
+  if (trimmed.startsWith('^') || trimmed.endsWith('.NS') || trimmed.endsWith('.BO') || trimmed.includes('=')) {
     return trimmed;
   }
 
@@ -69,7 +92,7 @@ export function resolveYahooFinanceSymbol(
 export function extractBaseSymbol(ticker: string): string {
   if (!ticker) return '';
   const upper = ticker.trim().toUpperCase();
-  if (upper.startsWith('^')) return upper;
+  if (upper.startsWith('^') || upper.includes('=')) return upper;
   return upper.replace(/\.(NS|BO)$/i, '');
 }
 
@@ -101,7 +124,7 @@ export function normalizeExchange(exchange?: string): SupportedExchange {
 export function isIndianEquity(symbol: string): boolean {
   if (!symbol) return false;
   const upper = symbol.trim().toUpperCase();
-  if (upper.startsWith('^')) return false;
+  if (upper.startsWith('^') || upper.includes('=')) return false;
   return /^[A-Z0-9_\-]+(\.(NS|BO))?$/.test(upper);
 }
 
