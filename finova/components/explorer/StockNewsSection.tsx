@@ -203,7 +203,7 @@ export function StockNewsSection({
       );
     }
     return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700">
+      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-surface-raised text-muted border border-border">
         Aggregated Feed
       </span>
     );
@@ -219,7 +219,7 @@ export function StockNewsSection({
     }
     if (isCached) {
       return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-raised text-muted border border-border">
           Cached
         </span>
       );
@@ -247,7 +247,7 @@ export function StockNewsSection({
           type="button"
           onClick={handleManualRefresh}
           disabled={loading}
-          className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-zinc-800 transition disabled:opacity-50"
+          className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-surface-raised transition disabled:opacity-50"
           aria-label="Refresh company news"
           title="Refresh company news"
         >
@@ -258,27 +258,27 @@ export function StockNewsSection({
       {loading && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 bg-zinc-900/40 border border-border/40 rounded-xl animate-pulse p-4 space-y-2">
-              <div className="h-4 bg-zinc-800 rounded w-3/4" />
-              <div className="h-3 bg-zinc-800/60 rounded w-1/2" />
+            <div key={i} className="h-24 bg-surface/50 border border-border/40 rounded-xl animate-pulse p-4 space-y-2">
+              <div className="h-4 bg-surface-raised rounded w-3/4" />
+              <div className="h-3 bg-surface-raised/60 rounded w-1/2" />
             </div>
           ))}
         </div>
       )}
 
       {error && !loading && (
-        <div className="p-4 rounded-xl bg-zinc-900/40 border border-border/30 text-xs text-muted flex items-center gap-2">
+        <div className="p-4 rounded-xl bg-surface/50 border border-border/40 text-xs text-muted flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
           <span>{error}. Displaying verified empty state.</span>
         </div>
       )}
 
       {!loading && !error && articles.length === 0 && (
-        <div className="p-8 text-center text-xs text-muted bg-zinc-900/30 rounded-xl border border-border/20 space-y-1">
-          <p className="font-semibold text-zinc-300">
+        <div className="p-8 text-center text-xs text-muted bg-surface/40 rounded-xl border border-border/40 space-y-1">
+          <p className="font-semibold text-foreground">
             No sufficiently recent relevant news available for this stock.
           </p>
-          <p className="text-[11px] text-zinc-500">
+          <p className="text-[11px] text-muted">
             Verified connected feeds (Marketaux, GDELT 2.0, NewsData.io) have no active coverage matches for {companyName || symbol}.
           </p>
         </div>
@@ -293,7 +293,7 @@ export function StockNewsSection({
             return (
               <div
                 key={article.article_id}
-                className="p-4 rounded-xl bg-zinc-900/50 hover:bg-zinc-850/80 border border-border/50 hover:border-zinc-700 transition block group space-y-3"
+                className="p-4 rounded-xl bg-surface/60 hover:bg-surface-raised border border-border/60 hover:border-border transition block group space-y-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1.5 min-w-0 flex-1">
@@ -313,11 +313,11 @@ export function StockNewsSection({
                       </p>
                     )}
 
-                    <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-zinc-400">
-                      <span className="font-medium text-zinc-200">{article.source_name}</span>
+                    <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted">
+                      <span className="font-medium text-foreground">{article.source_name}</span>
                       <span>•</span>
-                      <span className="flex items-center gap-1 font-mono text-zinc-400">
-                        <Clock className="w-3 h-3 text-zinc-500" />
+                      <span className="flex items-center gap-1 font-mono text-muted">
+                        <Clock className="w-3 h-3 text-muted" />
                         {article.temporal_info?.display_label || formatArticleTime(article.pubDate)}
                       </span>
                       <span>•</span>
@@ -355,21 +355,21 @@ export function StockNewsSection({
                         <span>FINOVA Intelligence (Gemini AI)</span>
                       </div>
                       {aiData?.model && (
-                        <span className="font-mono text-[10px] text-zinc-500">
+                        <span className="font-mono text-[10px] text-muted">
                           {aiData.model}
                         </span>
                       )}
                     </div>
 
                     {aiData?.loading ? (
-                      <div className="p-3 bg-zinc-950/60 rounded-lg border border-border/40 animate-pulse space-y-1.5">
-                        <div className="h-3 bg-zinc-800 rounded w-5/6" />
-                        <div className="h-3 bg-zinc-800/60 rounded w-4/6" />
+                      <div className="p-3 bg-surface/60 rounded-lg border border-border/40 animate-pulse space-y-1.5">
+                        <div className="h-3 bg-surface-raised rounded w-5/6" />
+                        <div className="h-3 bg-surface-raised/60 rounded w-4/6" />
                       </div>
                     ) : aiData?.text ? (
-                      <div className="p-3 bg-zinc-950/80 rounded-lg border border-emerald-500/20 text-xs text-zinc-300 leading-relaxed space-y-1.5">
+                      <div className="p-3 bg-surface/80 rounded-lg border border-emerald-500/20 text-xs text-foreground leading-relaxed space-y-1.5">
                         <p>{aiData.text}</p>
-                        <p className="text-[10px] text-zinc-500 pt-1 border-t border-zinc-800/50">
+                        <p className="text-[10px] text-muted pt-1 border-t border-border/50">
                           AI educational summary grounded in verified news text. Stock prices and fundamentals are deterministic.
                         </p>
                       </div>

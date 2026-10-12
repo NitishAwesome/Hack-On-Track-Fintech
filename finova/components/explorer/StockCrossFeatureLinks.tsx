@@ -33,7 +33,7 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
         {/* Link 1: Investment X-Ray */}
         <Link
           href="/analysis"
-          className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-emerald-500/40 transition group flex flex-col justify-between"
+          className="p-3.5 rounded-xl bg-surface-raised hover:bg-surface border border-border hover:border-brand/40 transition group flex flex-col justify-between"
         >
           <div>
             <div className="flex items-center justify-between text-muted group-hover:text-emerald-400 transition">
@@ -56,21 +56,21 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
         {/* Link 2: Risk Radar */}
         <Link
           href="/risk"
-          className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-amber-500/40 transition group flex flex-col justify-between"
+          className="p-3.5 rounded-xl bg-surface-raised hover:bg-surface border border-border hover:border-amber-500/40 transition group flex flex-col justify-between"
         >
           <div>
-            <div className="flex items-center justify-between text-muted group-hover:text-amber-400 transition">
-              <ShieldAlert className="w-4 h-4 text-amber-400" />
+            <div className="flex items-center justify-between text-muted group-hover:text-amber-500 transition">
+              <ShieldAlert className="w-4 h-4 text-amber-500" />
               <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
-            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-amber-400 transition">
+            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-amber-500 transition">
               Risk Radar
             </h5>
             <p className="text-[11px] text-muted mt-1 leading-snug">
               Evaluate portfolio concentration risk, beta sensitivity, and stress scenarios.
             </p>
           </div>
-          <div className="mt-3 text-[10px] font-semibold text-amber-400 flex items-center gap-0.5">
+          <div className="mt-3 text-[10px] font-semibold text-amber-500 flex items-center gap-0.5">
             <span>Analyze Portfolio Risk</span>
             <ChevronRight className="w-3 h-3" />
           </div>
@@ -79,21 +79,21 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
         {/* Link 3: Future Lab */}
         <Link
           href="/future-lab"
-          className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-cyan-500/40 transition group flex flex-col justify-between"
+          className="p-3.5 rounded-xl bg-surface-raised hover:bg-surface border border-border hover:border-cyan-500/40 transition group flex flex-col justify-between"
         >
           <div>
-            <div className="flex items-center justify-between text-muted group-hover:text-cyan-400 transition">
-              <Compass className="w-4 h-4 text-cyan-400" />
+            <div className="flex items-center justify-between text-muted group-hover:text-cyan-500 transition">
+              <Compass className="w-4 h-4 text-cyan-500" />
               <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
-            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-cyan-400 transition">
+            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-cyan-500 transition">
               Future Lab
             </h5>
             <p className="text-[11px] text-muted mt-1 leading-snug">
               Simulate hypothetical capital allocation strategies before committing funds.
             </p>
           </div>
-          <div className="mt-3 text-[10px] font-semibold text-cyan-400 flex items-center gap-0.5">
+          <div className="mt-3 text-[10px] font-semibold text-cyan-500 flex items-center gap-0.5">
             <span>Explore Scenario</span>
             <ChevronRight className="w-3 h-3" />
           </div>
@@ -102,21 +102,21 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
         {/* Link 4: FINOVA Intelligence */}
         <Link
           href={`/insights?q=${encodeURIComponent(symbol)}`}
-          className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-rose-500/40 transition group flex flex-col justify-between"
+          className="p-3.5 rounded-xl bg-surface-raised hover:bg-surface border border-border hover:border-rose-500/40 transition group flex flex-col justify-between"
         >
           <div>
-            <div className="flex items-center justify-between text-muted group-hover:text-rose-400 transition">
-              <Compass className="w-4 h-4 text-rose-400" />
+            <div className="flex items-center justify-between text-muted group-hover:text-rose-500 transition">
+              <Compass className="w-4 h-4 text-rose-500" />
               <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
-            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-rose-400 transition">
+            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-rose-500 transition">
               FINOVA Intelligence
             </h5>
             <p className="text-[11px] text-muted mt-1 leading-snug">
               Ask AI about risk drivers, business moat, earnings catalysts, and sector outlook.
             </p>
           </div>
-          <div className="mt-3 text-[10px] font-semibold text-rose-400 flex items-center gap-0.5">
+          <div className="mt-3 text-[10px] font-semibold text-rose-500 flex items-center gap-0.5">
             <span>Ask FINOVA</span>
             <ChevronRight className="w-3 h-3" />
           </div>
@@ -125,7 +125,7 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
         {/* Link 5: Market News */}
         <Link
           href={`/news?symbol=${encodeURIComponent(symbol)}`}
-          className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-violet-500/40 transition group flex flex-col justify-between"
+          className="p-3.5 rounded-xl bg-surface-raised hover:bg-surface border border-border hover:border-violet-500/40 transition group flex flex-col justify-between"
         >
           <div>
             <div className="flex items-center justify-between text-muted group-hover:text-violet-400 transition">

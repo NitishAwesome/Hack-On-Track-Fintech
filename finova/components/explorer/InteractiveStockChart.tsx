@@ -68,8 +68,8 @@ function CustomTooltip({ active, payload, currencySymbol = '₹', firstPrice }: 
   })();
 
   return (
-    <div className="bg-zinc-900/95 border border-zinc-700/80 p-3 rounded-xl shadow-xl backdrop-blur-md text-xs">
-      <div className="text-zinc-400 font-medium">{formattedDate} IST</div>
+    <div className="bg-surface border border-border p-3 rounded-xl shadow-xl backdrop-blur-md text-xs">
+      <div className="text-muted font-medium">{formattedDate} IST</div>
       <div className="text-base font-extrabold text-foreground mt-1">
         {currencySymbol}
         {price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -265,7 +265,7 @@ export function InteractiveStockChart({
         </div>
 
         {/* Range Selector Controls */}
-        <div className="flex items-center gap-1 bg-zinc-900/90 border border-border p-1 rounded-xl self-start sm:self-auto overflow-x-auto">
+        <div className="flex items-center gap-1 bg-surface-raised border border-border p-1 rounded-xl self-start sm:self-auto overflow-x-auto">
           {RANGES.map(({ label, tooltip }) => {
             const isActive = range === label;
             return (
@@ -277,8 +277,8 @@ export function InteractiveStockChart({
                 disabled={loading}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                   isActive
-                    ? 'bg-zinc-800 text-foreground shadow-sm border border-zinc-700 text-emerald-400'
-                    : 'text-muted hover:text-foreground hover:bg-zinc-800/50'
+                    ? 'bg-surface text-emerald-500 shadow-sm border border-border'
+                    : 'text-muted hover:text-foreground hover:bg-surface/50'
                 }`}
               >
                 {label}

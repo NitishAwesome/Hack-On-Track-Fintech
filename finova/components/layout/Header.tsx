@@ -171,8 +171,9 @@ export function Header({
           <ThemeToggle />
 
           {/* Notifications Button */}
-          <button
-            className="relative p-1.5 rounded-lg border transition-colors hover:text-foreground"
+          <Link
+            href="/notifications"
+            className="relative p-1.5 rounded-lg border transition-colors hover:text-foreground inline-flex items-center justify-center"
             style={{
               backgroundColor: 'rgb(var(--surface-raised))',
               borderColor: 'rgb(var(--border))',
@@ -186,7 +187,7 @@ export function Header({
               className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: 'rgb(var(--brand-500))' }}
             />
-          </button>
+          </Link>
 
           {/* Profile Avatar & Account Dropdown */}
           <div className="relative pl-1 border-l" style={{ borderColor: 'rgb(var(--border))' }}>

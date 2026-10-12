@@ -93,7 +93,7 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
           type="button"
           onClick={handleManualRefresh}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-900 border border-border text-muted hover:text-foreground transition disabled:opacity-50 self-start sm:self-auto"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-surface-raised border border-border text-muted hover:text-foreground transition disabled:opacity-50 self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh Prices
@@ -101,24 +101,24 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
       </div>
 
       {/* Critical Currency & Unit Provenance Warning */}
-      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
+      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 space-y-1">
         <div className="flex items-center gap-2 font-bold">
-          <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-          <span>Important Benchmark & Unit Disclosure</span>
+          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+          <span>Important Benchmark &amp; Unit Disclosure</span>
         </div>
-        <p className="text-[11px] text-amber-300/90 leading-relaxed">
-          International futures (COMEX) are denominated in <strong className="text-white">USD per troy ounce</strong> and reflect global wholesale contracts. They do not represent Indian domestic retail jewelry spot prices (quoted in INR per 10 grams) which incorporate import tariffs, GST, and local mint premiums. For Indian currency tracking, observe the NSE-listed Gold & Silver BeES ETFs below.
+        <p className="text-[11px] leading-relaxed">
+          International futures (COMEX) are denominated in <strong className="text-foreground">USD per troy ounce</strong> and reflect global wholesale contracts. They do not represent Indian domestic retail jewelry spot prices (quoted in INR per 10 grams) which incorporate import tariffs, GST, and local mint premiums. For Indian currency tracking, observe the NSE-listed Gold &amp; Silver BeES ETFs below.
         </p>
       </div>
 
       {loading && !data ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-28 bg-zinc-900/40 border border-border/40 rounded-xl animate-pulse p-4" />
+            <div key={i} className="h-28 bg-surface-raised border border-border rounded-xl animate-pulse p-4" />
           ))}
         </div>
       ) : error && !data ? (
-        <div className="p-6 text-center text-xs text-muted bg-zinc-900/30 rounded-xl border border-border/20">
+        <div className="p-6 text-center text-xs text-muted bg-surface-raised rounded-xl border border-border">
           {error}. Please try refreshing shortly.
         </div>
       ) : (
@@ -129,7 +129,7 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted">
                 1. International Futures Benchmarks (COMEX · USD / troy oz)
               </h4>
-              <span className="text-[10px] text-zinc-500">Global Reference Contracts</span>
+              <span className="text-[10px] text-muted">Global Reference Contracts</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -138,7 +138,7 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
                 return (
                   <div
                     key={item.id}
-                    className="p-4 rounded-xl bg-zinc-900/60 border border-border/60 flex flex-col justify-between"
+                    className="p-4 rounded-xl bg-surface border border-border flex flex-col justify-between shadow-sm"
                   >
                     <div>
                       <div className="flex items-start justify-between">
@@ -147,18 +147,18 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
                             <span className="font-extrabold text-base text-foreground">
                               {item.name}
                             </span>
-                            <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-800 text-amber-400 border border-zinc-700">
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-surface-raised text-amber-500 border border-border">
                               {item.symbol}
                             </span>
                           </div>
                           <span className="text-[11px] text-muted block mt-0.5">
-                            Quoted Unit: <strong className="text-zinc-300">{item.quotedUnit}</strong>
+                            Quoted Unit: <strong className="text-foreground">{item.quotedUnit}</strong>
                           </span>
                         </div>
 
                         <div
                           className={`p-1.5 rounded-lg ${
-                            isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                            isPositive ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
                           }`}
                         >
                           {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
@@ -172,7 +172,7 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
                         {typeof item.dayChangePercent === 'number' && (
                           <div
                             className={`text-xs font-bold flex items-center gap-1 ${
-                              isPositive ? 'text-emerald-400' : 'text-rose-400'
+                              isPositive ? 'text-emerald-500' : 'text-rose-500'
                             }`}
                           >
                             <span>{isPositive ? '+' : ''}{item.dayChange?.toFixed(2)}</span>
@@ -182,7 +182,7 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
                       </div>
                     </div>
 
-                    <div className="mt-3 pt-2.5 border-t border-border/40 text-[10px] text-zinc-500 leading-snug">
+                    <div className="mt-3 pt-2.5 border-t border-border/40 text-[10px] text-muted leading-snug">
                       {item.disclaimer}
                     </div>
                   </div>
@@ -197,7 +197,7 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted">
                 2. Indian Precious Metal Instruments (NSE · INR / unit)
               </h4>
-              <span className="text-[10px] text-emerald-400 font-semibold">NSE Traded · Physical Backing</span>
+              <span className="text-[10px] text-emerald-500 font-semibold">NSE Traded · Physical Backing</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -206,16 +206,16 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
                 return (
                   <div
                     key={item.id}
-                    className="p-4 rounded-xl bg-zinc-900/60 border border-border/60 hover:border-emerald-500/30 transition flex flex-col justify-between group"
+                    className="p-4 rounded-xl bg-surface border border-border hover:border-emerald-500/30 transition flex flex-col justify-between group shadow-sm"
                   >
                     <div>
                       <div className="flex items-start justify-between">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-base text-foreground group-hover:text-emerald-400 transition">
+                            <span className="font-extrabold text-base text-foreground group-hover:text-emerald-500 transition">
                               {item.name}
                             </span>
-                            <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-zinc-800 text-emerald-400 border border-zinc-700">
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-surface-raised text-emerald-500 border border-border">
                               {item.symbol}
                             </span>
                           </div>

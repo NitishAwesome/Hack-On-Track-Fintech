@@ -57,8 +57,8 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-800 text-zinc-400 border border-zinc-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-surface-raised text-muted border border-border">
+            <span className="w-1.5 h-1.5 rounded-full bg-muted" />
             Market Closed
           </span>
         );
@@ -89,7 +89,7 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
                   ? isRefreshing
                     ? 'bg-amber-400 animate-pulse'
                     : 'bg-emerald-400'
-                  : 'bg-zinc-500'
+                  : 'bg-muted'
               }`}
             />
             <span>
@@ -101,14 +101,14 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
             </span>
           </div>
           <span className="text-xs text-muted hidden md:flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
             Yahoo Finance
           </span>
           <button
             onClick={handleManualRefresh}
             disabled={loading || isRefreshing}
             title="Refresh indices"
-            className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-zinc-800/60 transition disabled:opacity-50"
+            className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-surface-raised transition disabled:opacity-50"
             aria-label="Refresh index data"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing || loading ? 'animate-spin' : ''}`} />
@@ -119,7 +119,7 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
       {loading && !data && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 bg-card/40 border border-border/50 rounded-xl animate-pulse p-4" />
+            <div key={i} className="h-28 bg-surface-raised border border-border rounded-xl animate-pulse p-4" />
           ))}
         </div>
       )}
@@ -147,8 +147,8 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
                 onClick={() => onSelectIndex(chartSymbol, idx.name)}
                 className={`text-left p-4 rounded-xl border transition-all duration-200 group relative overflow-hidden ${
                   isSelected
-                    ? 'bg-zinc-900 border-emerald-500/40 shadow-lg shadow-emerald-500/5 ring-1 ring-emerald-500/20'
-                    : 'bg-card/60 hover:bg-zinc-900/80 border-border hover:border-zinc-700'
+                    ? 'bg-surface border-brand shadow-sm ring-1 ring-brand'
+                    : 'bg-surface hover:bg-surface-raised border-border'
                 }`}
               >
                 <div className="flex items-start justify-between">
@@ -156,13 +156,13 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
                     <span className="text-xs font-medium text-muted uppercase tracking-wider">
                       {idx.symbol === 'BANKNIFTY' ? 'NSE Index' : idx.symbol === 'SENSEX' ? 'BSE Index' : 'NSE Index'}
                     </span>
-                    <h3 className="text-base font-bold text-foreground mt-0.5 group-hover:text-emerald-400 transition">
+                    <h3 className="text-base font-bold text-foreground mt-0.5 group-hover:text-brand transition">
                       {idx.name}
                     </h3>
                   </div>
                   <div
                     className={`p-1.5 rounded-lg ${
-                      isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                      isPositive ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
                     }`}
                   >
                     {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
@@ -175,7 +175,7 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
                   </div>
                   <div
                     className={`text-xs font-semibold flex items-center gap-1 ${
-                      isPositive ? 'text-emerald-400' : 'text-rose-400'
+                      isPositive ? 'text-emerald-500' : 'text-rose-500'
                     }`}
                   >
                     <span>{isPositive ? '+' : ''}{changeVal.toFixed(2)}</span>
@@ -188,7 +188,7 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
                     <Clock className="w-3 h-3" />
                     {formatISTTime(idx.timestamp)} IST
                   </span>
-                  <span className="text-zinc-500 group-hover:text-zinc-400 transition">
+                  <span className="text-muted group-hover:text-foreground transition">
                     Click to inspect chart →
                   </span>
                 </div>

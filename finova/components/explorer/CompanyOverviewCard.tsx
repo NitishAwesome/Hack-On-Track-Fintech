@@ -124,56 +124,56 @@ export function CompanyOverviewCard({
           Key Market Statistics
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3 rounded-xl bg-zinc-900/60 border border-border/40">
+          <div className="p-3 rounded-xl bg-surface-raised border border-border">
             <span className="text-[10px] text-muted block uppercase">Previous Close</span>
             <span className="text-sm font-bold text-foreground mt-0.5 block">
               {formatPrice(previousClose)}
             </span>
           </div>
 
-          <div className="p-3 rounded-xl bg-zinc-900/60 border border-border/40">
+          <div className="p-3 rounded-xl bg-surface-raised border border-border">
             <span className="text-[10px] text-muted block uppercase">Day High</span>
             <span className="text-sm font-bold text-foreground mt-0.5 block">
               {formatPrice(dayHigh)}
             </span>
           </div>
 
-          <div className="p-3 rounded-xl bg-zinc-900/60 border border-border/40">
+          <div className="p-3 rounded-xl bg-surface-raised border border-border">
             <span className="text-[10px] text-muted block uppercase">Day Low</span>
             <span className="text-sm font-bold text-foreground mt-0.5 block">
               {formatPrice(dayLow)}
             </span>
           </div>
 
-          <div className="p-3 rounded-xl bg-zinc-900/60 border border-border/40">
+          <div className="p-3 rounded-xl bg-surface-raised border border-border">
             <span className="text-[10px] text-muted block uppercase">Volume</span>
             <span className="text-sm font-bold text-foreground mt-0.5 block">
               {formatVolume(volume)}
             </span>
           </div>
 
-          <div className="p-3 rounded-xl bg-zinc-900/60 border border-border/40">
+          <div className="p-3 rounded-xl bg-surface-raised border border-border">
             <span className="text-[10px] text-muted block uppercase">52-Week High</span>
             <span className="text-sm font-bold text-foreground mt-0.5 block">
               {formatPrice(fiftyTwoWeekHigh)}
             </span>
           </div>
 
-          <div className="p-3 rounded-xl bg-zinc-900/60 border border-border/40">
+          <div className="p-3 rounded-xl bg-surface-raised border border-border">
             <span className="text-[10px] text-muted block uppercase">52-Week Low</span>
             <span className="text-sm font-bold text-foreground mt-0.5 block">
               {formatPrice(fiftyTwoWeekLow)}
             </span>
           </div>
 
-          <div className="p-3 rounded-xl bg-zinc-900/60 border border-border/40">
+          <div className="p-3 rounded-xl bg-surface-raised border border-border">
             <span className="text-[10px] text-muted block uppercase">Exchange</span>
             <span className="text-sm font-bold text-foreground mt-0.5 block">
               {exchange} (National Stock Exchange)
             </span>
           </div>
 
-          <div className="p-3 rounded-xl bg-zinc-900/60 border border-border/40">
+          <div className="p-3 rounded-xl bg-surface-raised border border-border">
             <span className="text-[10px] text-muted block uppercase">Trading Currency</span>
             <span className="text-sm font-bold text-foreground mt-0.5 block">
               {currency} (Indian Rupee)
@@ -241,7 +241,7 @@ export function CompanyOverviewCard({
             )}
           </div>
         ) : (
-          <div className="p-4 rounded-xl bg-zinc-900/40 border border-border/30 text-xs text-muted">
+          <div className="p-4 rounded-xl bg-surface-raised border border-border text-xs text-muted">
             Company description currently unavailable for <strong className="text-foreground">{symbol}</strong>. Detailed business profiles are curated for benchmark equities from verified annual filings and stock exchange registries.
           </div>
         )}

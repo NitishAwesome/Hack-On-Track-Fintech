@@ -93,7 +93,7 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
             <h3 className="text-base font-bold text-foreground tracking-tight">
               Top Movers Among Tracked Stocks
             </h3>
-            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-surface-raised text-muted border border-border">
               Tracked Universe (20 NSE Equities)
             </span>
           </div>
@@ -102,13 +102,13 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
           </p>
         </div>
 
-        <div className="flex items-center gap-1 bg-zinc-900/90 border border-border p-1 rounded-xl overflow-x-auto self-start sm:self-auto">
+        <div className="flex items-center gap-1 bg-surface-raised border border-border p-1 rounded-xl overflow-x-auto self-start sm:self-auto">
           <button
             type="button"
             onClick={() => setActiveTab('gainers')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
               activeTab === 'gainers'
-                ? 'bg-zinc-800 text-emerald-400 border border-zinc-700 shadow-sm'
+                ? 'bg-surface text-emerald-500 border border-border shadow-sm'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -121,7 +121,7 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
             onClick={() => setActiveTab('losers')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
               activeTab === 'losers'
-                ? 'bg-zinc-800 text-rose-400 border border-zinc-700 shadow-sm'
+                ? 'bg-surface text-rose-500 border border-border shadow-sm'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -134,7 +134,7 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
             onClick={() => setActiveTab('active')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
               activeTab === 'active'
-                ? 'bg-zinc-800 text-amber-400 border border-zinc-700 shadow-sm'
+                ? 'bg-surface text-amber-500 border border-border shadow-sm'
                 : 'text-muted hover:text-foreground'
             }`}
           >
@@ -147,7 +147,7 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
             onClick={handleManualRefresh}
             disabled={loading}
             title="Refresh market movers"
-            className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-zinc-800 transition disabled:opacity-50 ml-1"
+            className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-surface transition disabled:opacity-50 ml-1"
             aria-label="Refresh movers"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -156,11 +156,11 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
       </div>
 
       {/* Intraday & Tracking Scope Disclosure Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-zinc-900/50 border border-zinc-800/80 text-[11px] text-muted">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-surface-raised border border-border text-[11px] text-muted">
         <div className="flex items-start gap-2">
-          <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
           <span>
-            <strong className="text-zinc-300">Session &amp; Scope Context:</strong>{' '}
+            <strong className="text-foreground">Session &amp; Scope Context:</strong>{' '}
             Prices reflect latest available provider feed (EOD or ~15m delayed exchange quotes). Movement percentages measure change from previous completed session close; they do not represent verified tick-by-tick live intraday order books.
           </span>
         </div>
@@ -170,7 +170,7 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
       {loading && !moversData ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-20 bg-zinc-900/40 border border-border/40 rounded-xl animate-pulse p-3" />
+            <div key={i} className="h-20 bg-surface-raised border border-border rounded-xl animate-pulse p-3" />
           ))}
         </div>
       ) : currentList.length > 0 ? (
@@ -182,14 +182,14 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
                 key={item.symbol}
                 type="button"
                 onClick={() => handleStockClick(item.symbol)}
-                className="p-3.5 text-left rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-border/60 hover:border-zinc-700 transition group flex items-center justify-between"
+                className="p-3.5 text-left rounded-xl bg-surface-raised/70 hover:bg-surface-raised border border-border hover:border-brand/40 transition group flex items-center justify-between"
               >
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-sm text-foreground group-hover:text-emerald-400 transition">
+                    <span className="font-bold text-sm text-foreground group-hover:text-brand transition">
                       {item.symbol}
                     </span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700">
+                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-surface text-muted border border-border">
                       NSE
                     </span>
                   </div>
@@ -201,7 +201,7 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
                 <div className="text-right">
                   <div
                     className={`text-xs font-bold flex items-center justify-end gap-1 ${
-                      isPositive ? 'text-emerald-400' : 'text-rose-400'
+                      isPositive ? 'text-emerald-500' : 'text-rose-500'
                     }`}
                   >
                     {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
@@ -215,7 +215,7 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
                       Vol: {item.volume >= 1000000 ? `${(item.volume / 1000000).toFixed(1)}M` : `${(item.volume / 1000).toFixed(0)}K`}
                     </div>
                   ) : (
-                    <div className="text-[10px] text-zinc-500 mt-0.5">
+                    <div className="text-[10px] text-muted mt-0.5">
                       {isPositive ? '+' : ''}
                       {item.day_change?.toFixed(2)}
                     </div>

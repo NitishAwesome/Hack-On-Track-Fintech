@@ -90,6 +90,14 @@ export default function ProfilePage() {
   const [resetSending, setResetSending] = useState(false);
   const [resetStatus, setResetStatus] = useState<{ success: boolean; message: string } | null>(null);
 
+  // Direct Change Password State (Prompt 16)
+  const [showChangePasswordForm, setShowChangePasswordForm] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordChanging, setPasswordChanging] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     async function loadProfile() {
       try {
@@ -235,6 +243,47 @@ export default function ProfilePage() {
         success: false,
         message: res.error || 'Failed to send password reset email. Please try again.',
       });
+    }
+  }
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordChangeError(null);
+    setPasswordChangeSuccess(null);
+
+    const trimmedPassword = newPassword.trim();
+    if (trimmedPassword.length < 8) {
+      setPasswordChangeError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (!/[0-9]/.test(trimmedPassword) && !/[!@#$%^&*(),.?":{}|<>]/.test(trimmedPassword)) {
+      setPasswordChangeError('Password must contain at least one number or special character.');
+      return;
+    }
+    if (trimmedPassword !== confirmPassword.trim()) {
+      setPasswordChangeError('New password and confirm password do not match.');
+      return;
+    }
+
+    setPasswordChanging(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: trimmedPassword,
+      });
+
+      if (error) {
+        setPasswordChangeError(error.message || 'Failed to update password.');
+      } else {
+        setPasswordChangeSuccess('Password updated successfully! Your account credentials have been updated.');
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowChangePasswordForm(false);
+        setTimeout(() => setPasswordChangeSuccess(null), 5000);
+      }
+    } catch (err) {
+      setPasswordChangeError('An unexpected error occurred while updating your password.');
+    } finally {
+      setPasswordChanging(false);
     }
   }
 
@@ -614,22 +663,118 @@ export default function ProfilePage() {
             </div>
 
             {authProvider === 'email' ? (
-              <div className="pt-2 border-t border-border/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <p className="text-xs text-muted">
-                  Need to change your account password? A secure reset link will be sent to your email.
-                </p>
-                <button
-                  type="button"
-                  onClick={handlePasswordReset}
-                  disabled={resetSending}
-                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-slate-800 text-foreground flex-shrink-0 transition-colors disabled:opacity-50"
-                >
-                  {resetSending ? 'Sending…' : 'Send Password Reset Link'}
-                </button>
+              <div className="pt-2 border-t border-border/40 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-foreground">Account Password</p>
+                    <p className="text-xs text-muted">
+                      Update your account password or request an email reset link.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowChangePasswordForm(!showChangePasswordForm)}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand/10 text-brand border border-brand/20 hover:bg-brand/20 transition-colors"
+                    >
+                      {showChangePasswordForm ? 'Hide Password Form' : 'Change Password'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePasswordReset}
+                      disabled={resetSending}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-surface-raised text-muted hover:text-foreground flex-shrink-0 transition-colors disabled:opacity-50"
+                      title="Send password reset link to your email"
+                    >
+                      {resetSending ? 'Sending…' : 'Email Reset Link'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Inline Change Password Form */}
+                {showChangePasswordForm && (
+                  <form
+                    onSubmit={handleChangePassword}
+                    className="p-4 rounded-xl border border-border bg-surface space-y-3 pt-3"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-foreground">Set New Password</p>
+                      <p className="text-[11px] text-muted">
+                        Must be at least 8 characters with at least one number or special character.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-muted">New Password</label>
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="••••••••••••"
+                          className="w-full px-3 py-2 rounded-lg text-xs bg-surface-raised border border-border text-foreground focus:outline-none focus:border-brand"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-muted">Confirm New Password</label>
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="••••••••••••"
+                          className="w-full px-3 py-2 rounded-lg text-xs bg-surface-raised border border-border text-foreground focus:outline-none focus:border-brand"
+                        />
+                      </div>
+                    </div>
+
+                    {passwordChangeError && (
+                      <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{passwordChangeError}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowChangePasswordForm(false);
+                          setPasswordChangeError(null);
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border text-muted hover:text-foreground"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={passwordChanging}
+                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-brand text-white hover:opacity-95 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                      >
+                        {passwordChanging ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Updating Password…</span>
+                          </>
+                        ) : (
+                          <span>Update Password</span>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             ) : (
               <div className="pt-2 border-t border-border/40 text-xs text-muted leading-relaxed">
                 Your account signs in via Google OAuth. To update your password or 2-factor authentication, manage your security settings directly in your Google Account.
+              </div>
+            )}
+
+            {passwordChangeSuccess && (
+              <div className="p-3 rounded-lg text-xs flex items-center gap-2 border bg-emerald-500/10 border-emerald-500/30 text-emerald-400">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>{passwordChangeSuccess}</span>
               </div>
             )}
 

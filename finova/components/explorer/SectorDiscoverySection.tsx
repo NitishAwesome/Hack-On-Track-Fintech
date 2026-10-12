@@ -94,13 +94,13 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
               }}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
                 isSelected
-                  ? 'bg-zinc-800 text-emerald-400 border border-emerald-500/30 shadow-md ring-1 ring-emerald-500/20'
-                  : 'bg-zinc-900/60 hover:bg-zinc-800/80 text-muted hover:text-foreground border border-border/50'
+                  ? 'bg-surface-raised text-emerald-500 border border-emerald-500/30 shadow-sm ring-1 ring-emerald-500/20'
+                  : 'bg-surface hover:bg-surface-raised text-muted hover:text-foreground border border-border/70'
               }`}
             >
               <Icon className="w-4 h-4" />
               <span>{sec.name}</span>
-              <span className="px-1.5 py-0.2 rounded text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700">
+              <span className="px-1.5 py-0.2 rounded text-[10px] bg-surface-raised text-muted border border-border">
                 {count}
               </span>
             </button>
@@ -112,7 +112,7 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-border/40">
         <div className="text-xs text-muted">
           Showing <strong className="text-foreground">{filteredStocks.length}</strong> equities in{' '}
-          <strong className="text-emerald-400">{currentSector.name}</strong>
+          <strong className="text-emerald-500">{currentSector.name}</strong>
         </div>
 
         <div className="relative w-full sm:w-64">
@@ -122,7 +122,7 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
             placeholder={`Filter ${currentSector.name}...`}
-            className="w-full pl-9 pr-3 py-1.5 bg-zinc-900 border border-border rounded-lg text-xs text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
+            className="w-full pl-9 pr-3 py-1.5 bg-surface border border-border rounded-lg text-xs text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
           />
         </div>
       </div>
@@ -144,18 +144,18 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
                   industry: item.industry,
                 })
               }
-              className="p-4 text-left rounded-xl bg-zinc-900/50 hover:bg-zinc-850 border border-border/50 hover:border-emerald-500/30 transition group flex flex-col justify-between"
+              className="p-4 text-left rounded-xl bg-surface hover:bg-surface-raised border border-border/70 hover:border-emerald-500/30 transition group flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-sm text-foreground group-hover:text-emerald-400 transition">
+                  <span className="font-extrabold text-sm text-foreground group-hover:text-emerald-500 transition">
                     {item.symbol}
                   </span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700">
+                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-surface-raised text-muted border border-border">
                     NSE
                   </span>
                 </div>
-                <div className="text-xs text-zinc-300 font-medium mt-1 truncate">
+                <div className="text-xs text-foreground font-medium mt-1 truncate">
                   {item.name}
                 </div>
                 <div className="text-[11px] text-muted truncate mt-0.5">
@@ -163,8 +163,8 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
                 </div>
               </div>
 
-              <div className="mt-3 pt-2.5 border-t border-border/30 flex items-center justify-between text-[11px] text-zinc-500 group-hover:text-emerald-400 transition">
-                <span className="font-mono text-[10px] text-zinc-500">{item.isin}</span>
+              <div className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[11px] text-muted group-hover:text-emerald-500 transition">
+                <span className="font-mono text-[10px] text-muted">{item.isin}</span>
                 <span className="flex items-center gap-0.5 font-semibold">
                   Inspect chart <ChevronRight className="w-3 h-3" />
                 </span>
@@ -173,7 +173,7 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
           ))}
         </div>
       ) : (
-        <div className="p-8 text-center text-xs text-muted bg-zinc-900/30 rounded-xl border border-border/20">
+        <div className="p-8 text-center text-xs text-muted bg-surface-raised rounded-xl border border-border/40">
           No equities matching &quot;{searchFilter}&quot; in {currentSector.name}.
         </div>
       )}

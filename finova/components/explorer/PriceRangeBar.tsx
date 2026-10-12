@@ -140,7 +140,7 @@ export function PriceRangeBar({
         </div>
       </div>
 
-      <div className="text-[11px] text-muted/80 bg-zinc-900/50 p-2.5 rounded-xl border border-border/30">
+      <div className="text-[11px] text-muted bg-surface-raised p-2.5 rounded-xl border border-border">
         💡 <strong className="text-foreground">Educational Note:</strong> 52-week and daily ranges indicate historical price extremes over the respective period. Proximity to a 52-week low or high is purely a price statistic and does not represent an indicator of company valuation or investment suitability.
       </div>
     </div>

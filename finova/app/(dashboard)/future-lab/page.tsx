@@ -14,6 +14,7 @@
 // - Review Your Existing Holdings (X-Ray Holding Outlook & Research Steps)
 // - Optional Advanced Rebalancing Sandbox (Relocated Category Transfer)
 // - Preserved Financial Goals Planner & Zero-Growth Savings Pacemaker
+// - Baseline allocation reset invariant: eqItem?.percentage_of_valued ?? 0 and invitItem?.percentage_of_valued ?? 0
 // ============================================================
 
 import React, { useState, useMemo } from 'react';

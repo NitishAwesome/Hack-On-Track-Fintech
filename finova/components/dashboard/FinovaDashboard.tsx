@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { RefreshCw, Plus, Upload } from 'lucide-react';
 
 import { PortfolioSummaryMetrics } from './PortfolioSummaryMetrics';
+import { ConsolidatedPortfolioHero } from './ConsolidatedPortfolioHero';
+import { PortfolioHealthSnapshot } from './PortfolioHealthSnapshot';
+import { QuickActionsBar } from './QuickActionsBar';
 import { PortfolioPerformanceSection } from './PortfolioPerformanceSection';
 import { AssetAllocationSection } from './AssetAllocationSection';
 import { HoldingsPreviewSection } from './HoldingsPreviewSection';
@@ -234,12 +237,18 @@ export function FinovaDashboard() {
         isLoading={summaryLoading}
       />
 
-      {/* Row 1.5: AI Portfolio Intelligence Highlight */}
-      <div className="w-full">
-        <AIInsightCard insightType="portfolio_summary" />
-      </div>
+      {/* Row 2: Consolidated Multi-Broker Hero (PS2 Core: All Your Investments In One Place) */}
+      <ConsolidatedPortfolioHero
+        brokers={brokers}
+        totalHoldingCount={holdings.length}
+        totalCurrentValue={summary?.total_current_value ?? null}
+        totalInvestedValue={summary?.total_invested_value ?? 0}
+      />
 
-      {/* Row 2: Portfolio Performance (8 cols) + Asset Allocation (4 cols) */}
+      {/* Row 3: Working Quick Actions Bar */}
+      <QuickActionsBar />
+
+      {/* Row 4: Portfolio Performance (8 cols) + Asset Allocation (4 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <div className="lg:col-span-7 xl:col-span-8 flex flex-col">
           <PortfolioPerformanceSection
@@ -261,7 +270,13 @@ export function FinovaDashboard() {
         </div>
       </div>
 
-      {/* Row 3: Holdings Preview (8 cols) + Broker Accounts (4 cols) */}
+      {/* Row 5: Portfolio Health Snapshot (Diagnostics from X-Ray & Risk Radar) */}
+      <PortfolioHealthSnapshot
+        holdingCount={holdings.length}
+        brokerCount={brokers.length}
+      />
+
+      {/* Row 6: Holdings Preview (8 cols) + Broker Accounts (4 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <div className="lg:col-span-7 xl:col-span-8 flex flex-col">
           <HoldingsPreviewSection
@@ -283,7 +298,12 @@ export function FinovaDashboard() {
         </div>
       </div>
 
-      {/* Row 4: Recent Activity Ledger (Full Width) */}
+      {/* Row 7: AI Portfolio Intelligence Highlight */}
+      <div className="w-full">
+        <AIInsightCard insightType="portfolio_summary" />
+      </div>
+
+      {/* Row 8: Recent Activity Ledger (Full Width) */}
       <div className="w-full">
         <RecentActivitySection
           transactions={transactions}
@@ -293,7 +313,7 @@ export function FinovaDashboard() {
         />
       </div>
 
-      {/* Row 5: Market & Portfolio News Intelligence Preview */}
+      {/* Row 9: Market & Portfolio News Intelligence Preview */}
       <div className="w-full">
         <NewsCard />
       </div>

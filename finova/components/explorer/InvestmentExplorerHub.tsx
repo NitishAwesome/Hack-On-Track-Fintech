@@ -60,7 +60,7 @@ export function InvestmentExplorerHub() {
   return (
     <div className="space-y-6">
       {/* Universal Search Bar */}
-      <div className="bg-gradient-to-r from-card/80 via-zinc-900/90 to-card/80 border border-border/80 rounded-2xl p-4 shadow-xl backdrop-blur-md">
+      <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm backdrop-blur-md">
         <div className="max-w-2xl mx-auto">
           <StockSearchInput
             onSelectStock={(stock) => {
@@ -77,8 +77,8 @@ export function InvestmentExplorerHub() {
           onClick={() => handleTabChange('stocks')}
           className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
             activeTab === 'stocks'
-              ? 'bg-zinc-800 text-emerald-400 border border-emerald-500/30 shadow-md ring-1 ring-emerald-500/20'
-              : 'text-muted hover:text-foreground hover:bg-zinc-900/80 border border-transparent'
+              ? 'bg-surface-raised text-emerald-500 border border-emerald-500/30 shadow-sm ring-1 ring-emerald-500/20'
+              : 'text-muted hover:text-foreground hover:bg-surface-raised border border-transparent'
           }`}
         >
           <TrendingUp className="w-4 h-4" />
@@ -90,8 +90,8 @@ export function InvestmentExplorerHub() {
           onClick={() => handleTabChange('browse')}
           className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
             activeTab === 'browse'
-              ? 'bg-zinc-800 text-emerald-400 border border-emerald-500/30 shadow-md ring-1 ring-emerald-500/20'
-              : 'text-muted hover:text-foreground hover:bg-zinc-900/80 border border-transparent'
+              ? 'bg-surface-raised text-emerald-500 border border-emerald-500/30 shadow-sm ring-1 ring-emerald-500/20'
+              : 'text-muted hover:text-foreground hover:bg-surface-raised border border-transparent'
           }`}
         >
           <Search className="w-4 h-4" />
@@ -103,8 +103,8 @@ export function InvestmentExplorerHub() {
           onClick={() => handleTabChange('sectors')}
           className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
             activeTab === 'sectors'
-              ? 'bg-zinc-800 text-cyan-400 border border-cyan-500/30 shadow-md ring-1 ring-cyan-500/20'
-              : 'text-muted hover:text-foreground hover:bg-zinc-900/80 border border-transparent'
+              ? 'bg-surface-raised text-cyan-500 border border-cyan-500/30 shadow-sm ring-1 ring-cyan-500/20'
+              : 'text-muted hover:text-foreground hover:bg-surface-raised border border-transparent'
           }`}
         >
           <Layers className="w-4 h-4" />
@@ -116,8 +116,8 @@ export function InvestmentExplorerHub() {
           onClick={() => handleTabChange('commodities')}
           className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
             activeTab === 'commodities'
-              ? 'bg-zinc-800 text-amber-400 border border-amber-500/30 shadow-md ring-1 ring-amber-500/20'
-              : 'text-muted hover:text-foreground hover:bg-zinc-900/80 border border-transparent'
+              ? 'bg-surface-raised text-amber-500 border border-amber-500/30 shadow-sm ring-1 ring-amber-500/20'
+              : 'text-muted hover:text-foreground hover:bg-surface-raised border border-transparent'
           }`}
         >
           <Coins className="w-4 h-4" />
@@ -129,8 +129,8 @@ export function InvestmentExplorerHub() {
           onClick={() => handleTabChange('alts')}
           className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
             activeTab === 'alts'
-              ? 'bg-zinc-800 text-violet-400 border border-violet-500/30 shadow-md ring-1 ring-violet-500/20'
-              : 'text-muted hover:text-foreground hover:bg-zinc-900/80 border border-transparent'
+              ? 'bg-surface-raised text-violet-500 border border-violet-500/30 shadow-sm ring-1 ring-violet-500/20'
+              : 'text-muted hover:text-foreground hover:bg-surface-raised border border-transparent'
           }`}
         >
           <Building className="w-4 h-4" />
@@ -142,8 +142,8 @@ export function InvestmentExplorerHub() {
           onClick={() => handleTabChange('ipo')}
           className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
             activeTab === 'ipo'
-              ? 'bg-zinc-800 text-rose-400 border border-rose-500/30 shadow-md ring-1 ring-rose-500/20'
-              : 'text-muted hover:text-foreground hover:bg-zinc-900/80 border border-transparent'
+              ? 'bg-surface-raised text-rose-500 border border-rose-500/30 shadow-sm ring-1 ring-rose-500/20'
+              : 'text-muted hover:text-foreground hover:bg-surface-raised border border-transparent'
           }`}
         >
           <BookOpen className="w-4 h-4" />

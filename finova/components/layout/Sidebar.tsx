@@ -9,9 +9,6 @@ import {
   BarChart3,
   Newspaper,
   Compass,
-  Bookmark,
-  ClipboardList,
-  Rocket,
   Layers,
   Link2,
   Building2,
@@ -29,6 +26,9 @@ import {
   Shield,
   FlaskConical,
   Target,
+  Activity,
+  BookOpen,
+  Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
@@ -48,42 +48,58 @@ interface NavGroup {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: 'Main',
+    title: 'Overview',
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/investments', label: 'My Investments', icon: TrendingUp },
-      { href: '/transactions', label: 'Transactions', icon: Receipt },
-      { href: '/analysis', label: 'Investment X-Ray', icon: BarChart3 },
-      { href: '/risk', label: 'Risk Radar', icon: Shield },
-      { href: '/future-lab', label: 'Future Lab', icon: FlaskConical },
-      { href: '/insights', label: 'FINOVA Intelligence', icon: Sparkles },
-      { href: '/news', label: 'News & Market', icon: Newspaper },
-      { href: '/explore', label: 'Investment Explorer', icon: Compass },
     ],
   },
   {
-    title: 'Personal',
+    title: 'Portfolio',
     items: [
+      { href: '/investments', label: 'My Investments', icon: TrendingUp },
+      { href: '/brokers', label: 'Broker Accounts', icon: Building2 },
+      { href: '/transactions', label: 'Transactions', icon: Receipt },
+      { href: '/performance', label: 'Performance', icon: Activity },
+    ],
+  },
+  {
+    title: 'Analyze',
+    items: [
+      { href: '/analysis', label: 'Investment X-Ray', icon: BarChart3 },
+      { href: '/risk', label: 'Risk Radar', icon: Shield },
+    ],
+  },
+  {
+    title: 'Plan',
+    items: [
+      { href: '/future-lab', label: 'Future Lab', icon: FlaskConical },
       { href: '/goals', label: 'Financial Goals', icon: Target },
-      { href: '/watchlist', label: 'Watchlist', icon: Bookmark, comingSoon: true },
-      { href: '/orders', label: 'Orders', icon: ClipboardList, comingSoon: true },
     ],
   },
   {
     title: 'Discover',
     items: [
-      { href: '/ipo', label: 'IPO', icon: Rocket, comingSoon: true },
-      { href: '/mutual-funds', label: 'Mutual Funds', icon: Layers, comingSoon: true },
-      { href: '/bonds', label: 'Bonds', icon: Link2 },
+      { href: '/explore', label: 'Investment Explorer', icon: Compass },
+      { href: '/explore/alternatives', label: 'Alternative Assets', icon: Layers },
       { href: '/reit', label: 'REITs', icon: Building2 },
       { href: '/invit', label: 'InvITs', icon: Zap },
+      { href: '/bonds', label: 'Bonds', icon: Link2 },
+      { href: '/news', label: 'News & Market', icon: Newspaper },
+      { href: '/learn', label: 'Learn', icon: BookOpen },
     ],
   },
   {
-    title: 'Account',
+    title: 'Intelligence',
     items: [
+      { href: '/insights', label: 'FINOVA Intelligence', icon: Sparkles },
+    ],
+  },
+  {
+    title: 'Utilities',
+    items: [
+      { href: '/notifications', label: 'Notifications', icon: Bell },
       { href: '/profile', label: 'Profile', icon: User },
-      { href: '/settings', label: 'Settings', icon: Settings, comingSoon: true },
+      { href: '/settings', label: 'Settings', icon: Settings },
     ],
   },
 ];
@@ -115,12 +131,25 @@ export function Sidebar({
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/portfolio' || pathname === '/';
     if (href === '/investments') return pathname === '/investments' || pathname === '/holdings';
-    if (href === '/analysis') return ['/analysis', '/performance', '/allocation'].some((p) => pathname.startsWith(p));
+    if (href === '/brokers') return pathname === '/brokers';
+    if (href === '/transactions') return pathname.startsWith('/transactions');
+    if (href === '/performance') return pathname === '/performance' || pathname === '/allocation';
+    if (href === '/analysis') return pathname.startsWith('/analysis');
     if (href === '/risk') return pathname.startsWith('/risk');
-    if (href === '/explore') return pathname.startsWith('/explore');
+    if (href === '/future-lab') return pathname.startsWith('/future-lab');
+    if (href === '/goals') return pathname.startsWith('/goals');
+    if (href === '/explore') return pathname === '/explore' || (pathname.startsWith('/explore/stocks') && !pathname.startsWith('/explore/alternatives'));
+    if (href === '/explore/alternatives') return pathname.startsWith('/explore/alternatives');
+    if (href === '/reit') return pathname.startsWith('/reit');
+    if (href === '/invit') return pathname.startsWith('/invit');
+    if (href === '/bonds') return pathname.startsWith('/bonds');
+    if (href === '/news') return pathname.startsWith('/news');
+    if (href === '/learn') return pathname.startsWith('/learn');
     if (href === '/insights') return pathname === '/insights';
-    if (href === '/news') return pathname === '/news';
-    return pathname === href || (href !== '/' && pathname.startsWith(href));
+    if (href === '/notifications') return pathname.startsWith('/notifications');
+    if (href === '/profile') return pathname.startsWith('/profile');
+    if (href === '/settings') return pathname.startsWith('/settings');
+    return pathname === href;
   }
 
   const initials = userName
