@@ -211,17 +211,18 @@ export function DiversificationConcentrationSection({
                 stroke="transparent"
               />
               <Tooltip
+                cursor={false}
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const item = payload[0].payload as typeof topHoldings[0];
                   return (
-                    <div className="card p-2.5 text-xs shadow-lg border border-border bg-surface/95 backdrop-blur-sm">
+                    <div className="p-2.5 text-xs rounded-xl shadow-xl border border-border bg-surface-raised/95 backdrop-blur-md">
                       <p className="font-bold text-foreground">{item.fullName}</p>
-                      <p className="font-mono text-brand-500 font-semibold mt-0.5">
+                      <p className="font-financial text-brand font-semibold mt-0.5">
                         {item.weight}% of valued portfolio
                       </p>
                       {item.value !== null && (
-                        <p className="text-[11px] text-muted font-mono mt-0.5">
+                        <p className="text-[11px] text-muted font-financial mt-0.5">
                           {formatIndianCurrency(item.value)}
                         </p>
                       )}

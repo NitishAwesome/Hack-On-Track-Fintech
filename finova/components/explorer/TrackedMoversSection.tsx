@@ -8,9 +8,9 @@ import {
   TrendingDown,
   Activity,
   ShieldAlert,
-  ChevronRight,
   RefreshCw,
 } from 'lucide-react';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
 interface TrackedMoversSectionProps {
   onSelectStock: (symbol: string) => void;
@@ -182,44 +182,59 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
                 key={item.symbol}
                 type="button"
                 onClick={() => handleStockClick(item.symbol)}
-                className="p-3.5 text-left rounded-xl bg-surface-raised/70 hover:bg-surface-raised border border-border hover:border-brand/40 transition group flex items-center justify-between"
+                className="p-3.5 text-left rounded-2xl bg-surface hover:bg-surface-raised border border-border hover:border-brand/40 transition group flex items-center justify-between gap-3 shadow-xs"
               >
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-sm text-foreground group-hover:text-brand transition">
-                      {item.symbol}
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-surface text-muted border border-border">
-                      NSE
-                    </span>
-                  </div>
-                  <div className="text-xs text-foreground font-semibold mt-1">
-                    {formatPrice(item.price)}
+                <div className="flex items-center gap-3 min-w-0">
+                  <CompanyLogo symbol={item.symbol} size="md" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-sm text-foreground group-hover:text-brand transition truncate">
+                        {item.symbol}
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded text-[10px] bg-surface-raised text-muted border border-border">
+                        NSE
+                      </span>
+                    </div>
+                    <div className="text-xs text-foreground font-financial tabular-nums font-bold mt-0.5">
+                      {formatPrice(item.price)}
+                    </div>
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <div
-                    className={`text-xs font-bold flex items-center justify-end gap-1 ${
-                      isPositive ? 'text-emerald-500' : 'text-rose-500'
-                    }`}
-                  >
-                    {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                    <span>
-                      {isPositive ? '+' : ''}
-                      {item.day_change_pct?.toFixed(2)}%
-                    </span>
+                <div className="text-right shrink-0 flex items-center gap-2.5">
+                  <svg className="w-12 h-6 hidden sm:block shrink-0" viewBox="0 0 48 24" fill="none">
+                    <path
+                      d={isPositive ? "M 2 20 Q 14 18, 24 10 T 46 4" : "M 2 4 Q 14 6, 24 14 T 46 20"}
+                      stroke={isPositive ? "#10B981" : "#F43F5E"}
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                  </svg>
+
+                  <div className="text-right">
+                    <div
+                      className={`text-xs font-financial tabular-nums font-bold flex items-center justify-end gap-1 ${
+                        isPositive ? 'text-emerald-500' : 'text-rose-500'
+                      }`}
+                    >
+                      {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                      <span>
+                        {isPositive ? '+' : ''}
+                        {item.day_change_pct?.toFixed(2)}%
+                      </span>
+                    </div>
+                    {item.volume ? (
+                      <div className="text-[10px] text-muted font-financial tabular-nums mt-0.5">
+                        Vol: {item.volume >= 1000000 ? `${(item.volume / 1000000).toFixed(1)}M` : `${(item.volume / 1000).toFixed(0)}K`}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-muted font-financial tabular-nums mt-0.5">
+                        {isPositive ? '+' : ''}
+                        {item.day_change?.toFixed(2)}
+                      </div>
+                    )}
                   </div>
-                  {item.volume ? (
-                    <div className="text-[10px] text-muted mt-0.5">
-                      Vol: {item.volume >= 1000000 ? `${(item.volume / 1000000).toFixed(1)}M` : `${(item.volume / 1000).toFixed(0)}K`}
-                    </div>
-                  ) : (
-                    <div className="text-[10px] text-muted mt-0.5">
-                      {isPositive ? '+' : ''}
-                      {item.day_change?.toFixed(2)}
-                    </div>
-                  )}
                 </div>
               </button>
             );

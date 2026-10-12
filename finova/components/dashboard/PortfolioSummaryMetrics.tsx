@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, Layers, Building2, HelpCircle } from 'lucide-react';
+import { Wallet, Landmark, TrendingUp, TrendingDown, Percent, Layers, Building2, HelpCircle } from 'lucide-react';
 import type { PortfolioSummary } from '@/types/portfolio';
 import { formatCurrency, formatPercentSafe } from '@/lib/utils';
 
@@ -17,15 +17,14 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className="p-4 sm:p-5 rounded-2xl border animate-pulse"
+            className="p-4 sm:p-5 rounded-2xl border animate-pulse bg-surface"
             style={{
-              backgroundColor: 'rgb(var(--surface))',
               borderColor: 'rgb(var(--border))',
             }}
           >
-            <div className="h-3 w-16 bg-slate-700/30 rounded mb-3" />
-            <div className="h-6 w-24 bg-slate-700/40 rounded mb-2" />
-            <div className="h-2.5 w-20 bg-slate-700/20 rounded" />
+            <div className="h-3 w-16 bg-muted/20 rounded mb-3" />
+            <div className="h-6 w-24 bg-muted/30 rounded mb-2" />
+            <div className="h-2.5 w-20 bg-muted/20 rounded" />
           </div>
         ))}
       </div>
@@ -39,222 +38,202 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
   const isValueUnavailable = displayValuation === null;
   const isReturnUnavailable = summary.total_absolute_return === null;
   const isPositiveReturn = (summary.total_absolute_return ?? 0) >= 0;
+  const returnPct = summary.total_absolute_return_pct ?? 0;
   const hasUnquoted = Boolean(summary.has_unquoted_assets);
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
-      {/* 1. Total Portfolio Value / Valued Subtotal */}
+      {/* 1. Current Value */}
       <div
-        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200"
-        style={{
-          backgroundColor: 'rgb(var(--surface))',
-          borderColor: 'rgb(var(--border))',
-          boxShadow: 'var(--shadow-card)',
-        }}
+        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface relative overflow-hidden group hover:border-emerald-500/40 shadow-xs"
+        style={{ borderColor: 'rgb(var(--border))' }}
       >
+        {/* Glow Accent Curve */}
+        <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/20 transition-all" />
+
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               {isComplete ? 'Current Value' : 'Valued Subtotal'}
             </span>
-            <Wallet className="w-3.5 h-3.5 text-muted opacity-70" />
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
+              <Wallet className="w-3.5 h-3.5" />
+            </div>
           </div>
-          <div
-            className="text-lg sm:text-xl font-bold tracking-tight"
-            style={{ color: 'rgb(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}
-          >
-            {isValueUnavailable
-              ? 'Valuation unavailable'
-              : formatCurrency(displayValuation!)}
+
+          <div className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground tabular-nums">
+            {isValueUnavailable ? 'Unavailable' : formatCurrency(displayValuation!)}
           </div>
         </div>
-        <div className="mt-2.5">
-          {hasUnquoted ? (
-            <span
-              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded"
-              style={{
-                backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                color: '#F59E0B',
-              }}
-              title={`${summary.priced_count ?? 0} of ${summary.holding_count} holdings quoted; unpriced positions excluded from valuation`}
-            >
-              <HelpCircle className="w-2.5 h-2.5" />
-              <span>Partial pricing ({summary.priced_count ?? 0}/{summary.holding_count})</span>
+
+        <div className="mt-3 flex items-center gap-1.5 text-[11px]">
+          {isPositiveReturn ? (
+            <span className="font-semibold text-gain flex items-center gap-0.5">
+              <TrendingUp className="w-3 h-3" />
+              <span>+{returnPct.toFixed(1)}%</span>
             </span>
           ) : (
-            <span className="text-[11px] text-muted">
-              {summary.holding_count > 0 ? 'Verified market valuation' : 'No active holdings'}
+            <span className="font-semibold text-loss flex items-center gap-0.5">
+              <TrendingDown className="w-3 h-3" />
+              <span>{returnPct.toFixed(1)}%</span>
             </span>
           )}
+          <span className="text-muted text-[10px]">vs invested</span>
         </div>
       </div>
 
       {/* 2. Total Invested */}
       <div
-        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200"
-        style={{
-          backgroundColor: 'rgb(var(--surface))',
-          borderColor: 'rgb(var(--border))',
-          boxShadow: 'var(--shadow-card)',
-        }}
+        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface relative overflow-hidden group hover:border-blue-500/40 shadow-xs"
+        style={{ borderColor: 'rgb(var(--border))' }}
       >
+        <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-blue-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-blue-500/20 transition-all" />
+
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Total Invested
             </span>
-            <TrendingUp className="w-3.5 h-3.5 text-muted opacity-70" />
+            <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20">
+              <Landmark className="w-3.5 h-3.5" />
+            </div>
           </div>
-          <div
-            className="text-lg sm:text-xl font-bold tracking-tight"
-            style={{ color: 'rgb(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}
-          >
+
+          <div className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground tabular-nums">
             {formatCurrency(summary.total_invested_value)}
           </div>
         </div>
-        <div className="mt-2.5 text-[11px] text-muted">
-          <span>Capital invested across accounts</span>
+
+        <div className="mt-3 text-[11px] text-muted font-medium">
+          <span>Capital deployed</span>
         </div>
       </div>
 
       {/* 3. Absolute P&L */}
       <div
-        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200"
-        style={{
-          backgroundColor: 'rgb(var(--surface))',
-          borderColor: 'rgb(var(--border))',
-          boxShadow: 'var(--shadow-card)',
-        }}
+        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface relative overflow-hidden group hover:border-rose-500/40 shadow-xs"
+        style={{ borderColor: 'rgb(var(--border))' }}
       >
+        <div
+          className={`absolute -bottom-6 -left-6 w-24 h-24 rounded-full blur-xl pointer-events-none transition-all ${
+            isPositiveReturn ? 'bg-emerald-500/10 group-hover:bg-emerald-500/20' : 'bg-rose-500/10 group-hover:bg-rose-500/20'
+          }`}
+        />
+
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Absolute P&L
             </span>
-            {isReturnUnavailable ? null : isPositiveReturn ? (
-              <ArrowUpRight className="w-3.5 h-3.5 text-gain" />
-            ) : (
-              <ArrowDownRight className="w-3.5 h-3.5 text-loss" />
-            )}
+            <div
+              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                isPositiveReturn
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+              }`}
+            >
+              {isPositiveReturn ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+            </div>
           </div>
+
           <div
-            className="text-lg sm:text-xl font-bold tracking-tight"
-            style={{
-              color: isReturnUnavailable
-                ? 'rgb(var(--muted))'
-                : isPositiveReturn
-                ? 'rgb(var(--gain))'
-                : 'rgb(var(--loss))',
-              fontVariantNumeric: 'tabular-nums',
-            }}
+            className={`text-lg sm:text-xl font-extrabold tracking-tight tabular-nums ${
+              isReturnUnavailable ? 'text-muted' : isPositiveReturn ? 'text-gain' : 'text-loss'
+            }`}
           >
             {isReturnUnavailable
-              ? 'P&L unavailable'
+              ? 'Unavailable'
               : `${isPositiveReturn ? '+' : ''}${formatCurrency(summary.total_absolute_return!)}`}
           </div>
         </div>
-        <div className="mt-2.5 text-[11px] text-muted">
-          <span>Unrealized total returns</span>
+
+        <div className="mt-3 text-[11px] text-muted">
+          <span>Unrealized returns</span>
         </div>
       </div>
 
-      {/* 4. Percentage Return */}
+      {/* 4. Total Return % */}
       <div
-        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200"
-        style={{
-          backgroundColor: 'rgb(var(--surface))',
-          borderColor: 'rgb(var(--border))',
-          boxShadow: 'var(--shadow-card)',
-        }}
+        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface relative overflow-hidden group hover:border-cyan-500/40 shadow-xs"
+        style={{ borderColor: 'rgb(var(--border))' }}
       >
+        <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-cyan-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-cyan-500/20 transition-all" />
+
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
-              Total Return %
+              Total Return
             </span>
-            {isReturnUnavailable ? null : isPositiveReturn ? (
-              <ArrowUpRight className="w-3.5 h-3.5 text-gain" />
-            ) : (
-              <ArrowDownRight className="w-3.5 h-3.5 text-loss" />
-            )}
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-500/20">
+              <Percent className="w-3.5 h-3.5" />
+            </div>
           </div>
+
           <div
-            className="text-lg sm:text-xl font-bold tracking-tight"
-            style={{
-              color: isReturnUnavailable
-                ? 'rgb(var(--muted))'
-                : isPositiveReturn
-                ? 'rgb(var(--gain))'
-                : 'rgb(var(--loss))',
-              fontVariantNumeric: 'tabular-nums',
-            }}
+            className={`text-lg sm:text-xl font-extrabold tracking-tight tabular-nums ${
+              isReturnUnavailable ? 'text-muted' : isPositiveReturn ? 'text-gain' : 'text-loss'
+            }`}
           >
-            {isReturnUnavailable
-              ? 'P&L unavailable'
-              : formatPercentSafe(summary.total_absolute_return_pct)}
+            {isReturnUnavailable ? 'Unavailable' : formatPercentSafe(summary.total_absolute_return_pct)}
           </div>
         </div>
-        <div className="mt-2.5 text-[11px] text-muted">
-          <span>Net percentage gain on cost</span>
+
+        <div className="mt-3 text-[11px] text-muted">
+          <span>Net gain on cost</span>
         </div>
       </div>
 
       {/* 5. Holdings Count */}
       <div
-        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200"
-        style={{
-          backgroundColor: 'rgb(var(--surface))',
-          borderColor: 'rgb(var(--border))',
-          boxShadow: 'var(--shadow-card)',
-        }}
+        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface relative overflow-hidden group hover:border-purple-500/40 shadow-xs"
+        style={{ borderColor: 'rgb(var(--border))' }}
       >
+        <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-purple-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/20 transition-all" />
+
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Holdings
             </span>
-            <Layers className="w-3.5 h-3.5 text-muted opacity-70" />
+            <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/20">
+              <Layers className="w-3.5 h-3.5" />
+            </div>
           </div>
-          <div
-            className="text-lg sm:text-xl font-bold tracking-tight"
-            style={{ color: 'rgb(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}
-          >
+
+          <div className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground tabular-nums">
             {summary.holding_count}
           </div>
         </div>
-        <div className="mt-2.5 text-[11px] text-muted">
-          <span>
-            {summary.priced_count ?? summary.holding_count} quoted
-            {summary.unquoted_count ? ` · ${summary.unquoted_count} unquoted` : ''}
-          </span>
+
+        <div className="mt-3 text-[11px] text-muted">
+          <span>Across stocks, REITs & more</span>
         </div>
       </div>
 
-      {/* 6. Linked Brokers */}
+      {/* 6. Broker Accounts */}
       <div
-        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200"
-        style={{
-          backgroundColor: 'rgb(var(--surface))',
-          borderColor: 'rgb(var(--border))',
-          boxShadow: 'var(--shadow-card)',
-        }}
+        className="p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface relative overflow-hidden group hover:border-sky-500/40 shadow-xs"
+        style={{ borderColor: 'rgb(var(--border))' }}
       >
+        <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-sky-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-sky-500/20 transition-all" />
+
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Broker Accounts
             </span>
-            <Building2 className="w-3.5 h-3.5 text-muted opacity-70" />
+            <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center shrink-0 border border-sky-500/20">
+              <Building2 className="w-3.5 h-3.5" />
+            </div>
           </div>
-          <div
-            className="text-lg sm:text-xl font-bold tracking-tight"
-            style={{ color: 'rgb(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}
-          >
+
+          <div className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground tabular-nums">
             {summary.broker_count}
           </div>
         </div>
-        <div className="mt-2.5 text-[11px] text-muted">
-          <span>Manual tracking accounts</span>
+
+        <div className="mt-3 text-[11px] text-muted">
+          <span>Tracked demat accounts</span>
         </div>
       </div>
     </div>

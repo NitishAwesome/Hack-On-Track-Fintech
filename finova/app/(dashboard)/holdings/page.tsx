@@ -17,6 +17,7 @@ import { SkeletonTable } from '@/components/shared/Skeletons';
 import { formatCurrency, formatCurrencySafe, formatStockPrice } from '@/lib/utils';
 import type { HoldingWithMetrics, AssetClass, BrokerAccount } from '@/types/portfolio';
 import { StockSearchDropdown } from '@/components/market/StockSearchDropdown';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
 const TAB_CATEGORIES: { id: string; label: string; assetClass?: AssetClass }[] = [
   { id: 'all', label: 'All Investments' },
@@ -348,14 +349,14 @@ export default function HoldingsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'rgb(var(--foreground))' }}>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Unified Portfolio Holdings
           </h1>
-          <p className="text-sm mt-1" style={{ color: 'rgb(var(--muted))' }}>
+          <p className="text-sm mt-1 text-muted">
             All your investments across brokers, depositories and asset classes in one place
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             id="btn-refresh-quotes"
             disabled={isRefreshingQuotes || isLoading}
@@ -370,7 +371,7 @@ export default function HoldingsPage() {
                 setTimeout(() => setIsRefreshingQuotes(false), 500);
               }
             }}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-colors shadow-sm disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border bg-surface hover:bg-surface-raised text-muted hover:text-foreground transition-all shadow-xs disabled:opacity-50"
             title="Refresh dynamic quotes from market feed"
           >
             <RefreshCw className={`w-4 h-4 text-emerald-400 ${isRefreshingQuotes ? 'animate-spin' : ''}`} />
@@ -378,7 +379,7 @@ export default function HoldingsPage() {
           </button>
           <Link
             href="/analysis"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-colors shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border bg-surface hover:bg-surface-raised text-foreground transition-all shadow-xs"
             title="Open portfolio exposure analysis in Investment X-Ray"
           >
             <BarChart3 className="w-4 h-4 text-brand" />
@@ -392,9 +393,9 @@ export default function HoldingsPage() {
               if (brokers.length > 0 && !importBrokerId) setImportBrokerId(brokers[0].id);
               setShowImportModal(true);
             }}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border bg-surface hover:bg-surface-raised text-foreground transition-all shadow-xs"
           >
-            <Upload className="w-4 h-4 text-blue-400" />
+            <Upload className="w-4 h-4 text-brand" />
             Import CSV
           </button>
           <button
@@ -403,7 +404,7 @@ export default function HoldingsPage() {
               if (brokers.length > 0) setForm((p) => ({ ...p, broker_account_id: brokers[0].id }));
               setShowAddModal(true);
             }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm hover:opacity-95 transition-opacity"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-xs hover:opacity-95 transition-opacity"
             style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
           >
             <Plus className="w-4 h-4" />
@@ -414,35 +415,38 @@ export default function HoldingsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-4 space-y-1">
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Invested</p>
-          <p className="text-xl font-bold text-slate-100" title={formatCurrency(summaryMetrics.totalInvested)}>
+        {/* Card 1: Total Invested */}
+        <div className="p-4 sm:p-5 rounded-2xl border border-border bg-surface shadow-xs space-y-1 relative overflow-hidden group">
+          <p className="text-xs font-bold text-muted uppercase tracking-wider">Total Invested</p>
+          <p className="text-xl sm:text-2xl font-extrabold text-foreground tabular-nums tracking-tight" title={formatCurrency(summaryMetrics.totalInvested)}>
             {formatCurrency(summaryMetrics.totalInvested)}
           </p>
-          <p className="text-xs text-slate-500">Across {summaryMetrics.totalCount} total positions</p>
+          <p className="text-xs text-muted">Across {summaryMetrics.totalCount} total positions</p>
         </div>
 
-        <div className="card p-4 space-y-1">
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+        {/* Card 2: Current Valuation */}
+        <div className="p-4 sm:p-5 rounded-2xl border border-border bg-surface shadow-xs space-y-1 relative overflow-hidden group">
+          <p className="text-xs font-bold text-muted uppercase tracking-wider">
             {summaryMetrics.isComplete ? 'Current Valuation' : 'Valued Subtotal'}
           </p>
-          <p className="text-xl font-bold text-slate-100" title={summaryMetrics.pricedCurrent !== null ? formatCurrency(summaryMetrics.pricedCurrent) : 'Valuation unavailable'}>
+          <p className="text-xl sm:text-2xl font-extrabold text-foreground tabular-nums tracking-tight" title={summaryMetrics.pricedCurrent !== null ? formatCurrency(summaryMetrics.pricedCurrent) : 'Valuation unavailable'}>
             {summaryMetrics.pricedCurrent !== null ? formatCurrency(summaryMetrics.pricedCurrent) : 'Valuation unavailable'}
           </p>
-          <p className="text-[11px] text-slate-400 flex items-center gap-1">
-            <Info className="w-3.5 h-3.5 text-blue-400" />
+          <p className="text-[11px] text-muted flex items-center gap-1">
+            <Info className="w-3.5 h-3.5 text-brand" />
             {summaryMetrics.isComplete
               ? `${summaryMetrics.totalCount} assets priced`
               : `${summaryMetrics.pricedCount} of ${summaryMetrics.totalCount} assets priced (partial)`}
           </p>
         </div>
 
-        <div className="card p-4 space-y-1">
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Unrealized P&L</p>
+        {/* Card 3: Unrealized P&L */}
+        <div className="p-4 sm:p-5 rounded-2xl border border-border bg-surface shadow-xs space-y-1 relative overflow-hidden group">
+          <p className="text-xs font-bold text-muted uppercase tracking-wider">Unrealized P&L</p>
           {summaryMetrics.totalPnL !== null ? (
             <div className="flex items-baseline gap-2">
               <span
-                className={`text-xl font-bold ${summaryMetrics.totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+                className={`text-xl sm:text-2xl font-extrabold tabular-nums tracking-tight ${summaryMetrics.totalPnL >= 0 ? 'text-gain' : 'text-loss'}`}
                 title={formatCurrency(summaryMetrics.totalPnL)}
               >
                 {summaryMetrics.totalPnL >= 0 ? '+' : ''}{formatCurrency(summaryMetrics.totalPnL)}
@@ -452,32 +456,33 @@ export default function HoldingsPage() {
               )}
             </div>
           ) : (
-            <p className="text-sm font-semibold text-amber-400/90 pt-1">P&L unavailable</p>
+            <p className="text-sm font-semibold text-amber-500 pt-1">P&L unavailable</p>
           )}
-          <p className="text-xs text-slate-500">Calculated from verified quotes</p>
+          <p className="text-xs text-muted">Calculated from verified quotes</p>
         </div>
 
-        <div className="card p-4 space-y-1">
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Accounts & Coverage</p>
-          <p className="text-xl font-bold text-slate-100">
+        {/* Card 4: Accounts & Coverage */}
+        <div className="p-4 sm:p-5 rounded-2xl border border-border bg-surface shadow-xs space-y-1 relative overflow-hidden group">
+          <p className="text-xs font-bold text-muted uppercase tracking-wider">Accounts & Coverage</p>
+          <p className="text-xl sm:text-2xl font-extrabold text-foreground tabular-nums tracking-tight">
             {brokers.length} {brokers.length === 1 ? 'Broker' : 'Brokers'}
           </p>
-          <p className="text-xs text-slate-500">Manual Demat & Depositories</p>
+          <p className="text-xs text-muted">Manual Demat & Depositories</p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
+      {/* Category Filter Tabs (Pill Buttons) */}
+      <div className="flex items-center gap-2 border-b border-border pb-3 overflow-x-auto no-scrollbar">
         {TAB_CATEGORIES.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-xs ${
                 isActive
-                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  ? 'bg-brand text-white shadow-sm'
+                  : 'bg-surface hover:bg-surface-raised text-muted hover:text-foreground border border-border'
               }`}
             >
               {tab.label}
@@ -489,20 +494,20 @@ export default function HoldingsPage() {
       {/* Search, Filter & Sort Controls */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
           <input
             type="text"
             placeholder="Search by symbol, company name, or ISIN…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-lg text-sm bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-blue-500"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs sm:text-sm bg-surface border border-border text-foreground placeholder:text-muted focus:outline-none focus:border-brand shadow-xs"
           />
         </div>
 
         <select
           value={selectedBrokerFilter}
           onChange={(e) => setSelectedBrokerFilter(e.target.value)}
-          className="px-3 py-2 rounded-lg text-sm bg-slate-900 border border-slate-800 text-slate-300 focus:outline-none focus:border-blue-500"
+          className="px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-surface border border-border text-foreground focus:outline-none focus:border-brand shadow-xs font-medium"
         >
           <option value="">All Brokers</option>
           {brokers.map((b) => (
@@ -515,7 +520,7 @@ export default function HoldingsPage() {
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as 'value' | 'invested' | 'return' | 'name')}
-          className="px-3 py-2 rounded-lg text-sm bg-slate-900 border border-slate-800 text-slate-300 focus:outline-none focus:border-blue-500"
+          className="px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-surface border border-border text-foreground focus:outline-none focus:border-brand shadow-xs font-medium"
         >
           <option value="value">Sort by Value</option>
           <option value="invested">Sort by Invested</option>
@@ -529,7 +534,7 @@ export default function HoldingsPage() {
         <SkeletonTable rows={5} />
       ) : holdings.length === 0 ? (
         <EmptyState
-          icon={<Building2 className="w-10 h-10" style={{ color: 'rgb(var(--brand-500))' }} />}
+          icon={<Building2 className="w-10 h-10 text-brand" />}
           title="Your unified portfolio starts here."
           description="Add your first investment or import your holdings to begin tracking your portfolio."
           action={
@@ -539,8 +544,7 @@ export default function HoldingsPage() {
                   if (brokers.length > 0) setForm((p) => ({ ...p, broker_account_id: brokers[0].id }));
                   setShowAddModal(true);
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white shadow-sm"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm bg-brand hover:bg-brand-hover transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add Investment
@@ -550,110 +554,117 @@ export default function HoldingsPage() {
                   setCsvRows([]);
                   setShowImportModal(true);
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-700 bg-slate-800 text-slate-200"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-border bg-surface hover:bg-surface-raised text-foreground transition-colors"
               >
-                <Upload className="w-4 h-4 text-blue-400" />
+                <Upload className="w-4 h-4 text-brand" />
                 Import CSV
               </button>
             </div>
           }
         />
       ) : filteredHoldings.length === 0 ? (
-        <div className="card p-8 text-center space-y-2">
-          <Filter className="w-8 h-8 text-slate-500 mx-auto" />
-          <p className="font-semibold text-slate-300">No matching investments found</p>
-          <p className="text-xs text-slate-500">Try adjusting your search query, broker filter, or category tab.</p>
+        <div className="bg-surface border border-border rounded-2xl p-8 text-center space-y-2">
+          <Filter className="w-8 h-8 text-muted mx-auto" />
+          <p className="font-semibold text-foreground">No matching investments found</p>
+          <p className="text-xs text-muted">Try adjusting your search query, broker filter, or category tab.</p>
         </div>
       ) : (
         <div>
           {/* Desktop Table View (>= 768px) */}
-          <div className="card overflow-hidden hidden md:block">
+          <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs hidden md:block">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-900/80 border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <thead className="bg-surface-raised/70 border-b border-border text-[11px] font-semibold text-muted uppercase tracking-wider">
                   <tr>
-                    <th className="px-4 py-3">Asset & Symbol</th>
-                    <th className="px-4 py-3">Broker</th>
-                    <th className="px-4 py-3 text-right">Quantity</th>
-                    <th className="px-4 py-3 text-right">Avg Buy Price</th>
-                    <th className="px-4 py-3 text-right">Current Price</th>
-                    <th className="px-4 py-3 text-right">Invested Value</th>
-                    <th className="px-4 py-3 text-right">Current Value</th>
-                    <th className="px-4 py-3 text-right">P&L / Return</th>
-                    <th className="px-4 py-3 text-center">Actions</th>
+                    <th className="px-4 py-3.5">Asset & Symbol</th>
+                    <th className="px-4 py-3.5">Broker</th>
+                    <th className="px-4 py-3.5 text-right">Quantity</th>
+                    <th className="px-4 py-3.5 text-right">Avg Buy Price</th>
+                    <th className="px-4 py-3.5 text-right">Current Price</th>
+                    <th className="px-4 py-3.5 text-right">Invested Value</th>
+                    <th className="px-4 py-3.5 text-right">Current Value</th>
+                    <th className="px-4 py-3.5 text-right">P&L / Return</th>
+                    <th className="px-4 py-3.5 text-center">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/80">
+                <tbody className="divide-y divide-border">
                   {filteredHoldings.map((h) => {
                     const hasPrice = h.current_price !== null && typeof h.current_price === 'number';
                     const returnPct = h.absolute_return_pct;
                     const isPositive = (h.absolute_return ?? 0) >= 0;
 
                     return (
-                      <tr key={h.id} className="hover:bg-slate-850/50 transition-colors group">
+                      <tr key={h.id} className="hover:bg-surface-raised/50 transition-colors group">
                         <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <span
-                              className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
-                              style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#60A5FA' }}
-                            >
-                              {h.asset_class}
-                            </span>
-                            <div>
-                              <p className="font-semibold text-slate-100">{h.name}</p>
-                              <p className="text-xs text-slate-500 font-mono">{h.symbol} • {h.exchange || 'NSE'}</p>
+                          <div className="flex items-center gap-3">
+                            <CompanyLogo symbol={h.symbol} name={h.name} size="md" />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <Link
+                                  href={`/explore/stocks/${encodeURIComponent(h.symbol.replace(/\.(NS|BO)$/i, ''))}`}
+                                  className="font-semibold text-foreground hover:text-brand transition-colors truncate"
+                                >
+                                  {h.name}
+                                </Link>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-brand/10 text-brand border border-brand/20 shrink-0">
+                                  {h.asset_class}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted font-financial mt-0.5">
+                                {h.symbol} • {h.exchange || 'NSE'}
+                              </p>
                             </div>
                           </div>
                         </td>
 
                         <td className="px-4 py-3.5">
-                          <span className="text-xs px-2 py-0.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300">
+                          <span className="text-xs px-2.5 py-1 rounded-lg border border-border bg-surface-raised text-foreground font-medium">
                             {h.broker_account?.display_name || h.broker_account?.broker_name || 'Manual'}
                           </span>
                         </td>
 
-                        <td className="px-4 py-3.5 text-right font-mono font-medium text-slate-200">
+                        <td className="px-4 py-3.5 text-right font-financial tabular-nums font-semibold text-foreground">
                           {h.quantity}
                         </td>
 
-                        <td className="px-4 py-3.5 text-right font-mono text-slate-300">
+                        <td className="px-4 py-3.5 text-right font-financial tabular-nums text-muted">
                           {formatStockPrice(h.avg_buy_price)}
                         </td>
 
-                        <td className="px-4 py-3.5 text-right font-mono">
+                        <td className="px-4 py-3.5 text-right font-financial">
                           {hasPrice ? (
                             <div className="flex flex-col items-end gap-1">
-                              <span className="text-slate-100 font-semibold">{formatStockPrice(h.current_price!)}</span>
+                              <span className="text-foreground font-semibold tabular-nums">{formatStockPrice(h.current_price!)}</span>
                               <div className="flex items-center gap-1.5 flex-wrap justify-end">
                                 <span
                                   className={`text-[10px] px-1.5 py-0.5 rounded font-sans font-semibold tracking-wide ${
                                     h.price_status === 'REALTIME'
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                                       : h.price_status === 'DELAYED'
-                                      ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                      ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
                                       : h.price_status === 'EOD'
-                                      ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                      ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20'
+                                      : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
                                   }`}
                                 >
                                   {h.price_status || 'DELAYED'}
                                 </span>
-                                <span className="text-[10px] text-slate-400 font-sans">
+                                <span className="text-[10px] text-muted font-sans">
                                   {h.price_source || 'Yahoo Finance'}
                                 </span>
                               </div>
                               {h.price_updated_at && (
-                                <span className="text-[9px] text-slate-500 font-sans" title={h.price_updated_at}>
+                                <span className="text-[9px] text-muted font-sans" title={h.price_updated_at}>
                                   {new Date(h.price_updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               )}
                             </div>
                           ) : (
                             <div className="flex flex-col items-end gap-0.5">
-                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-sans font-medium">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-sans font-medium">
                                 Price unavailable
                               </span>
-                              <span className="text-[9px] text-slate-500 font-sans">
+                              <span className="text-[9px] text-muted font-sans">
                                 Feed unquoted or stale
                               </span>
                             </div>
@@ -661,28 +672,28 @@ export default function HoldingsPage() {
                         </td>
 
                         <td
-                          className="px-4 py-3.5 text-right font-mono text-slate-300 font-medium"
+                          className="px-4 py-3.5 text-right font-financial tabular-nums text-foreground font-medium"
                           title={formatCurrency(h.invested_value)}
                         >
                           {formatCurrency(h.invested_value)}
                         </td>
 
                         <td
-                          className="px-4 py-3.5 text-right font-mono font-semibold text-slate-100"
+                          className="px-4 py-3.5 text-right font-financial tabular-nums font-semibold text-foreground"
                           title={hasPrice && h.current_value !== null ? formatCurrency(h.current_value) : 'Valuation unavailable'}
                         >
                           {hasPrice && h.current_value !== null ? (
                             formatCurrency(h.current_value)
                           ) : (
-                            <span className="text-slate-500">—</span>
+                            <span className="text-muted">—</span>
                           )}
                         </td>
 
-                        <td className="px-4 py-3.5 text-right font-mono">
+                        <td className="px-4 py-3.5 text-right font-financial tabular-nums">
                           {hasPrice && h.absolute_return !== null ? (
                             <div className="flex flex-col items-end">
                               <span
-                                className={`text-xs font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}
+                                className={`text-xs font-semibold ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}
                                 title={formatCurrency(h.absolute_return)}
                               >
                                 {isPositive ? '+' : ''}{formatCurrency(h.absolute_return)}
@@ -692,7 +703,7 @@ export default function HoldingsPage() {
                               )}
                             </div>
                           ) : (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-raised text-muted border border-border">
                               P&L unavailable
                             </span>
                           )}
@@ -701,23 +712,30 @@ export default function HoldingsPage() {
                         <td className="px-4 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
                             <Link
+                              href={`/explore/stocks/${encodeURIComponent(h.symbol.replace(/\.(NS|BO)$/i, ''))}`}
+                              title={`Analyze ${h.symbol}`}
+                              className="p-1.5 rounded-lg hover:bg-surface-raised text-muted hover:text-brand transition-colors"
+                            >
+                              <BarChart3 className="w-4 h-4" />
+                            </Link>
+                            <Link
                               href={`/news?symbol=${encodeURIComponent(h.symbol)}`}
                               title={`View news for ${h.symbol}`}
-                              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-surface-raised text-muted hover:text-brand transition-colors"
                             >
                               <Newspaper className="w-4 h-4" />
                             </Link>
                             <button
                               title="Edit Holding"
                               onClick={() => setEditingHolding(h)}
-                              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-surface-raised text-muted hover:text-foreground transition-colors"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                             <button
                               title="Delete Holding"
                               onClick={() => setDeletingHolding(h)}
-                              className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-rose-500/10 text-muted hover:text-rose-500 transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -749,35 +767,37 @@ export default function HoldingsPage() {
                   }}
                 >
                   {/* Top Bar: Symbol, Name & Current Value */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span
-                          className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
-                          style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#60A5FA' }}
-                        >
-                          {h.asset_class}
-                        </span>
-                        <span className="font-bold text-sm truncate text-foreground">{h.name}</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <CompanyLogo symbol={h.symbol} name={h.name} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-sm truncate text-foreground">{h.name}</span>
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-brand/10 text-brand border border-brand/20"
+                          >
+                            {h.asset_class}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted font-financial mt-0.5">
+                          {h.symbol} • {h.exchange || 'NSE'}
+                        </p>
                       </div>
-                      <p className="text-xs text-muted font-mono mt-0.5">
-                        {h.symbol} • {h.exchange || 'NSE'}
-                      </p>
                     </div>
 
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-bold font-mono text-foreground">
+                      <p className="text-sm font-bold font-financial tabular-nums text-foreground">
                         {hasPrice && h.current_value !== null ? formatCurrency(h.current_value) : '—'}
                       </p>
-                      <span className="text-[10px] text-muted">
+                      <span className="text-[10px] text-muted font-financial tabular-nums">
                         {h.quantity} units
                       </span>
                     </div>
                   </div>
 
                   {/* Secondary Bar: Broker Badge & Return */}
-                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t text-xs" style={{ borderColor: 'rgb(var(--border) / 0.5)' }}>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300">
+                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t text-xs border-border/50">
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-lg border border-border bg-surface-raised text-foreground font-medium">
                       {h.broker_account?.display_name || h.broker_account?.broker_name || 'Manual'}
                     </span>
 

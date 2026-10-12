@@ -151,7 +151,7 @@ export function ConcentrationRiskChart({
                   tickLine={false}
                   width={75}
                 />
-                <Tooltip content={<ConcentrationTooltip />} />
+                <Tooltip content={<ConcentrationTooltip />} cursor={false} />
                 <Bar dataKey="weight" radius={[0, 4, 4, 0]}>
                   {topHoldings.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />

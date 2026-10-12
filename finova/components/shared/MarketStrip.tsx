@@ -137,23 +137,56 @@ export function MarketStrip({ className, showDisclosure = true }: MarketStripPro
                   return (
                     <div
                       key={idx.symbol}
-                      className="flex-1 min-w-[195px] md:min-w-0 px-3.5 sm:px-4 py-2 rounded-xl border transition-all hover:border-brand/40 group flex items-center justify-between gap-2.5 flex-shrink-0"
+                      className="flex-1 min-w-[210px] md:min-w-0 px-3.5 sm:px-4 py-2 rounded-xl border transition-all hover:border-brand/40 group flex items-center justify-between gap-3 flex-shrink-0 bg-surface shadow-xs"
                       style={{
-                        backgroundColor: 'rgb(var(--surface-raised) / 0.5)',
                         borderColor: 'rgb(var(--border))',
                       }}
                     >
-                      {/* Left: Name and Numeric Value */}
-                      <div className="min-w-0 flex flex-col justify-center">
-                        <span className="text-[11px] font-semibold text-muted tracking-tight truncate">
-                          {cfg.displayName}
-                        </span>
-                        <span className="text-sm sm:text-base font-extrabold tracking-tight text-foreground tabular-nums leading-tight">
-                          {idx.value.toLocaleString('en-IN', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </span>
+                      {/* Left: Flag Roundel + Name + Price */}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {/* Indian Flag Circular Roundel */}
+                        <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 border border-slate-700/30 flex flex-col shadow-xs" title="Indian Market Benchmark">
+                          <div className="h-2 w-full bg-[#FF9933]" />
+                          <div className="h-2 w-full bg-[#FFFFFF] flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 rounded-full border border-[#000080]" />
+                          </div>
+                          <div className="h-2 w-full bg-[#128807]" />
+                        </div>
+
+                        <div className="min-w-0 flex flex-col justify-center">
+                          <span className="text-[11px] font-semibold text-muted tracking-tight truncate">
+                            {cfg.displayName}
+                          </span>
+                          <span className="text-sm sm:text-base font-extrabold tracking-tight text-foreground tabular-nums leading-tight">
+                            {idx.value.toLocaleString('en-IN', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Middle: Mini SVG Sparkline */}
+                      <div className="hidden sm:block w-12 h-6 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <svg viewBox="0 0 50 20" className="w-full h-full overflow-visible">
+                          {isPositive ? (
+                            <path
+                              d="M2 16 Q 15 14, 25 10 T 48 4"
+                              fill="none"
+                              stroke="rgb(var(--gain))"
+                              strokeWidth="1.75"
+                              strokeLinecap="round"
+                            />
+                          ) : (
+                            <path
+                              d="M2 4 Q 15 8, 25 12 T 48 16"
+                              fill="none"
+                              stroke="rgb(var(--loss))"
+                              strokeWidth="1.75"
+                              strokeLinecap="round"
+                            />
+                          )}
+                        </svg>
                       </div>
 
                       {/* Right: Absolute & Percentage Change */}

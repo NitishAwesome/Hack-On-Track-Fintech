@@ -18,7 +18,9 @@ import {
   ShieldCheck,
   RefreshCw,
   Hash,
+  Bookmark,
 } from 'lucide-react';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
 interface InitialStockState {
   symbol: string;
@@ -85,7 +87,7 @@ export function DedicatedStockDetailClient({
       <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-3">
         <Link
           href="/explore"
-          className="inline-flex items-center gap-2 text-xs font-semibold text-muted hover:text-foreground transition px-2.5 py-1.5 rounded-lg hover:bg-zinc-800/60 border border-transparent hover:border-border"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-muted hover:text-foreground transition px-2.5 py-1.5 rounded-xl hover:bg-surface-raised border border-transparent hover:border-border"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Investment Explorer</span>
@@ -93,14 +95,14 @@ export function DedicatedStockDetailClient({
 
         {/* Freshness / Auto-update status badge */}
         <div className="flex items-center gap-2 text-[11px] text-muted">
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-900 border border-border/70 font-mono">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-raised border border-border font-financial">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
                 marketOpen
                   ? isRefreshing
-                    ? 'bg-amber-400 animate-pulse'
-                    : 'bg-emerald-400'
-                  : 'bg-zinc-500'
+                    ? 'bg-amber-500 animate-pulse'
+                    : 'bg-emerald-500'
+                  : 'bg-muted'
               }`}
             />
             <span>{updateStatusLabel}</span>
@@ -110,7 +112,7 @@ export function DedicatedStockDetailClient({
             onClick={() => refreshNow()}
             disabled={isRefreshing}
             title="Manual quote refresh"
-            className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-zinc-800 transition disabled:opacity-50"
+            className="p-1.5 text-muted hover:text-foreground rounded-lg hover:bg-surface-raised transition disabled:opacity-50"
             aria-label="Refresh quote"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -119,37 +121,45 @@ export function DedicatedStockDetailClient({
       </div>
 
       {/* 2. Comprehensive Company Header */}
-      <div className="bg-card/80 border border-border/80 rounded-2xl p-6 shadow-xl backdrop-blur-md">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                {exchange}
-              </span>
-              <span className="text-xs font-extrabold text-emerald-400 tracking-wider">
-                {symbol}
-              </span>
-              {isin && (
-                <span className="text-[11px] text-zinc-500 font-mono flex items-center gap-1">
-                  <Hash className="w-3 h-3" />
-                  {isin}
+      <div className="bg-surface border border-border rounded-2xl p-6 shadow-xs backdrop-blur-md">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+          <div className="flex items-start gap-4">
+            <CompanyLogo symbol={symbol} name={name} size="xl" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black text-brand tracking-wider">
+                  {symbol}
                 </span>
-              )}
-              {sector && (
-                <span className="text-xs text-muted border-l border-zinc-700 pl-2">
-                  {sector} {industry ? `• ${industry}` : ''}
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-surface-raised text-muted border border-border">
+                  {exchange}
                 </span>
-              )}
-            </div>
+                {sector && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-raised text-foreground border border-border">
+                    {sector}
+                  </span>
+                )}
+                {industry && (
+                  <span className="text-[10px] text-muted hidden sm:inline-block">
+                    • {industry}
+                  </span>
+                )}
+                {isin && (
+                  <span className="text-[10px] text-muted font-financial flex items-center gap-1">
+                    <Hash className="w-3 h-3" />
+                    {isin}
+                  </span>
+                )}
+              </div>
 
-            <h1 className="text-2xl sm:text-3xl font-black text-foreground mt-1.5 tracking-tight">
-              {name}
-            </h1>
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground mt-1.5 tracking-tight truncate">
+                {name}
+              </h1>
+            </div>
           </div>
 
           {/* Pricing Banner */}
-          <div className="text-left md:text-right">
-            <div className="text-3xl sm:text-4xl font-black text-foreground font-mono tracking-tight">
+          <div className="text-left md:text-right shrink-0">
+            <div className="text-3xl sm:text-4xl font-black text-foreground font-financial tabular-nums tracking-tight">
               {typeof currentPrice === 'number'
                 ? `₹${currentPrice.toLocaleString('en-IN', {
                     minimumFractionDigits: 2,
@@ -161,8 +171,8 @@ export function DedicatedStockDetailClient({
             <div className="flex items-center md:justify-end gap-2 mt-1">
               {typeof dayChange === 'number' && typeof dayChangePct === 'number' ? (
                 <div
-                  className={`text-sm font-bold flex items-center gap-1 ${
-                    isPositive ? 'text-emerald-400' : 'text-rose-400'
+                  className={`text-sm font-bold font-financial tabular-nums flex items-center gap-1 ${
+                    isPositive ? 'text-emerald-500' : 'text-rose-500'
                   }`}
                 >
                   {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
@@ -178,13 +188,13 @@ export function DedicatedStockDetailClient({
             </div>
 
             <div className="text-[11px] text-muted mt-1 flex items-center md:justify-end gap-2">
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 font-financial">
                 <Clock className="w-3 h-3" />
                 {lastUpdated ? formatIST(lastUpdated) : 'IST'}
               </span>
               <span>•</span>
               <span className="flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                <ShieldCheck className="w-3 h-3 text-emerald-500" />
                 Yahoo Finance
               </span>
             </div>

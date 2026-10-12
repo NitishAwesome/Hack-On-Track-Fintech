@@ -10,9 +10,7 @@ import {
   Newspaper,
   Compass,
   Layers,
-  Link2,
   Building2,
-  Zap,
   User,
   Settings,
   X,
@@ -34,11 +32,17 @@ import { cn } from '@/lib/utils';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
 import { createClient } from '@/lib/supabase/client';
 
+interface SubNavItem {
+  href: string;
+  label: string;
+}
+
 interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   comingSoon?: boolean;
+  subItems?: SubNavItem[];
 }
 
 interface NavGroup {
@@ -80,10 +84,16 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Discover',
     items: [
       { href: '/explore', label: 'Investment Explorer', icon: Compass },
-      { href: '/explore/alternatives', label: 'Alternative Assets', icon: Layers },
-      { href: '/reit', label: 'REITs', icon: Building2 },
-      { href: '/invit', label: 'InvITs', icon: Zap },
-      { href: '/bonds', label: 'Bonds', icon: Link2 },
+      {
+        href: '/explore/alternatives',
+        label: 'Alternative Assets',
+        icon: Layers,
+        subItems: [
+          { href: '/reit', label: 'REITs' },
+          { href: '/invit', label: 'InvITs' },
+          { href: '/bonds', label: 'Bonds' },
+        ],
+      },
       { href: '/news', label: 'News & Market', icon: Newspaper },
       { href: '/learn', label: 'Learn', icon: BookOpen },
     ],
@@ -203,63 +213,93 @@ export function Sidebar({
               </p>
             )}
             <div className="space-y-0.5">
-              {group.items.map(({ href, label, icon: Icon, comingSoon }) => {
-                const active = isActive(href);
+              {group.items.map((item) => {
+                const { href, label, icon: Icon, comingSoon, subItems } = item;
+                const isAnySubActive = subItems?.some((s) => pathname === s.href);
+                const active = isActive(href) || isAnySubActive;
                 return (
-                  <Link
-                    key={href}
-                    href={comingSoon ? '#' : href}
-                    onClick={comingSoon ? (e) => e.preventDefault() : onClose}
-                    title={collapsed ? label : undefined}
-                    className={cn(
-                      'relative flex items-center rounded-lg text-xs font-medium transition-all duration-150 group',
-                      collapsed ? 'justify-center p-2.5' : 'gap-2.5 px-3 py-2',
-                      comingSoon && 'cursor-default opacity-60'
+                  <div key={href} className="space-y-0.5">
+                    <Link
+                      href={comingSoon ? '#' : href}
+                      onClick={comingSoon ? (e) => e.preventDefault() : onClose}
+                      title={collapsed ? label : undefined}
+                      className={cn(
+                        'relative flex items-center rounded-xl text-xs font-semibold transition-all duration-150 group overflow-hidden',
+                        collapsed ? 'justify-center p-2.5' : 'gap-2.5 px-3 py-2',
+                        comingSoon && 'cursor-default opacity-60'
+                      )}
+                      style={{
+                        color: active ? 'rgb(var(--brand-500))' : 'rgb(var(--muted))',
+                        backgroundColor: active ? 'rgb(var(--brand-500) / 0.1)' : 'transparent',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!active && !comingSoon) {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = 'rgb(var(--surface-raised))';
+                          (e.currentTarget as HTMLElement).style.color = 'rgb(var(--foreground))';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!active && !comingSoon) {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                          (e.currentTarget as HTMLElement).style.color = 'rgb(var(--muted))';
+                        }
+                      }}
+                    >
+                      {active && (
+                        <>
+                          <motion.div
+                            layoutId="active-sidebar-pill"
+                            className="absolute inset-0 rounded-xl"
+                            style={{ backgroundColor: 'rgb(var(--brand-500) / 0.1)' }}
+                            transition={{ type: 'spring', duration: 0.3, bounce: 0.15 }}
+                          />
+                          <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-brand" />
+                        </>
+                      )}
+                      <Icon className="w-4 h-4 flex-shrink-0 relative z-10" />
+                      {!collapsed && (
+                        <>
+                          <span className="relative z-10 flex-1 truncate font-medium">{label}</span>
+                          {comingSoon && (
+                            <span
+                              className="relative z-10 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-raised text-muted border border-border"
+                            >
+                              Soon
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </Link>
+
+                    {subItems && !collapsed && (
+                      <div className="ml-5 pl-3 border-l border-border/70 my-1 space-y-0.5">
+                        {subItems.map((sub) => {
+                          const isSubActive = pathname === sub.href;
+                          return (
+                            <Link
+                              key={sub.href}
+                              href={sub.href}
+                              onClick={onClose}
+                              className={cn(
+                                'flex items-center gap-2 py-1 px-2.5 rounded-lg text-[11px] font-medium transition-colors',
+                                isSubActive
+                                  ? 'text-brand font-bold bg-brand/10'
+                                  : 'text-muted hover:text-foreground hover:bg-surface-raised'
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  'w-1.5 h-1.5 rounded-full transition-colors',
+                                  isSubActive ? 'bg-brand' : 'bg-muted/60'
+                                )}
+                              />
+                              <span>{sub.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
                     )}
-                    style={{
-                      color: active ? 'rgb(var(--brand-500))' : 'rgb(var(--muted))',
-                      backgroundColor: active ? 'rgb(var(--brand-500) / 0.12)' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active && !comingSoon) {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = 'rgb(var(--surface-raised))';
-                        (e.currentTarget as HTMLElement).style.color = 'rgb(var(--foreground))';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!active && !comingSoon) {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                        (e.currentTarget as HTMLElement).style.color = 'rgb(var(--muted))';
-                      }
-                    }}
-                  >
-                    {active && (
-                      <motion.div
-                        layoutId="active-sidebar-pill"
-                        className="absolute inset-0 rounded-lg"
-                        style={{ backgroundColor: 'rgb(var(--brand-500) / 0.12)' }}
-                        transition={{ type: 'spring', duration: 0.3, bounce: 0.15 }}
-                      />
-                    )}
-                    <Icon className="w-4 h-4 flex-shrink-0 relative z-10" />
-                    {!collapsed && (
-                      <>
-                        <span className="relative z-10 flex-1 truncate font-medium">{label}</span>
-                        {comingSoon && (
-                          <span
-                            className="relative z-10 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                            style={{
-                              backgroundColor: 'rgb(var(--surface-raised))',
-                              color: 'rgb(var(--muted))',
-                              border: '1px solid rgb(var(--border))',
-                            }}
-                          >
-                            Soon
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </Link>
+                  </div>
                 );
               })}
             </div>

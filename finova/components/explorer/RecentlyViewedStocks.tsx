@@ -16,7 +16,9 @@ import {
   TrendingDown,
   Trash2,
   Sparkles,
+  ChevronRight,
 } from 'lucide-react';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
 interface RecentlyViewedStocksProps {
   onSelectStock?: (symbol: string) => void;
@@ -119,7 +121,7 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {recentItems.map((item) => {
             const q = quotes[item.symbol];
             const price = q?.price;
@@ -131,52 +133,45 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
                 key={item.symbol}
                 type="button"
                 onClick={() => handleClick(item)}
-                className="text-left p-3 rounded-xl border border-border/70 bg-card/70 hover:bg-zinc-800/80 hover:border-emerald-500/40 transition-all duration-150 group flex flex-col justify-between shadow-sm relative overflow-hidden"
+                className="text-left p-3.5 rounded-2xl border border-border bg-surface hover:bg-surface-raised hover:border-brand/40 transition-all duration-150 group flex items-center justify-between gap-3 shadow-xs"
               >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-sm text-foreground group-hover:text-emerald-400 transition tracking-tight">
-                      {item.symbol}
-                    </span>
-                    <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60 uppercase">
-                      {item.exchange || 'NSE'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted truncate mt-0.5 max-w-[120px]" title={item.name}>
-                    {item.name}
-                  </p>
-                </div>
-
-                <div className="mt-2.5 pt-2 border-t border-border/40 flex items-baseline justify-between">
-                  <div className="font-bold text-xs text-foreground font-mono">
-                    {typeof price === 'number' && !isNaN(price)
-                      ? `₹${price.toLocaleString('en-IN', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}`
-                      : '—'}
-                  </div>
-
-                  {typeof changePct === 'number' && !isNaN(changePct) ? (
-                    <div
-                      className={`text-[11px] font-semibold flex items-center gap-0.5 ${
-                        isPositive ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {isPositive ? (
-                        <TrendingUp className="w-3 h-3" />
-                      ) : (
-                        <TrendingDown className="w-3 h-3" />
-                      )}
-                      <span>
-                        {isPositive ? '+' : ''}
-                        {changePct.toFixed(2)}%
+                <div className="flex items-center gap-3 min-w-0">
+                  <CompanyLogo symbol={item.symbol} name={item.name} size="md" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-sm text-foreground group-hover:text-brand transition tracking-tight truncate">
+                        {item.symbol}
                       </span>
                     </div>
-                  ) : (
-                    <span className="text-[10px] text-zinc-500">Latest</span>
-                  )}
+                    <div className="font-financial tabular-nums text-xs font-bold text-foreground mt-0.5">
+                      {typeof price === 'number' && !isNaN(price)
+                        ? `₹${price.toLocaleString('en-IN', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}`
+                        : '—'}
+                    </div>
+                    {typeof changePct === 'number' && !isNaN(changePct) ? (
+                      <div
+                        className={`text-[11px] font-semibold flex items-center gap-0.5 mt-0.5 ${
+                          isPositive ? 'text-emerald-500' : 'text-rose-500'
+                        }`}
+                      >
+                        {isPositive ? (
+                          <TrendingUp className="w-3 h-3" />
+                        ) : (
+                          <TrendingDown className="w-3 h-3" />
+                        )}
+                        <span>
+                          {isPositive ? '+' : ''}
+                          {changePct.toFixed(2)}%
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
+
+                <ChevronRight className="w-4 h-4 text-muted group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" />
               </button>
             );
           })}

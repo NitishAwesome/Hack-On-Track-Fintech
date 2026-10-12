@@ -274,7 +274,7 @@ export function SectorAnalysisSection({
                 tick={{ fill: 'rgb(var(--foreground))', fontSize: 11 }}
                 stroke="transparent"
               />
-              <Tooltip content={<BarTooltip />} />
+              <Tooltip content={<BarTooltip />} cursor={false} />
               <Bar
                 dataKey="value"
                 radius={[0, 4, 4, 0]}

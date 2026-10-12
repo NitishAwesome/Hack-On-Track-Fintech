@@ -5,64 +5,65 @@ import Link from 'next/link';
 import { RefreshCw, Plus, Upload } from 'lucide-react';
 
 import { PortfolioSummaryMetrics } from './PortfolioSummaryMetrics';
-import { ConsolidatedPortfolioHero } from './ConsolidatedPortfolioHero';
-import { PortfolioHealthSnapshot } from './PortfolioHealthSnapshot';
-import { QuickActionsBar } from './QuickActionsBar';
-import { PortfolioPerformanceSection } from './PortfolioPerformanceSection';
-import { AssetAllocationSection } from './AssetAllocationSection';
-import { HoldingsPreviewSection } from './HoldingsPreviewSection';
-import { BrokerAccountsSection } from './BrokerAccountsSection';
+import { PortfolioOverviewCard } from './PortfolioOverviewCard';
+import { PortfolioInsightsCard } from './PortfolioInsightsCard';
+import { MarketHighlightsCard } from './MarketHighlightsCard';
 import { RecentActivitySection } from './RecentActivitySection';
-import { AIInsightCard } from '@/components/insights/AIInsightCard';
-import { NewsCard } from './NewsCard';
+import { QuickLinksCard } from './QuickLinksCard';
 
 import type { PortfolioSummary, AssetAllocation, HoldingWithMetrics } from '@/types/portfolio';
-import type { BrokerAccountRow, PortfolioSnapshotRow, InvestmentTransactionRow } from '@/types/database';
+import type { BrokerAccountRow, InvestmentTransactionRow } from '@/types/database';
+import { createClient } from '@/lib/supabase/client';
 
 export function FinovaDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [userName, setUserName] = useState<string>('Investor');
 
-  // Section 1: Summary & Allocation
+  // Summary & Allocation
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [allocations, setAllocations] = useState<AssetAllocation[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(true);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
 
-  // Section 2: Holdings
+  // Holdings
   const [holdings, setHoldings] = useState<HoldingWithMetrics[]>([]);
   const [holdingsLoading, setHoldingsLoading] = useState(true);
-  const [holdingsError, setHoldingsError] = useState<string | null>(null);
 
-  // Section 3: Broker Accounts
+  // Broker Accounts
   const [brokers, setBrokers] = useState<BrokerAccountRow[]>([]);
   const [brokersLoading, setBrokersLoading] = useState(true);
-  const [brokersError, setBrokersError] = useState<string | null>(null);
 
-  // Section 4: Snapshots
-  const [snapshots, setSnapshots] = useState<PortfolioSnapshotRow[]>([]);
-  const [snapshotsLoading, setSnapshotsLoading] = useState(true);
-  const [snapshotsError, setSnapshotsError] = useState<string | null>(null);
-
-  // Section 5: Transactions
+  // Transactions
   const [transactions, setTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
-  const [transactionsError, setTransactionsError] = useState<string | null>(null);
 
-  // Fetch Summary & Allocation
+  // Fetch current user display name
+  useEffect(() => {
+    async function loadUser() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const rawName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Investor';
+          setUserName(rawName.charAt(0).toUpperCase() + rawName.slice(1));
+        }
+      } catch {
+        // fallback to Investor
+      }
+    }
+    loadUser();
+  }, []);
+
+  // Fetch Summary
   const fetchSummary = useCallback(async () => {
     try {
       setSummaryLoading(true);
-      setSummaryError(null);
       const res = await fetch('/api/portfolio/summary');
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load portfolio summary');
-      }
+      if (!res.ok) return;
       const data = await res.json();
       setSummary(data.summary || null);
       setAllocations(data.assetAllocation || []);
-    } catch (err) {
-      setSummaryError(err instanceof Error ? err.message : 'Unable to connect to summary service');
+    } catch {
+      // ignore
     } finally {
       setSummaryLoading(false);
     }
@@ -72,16 +73,12 @@ export function FinovaDashboard() {
   const fetchHoldings = useCallback(async () => {
     try {
       setHoldingsLoading(true);
-      setHoldingsError(null);
       const res = await fetch('/api/portfolio/holdings');
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load holdings');
-      }
+      if (!res.ok) return;
       const data = await res.json();
       setHoldings(data.holdings || []);
-    } catch (err) {
-      setHoldingsError(err instanceof Error ? err.message : 'Unable to connect to holdings service');
+    } catch {
+      // ignore
     } finally {
       setHoldingsLoading(false);
     }
@@ -91,37 +88,14 @@ export function FinovaDashboard() {
   const fetchBrokers = useCallback(async () => {
     try {
       setBrokersLoading(true);
-      setBrokersError(null);
       const res = await fetch('/api/brokers');
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load broker accounts');
-      }
+      if (!res.ok) return;
       const data = await res.json();
       setBrokers(data.brokers || []);
-    } catch (err) {
-      setBrokersError(err instanceof Error ? err.message : 'Unable to connect to broker service');
+    } catch {
+      // ignore
     } finally {
       setBrokersLoading(false);
-    }
-  }, []);
-
-  // Fetch Snapshots
-  const fetchSnapshots = useCallback(async () => {
-    try {
-      setSnapshotsLoading(true);
-      setSnapshotsError(null);
-      const res = await fetch('/api/portfolio/snapshots');
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load snapshots');
-      }
-      const data = await res.json();
-      setSnapshots(data.snapshots || []);
-    } catch (err) {
-      setSnapshotsError(err instanceof Error ? err.message : 'Unable to connect to snapshots service');
-    } finally {
-      setSnapshotsLoading(false);
     }
   }, []);
 
@@ -129,16 +103,12 @@ export function FinovaDashboard() {
   const fetchTransactions = useCallback(async () => {
     try {
       setTransactionsLoading(true);
-      setTransactionsError(null);
       const res = await fetch('/api/portfolio/transactions');
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load transactions');
-      }
+      if (!res.ok) return;
       const data = await res.json();
       setTransactions(data.transactions || []);
-    } catch (err) {
-      setTransactionsError(err instanceof Error ? err.message : 'Unable to connect to transactions service');
+    } catch {
+      // ignore
     } finally {
       setTransactionsLoading(false);
     }
@@ -147,19 +117,16 @@ export function FinovaDashboard() {
   // Initial load
   useEffect(() => {
     let active = true;
-    void (async () => {
-      if (active) {
-        fetchSummary();
-        fetchHoldings();
-        fetchBrokers();
-        fetchSnapshots();
-        fetchTransactions();
-      }
-    })();
+    if (active) {
+      fetchSummary();
+      fetchHoldings();
+      fetchBrokers();
+      fetchTransactions();
+    }
     return () => {
       active = false;
     };
-  }, [fetchSummary, fetchHoldings, fetchBrokers, fetchSnapshots, fetchTransactions]);
+  }, [fetchSummary, fetchHoldings, fetchBrokers, fetchTransactions]);
 
   // Sync button handler
   const handleSyncAll = async () => {
@@ -168,51 +135,39 @@ export function FinovaDashboard() {
       fetchSummary(),
       fetchHoldings(),
       fetchBrokers(),
-      fetchSnapshots(),
       fetchTransactions(),
     ]);
     setIsRefreshing(false);
   };
 
   return (
-    <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      {/* Top Banner / Controls */}
+    <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-6">
+      {/* 1. Welcome Hero Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
-          <h1
-            className="text-xl sm:text-2xl font-bold tracking-tight"
-            style={{ color: 'rgb(var(--foreground))' }}
-          >
-            Dashboard
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+            Welcome back, <span className="text-brand">{userName}</span>
           </h1>
-          <p className="text-xs sm:text-sm mt-0.5 text-muted">
-            Unified multi-asset overview across Zerodha, Groww & manual depositories
+          <p className="text-xs sm:text-sm mt-1 text-muted">
+            Here&apos;s a unified view of all your investments across Zerodha, Groww and more.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        {/* Action Controls */}
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={handleSyncAll}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-150 hover:bg-surface-raised"
-            style={{
-              backgroundColor: 'rgb(var(--surface))',
-              borderColor: 'rgb(var(--border))',
-              color: 'rgb(var(--muted))',
-            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-border bg-surface hover:bg-surface-raised text-muted hover:text-foreground transition-all shadow-xs disabled:opacity-50"
+            title="Sync all broker holdings and market valuations"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Sync</span>
+            <span>Sync Accounts</span>
           </button>
 
           <Link
             href="/holdings"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-150 hover:bg-surface-raised"
-            style={{
-              backgroundColor: 'rgb(var(--surface))',
-              borderColor: 'rgb(var(--border))',
-              color: 'rgb(var(--foreground))',
-            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-border bg-surface hover:bg-surface-raised text-foreground transition-all shadow-xs"
           >
             <Upload className="w-3.5 h-3.5" />
             <span>Import CSV</span>
@@ -220,102 +175,66 @@ export function FinovaDashboard() {
 
           <Link
             href="/holdings"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm transition-all duration-150 hover:opacity-95"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-xs transition-all hover:opacity-95"
             style={{
               background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
             }}
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4" />
             <span>Add Investment</span>
           </Link>
         </div>
       </div>
 
-      {/* Row 1: Portfolio Summary Metrics (6 Cards) */}
+      {/* 2. Top KPI Cards: 6 Glowing Metric Blocks in Row */}
       <PortfolioSummaryMetrics
         summary={summary}
         isLoading={summaryLoading}
       />
 
-      {/* Row 2: Consolidated Multi-Broker Hero (PS2 Core: All Your Investments In One Place) */}
-      <ConsolidatedPortfolioHero
-        brokers={brokers}
-        totalHoldingCount={holdings.length}
-        totalCurrentValue={summary?.total_current_value ?? null}
-        totalInvestedValue={summary?.total_invested_value ?? 0}
-      />
-
-      {/* Row 3: Working Quick Actions Bar */}
-      <QuickActionsBar />
-
-      {/* Row 4: Portfolio Performance (8 cols) + Asset Allocation (4 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        <div className="lg:col-span-7 xl:col-span-8 flex flex-col">
-          <PortfolioPerformanceSection
-            snapshots={snapshots}
-            isLoading={snapshotsLoading}
-            error={snapshotsError}
-            onRetry={fetchSnapshots}
-          />
-        </div>
-
-        <div className="lg:col-span-5 xl:col-span-4 flex flex-col">
-          <AssetAllocationSection
+      {/* 3. Middle 3-Column Section: Overview Donut (4) + Insights (4) + Market Highlights (4) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        {/* Col 1: Portfolio Overview Donut + Tabs */}
+        <div className="lg:col-span-4 flex flex-col">
+          <PortfolioOverviewCard
             allocations={allocations}
-            totalValue={summary?.total_current_value ?? null}
-            isLoading={summaryLoading}
-            error={summaryError}
-            onRetry={fetchSummary}
-          />
-        </div>
-      </div>
-
-      {/* Row 5: Portfolio Health Snapshot (Diagnostics from X-Ray & Risk Radar) */}
-      <PortfolioHealthSnapshot
-        holdingCount={holdings.length}
-        brokerCount={brokers.length}
-      />
-
-      {/* Row 6: Holdings Preview (8 cols) + Broker Accounts (4 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        <div className="lg:col-span-7 xl:col-span-8 flex flex-col">
-          <HoldingsPreviewSection
             holdings={holdings}
-            totalCount={holdings.length}
-            isLoading={holdingsLoading}
-            error={holdingsError}
-            onRetry={fetchHoldings}
-          />
-        </div>
-
-        <div className="lg:col-span-5 xl:col-span-4 flex flex-col">
-          <BrokerAccountsSection
             brokers={brokers}
-            isLoading={brokersLoading}
-            error={brokersError}
-            onRetry={fetchBrokers}
+            totalValue={summary?.total_current_value ?? null}
+            isLoading={summaryLoading || holdingsLoading}
           />
+        </div>
+
+        {/* Col 2: Portfolio Insights Diagnostic */}
+        <div className="lg:col-span-4 flex flex-col">
+          <PortfolioInsightsCard
+            summary={summary}
+            holdings={holdings}
+            brokers={brokers}
+            isLoading={summaryLoading || holdingsLoading}
+          />
+        </div>
+
+        {/* Col 3: Market Highlights Live News */}
+        <div className="lg:col-span-4 flex flex-col">
+          <MarketHighlightsCard />
         </div>
       </div>
 
-      {/* Row 7: AI Portfolio Intelligence Highlight */}
-      <div className="w-full">
-        <AIInsightCard insightType="portfolio_summary" />
-      </div>
+      {/* 4. Lower 2-Column Section: Recent Activity Table (7) + Quick Links (5) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        {/* Col 1: Clean Financial Transaction Ledger */}
+        <div className="lg:col-span-7 flex flex-col">
+          <RecentActivitySection
+            transactions={transactions}
+            isLoading={transactionsLoading}
+          />
+        </div>
 
-      {/* Row 8: Recent Activity Ledger (Full Width) */}
-      <div className="w-full">
-        <RecentActivitySection
-          transactions={transactions}
-          isLoading={transactionsLoading}
-          error={transactionsError}
-          onRetry={fetchTransactions}
-        />
-      </div>
-
-      {/* Row 9: Market & Portfolio News Intelligence Preview */}
-      <div className="w-full">
-        <NewsCard />
+        {/* Col 2: 2x2 Quick Links Cards */}
+        <div className="lg:col-span-5 flex flex-col">
+          <QuickLinksCard />
+        </div>
       </div>
     </div>
   );

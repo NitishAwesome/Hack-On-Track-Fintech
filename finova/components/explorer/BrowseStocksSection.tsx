@@ -17,19 +17,18 @@ import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   EXPANDED_NSE_STOCKS,
-  type CatalogInstrument,
 } from '@/lib/market/stockCatalog';
 import { useSharedStockQuotes } from '@/lib/market/sharedMarketStore';
 import {
   Search,
   TrendingUp,
   TrendingDown,
-  Building2,
   ChevronRight,
   ShieldCheck,
   RefreshCw,
   SlidersHorizontal,
 } from 'lucide-react';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
 interface BrowseStocksSectionProps {
   onSelectStock?: (symbol: string) => void;
@@ -229,10 +228,8 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
                   >
                     {/* Company & Symbol */}
                     <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-surface-raised border border-border flex items-center justify-center font-bold text-xs text-foreground group-hover:text-brand group-hover:border-brand/40 transition">
-                          {stock.symbol.slice(0, 2)}
-                        </div>
+                      <div className="flex items-center gap-3">
+                        <CompanyLogo symbol={stock.symbol} name={stock.name} size="sm" />
                         <div>
                           <div className="font-bold text-foreground group-hover:text-brand transition flex items-center gap-1.5">
                             <span>{stock.name}</span>
@@ -240,7 +237,7 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
                               NSE
                             </span>
                           </div>
-                          <div className="text-[11px] text-muted font-mono">
+                          <div className="text-[11px] text-muted font-financial">
                             {stock.symbol}
                           </div>
                         </div>

@@ -142,7 +142,7 @@ export function SectorRiskChart({ sectorBreakdown }: SectorRiskChartProps) {
                   tickLine={false}
                   width={110}
                 />
-                <Tooltip content={<SectorTooltip />} />
+                <Tooltip content={<SectorTooltip />} cursor={false} />
                 <Bar dataKey="percentage" radius={[0, 4, 4, 0]}>
                   {chartData.map((entry, index) => (
                     <Cell key={`sector-cell-${index}`} fill={entry.fill} />
