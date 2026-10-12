@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   HelpCircle,
   Layers,
+  History,
+  CheckCircle2,
 } from 'lucide-react';
 import { PercentageBadge } from '@/components/shared/PercentageBadge';
 import { SkeletonCard, SkeletonChart } from '@/components/shared/Skeletons';
@@ -31,6 +33,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { formatCurrency, formatPercent, ASSET_CLASS_LABELS, cn } from '@/lib/utils';
 import type { HoldingWithMetrics } from '@/types/portfolio';
 import type { PerformanceSummary } from '@/types/financial';
+import type { PortfolioSnapshotRow } from '@/types/database';
 
 async function fetchPerformanceData() {
   const res = await fetch('/api/portfolio/performance');
@@ -41,6 +44,12 @@ async function fetchPerformanceData() {
 async function fetchHoldings() {
   const res = await fetch('/api/portfolio/holdings');
   if (!res.ok) throw new Error('Failed to load holdings');
+  return res.json();
+}
+
+async function fetchSnapshots() {
+  const res = await fetch('/api/portfolio/snapshots');
+  if (!res.ok) throw new Error('Failed to load portfolio snapshots');
   return res.json();
 }
 
@@ -79,10 +88,22 @@ export default function PerformancePage() {
     queryFn: fetchHoldings,
   });
 
+  const { data: snapData, isLoading: isSnapLoading, refetch: refetchSnapshots } = useQuery({
+    queryKey: ['portfolio-snapshots'],
+    queryFn: fetchSnapshots,
+  });
+
+  const [isRecordingSnapshot, setIsRecordingSnapshot] = useState(false);
+  const [snapshotSuccessMsg, setSnapshotSuccessMsg] = useState<string | null>(null);
+
   const holdings: HoldingWithMetrics[] = holdingsData?.holdings ?? [];
   const performance: PerformanceSummary | undefined = perfData?.performance;
+  const snapshots: PortfolioSnapshotRow[] = snapData?.snapshots ?? [];
 
-  const isLoading = isPerfLoading || isHoldingsLoading;
+  const isLoading = isPerfLoading || isHoldingsLoading || isSnapLoading;
+
+  const totalInvested = holdings.reduce((s, h) => s + h.invested_value, 0);
+  const totalValue = holdings.reduce((s, h) => s + (h.current_value ?? h.invested_value), 0);
 
   // Sort by absolute return % for gainers/losers
   const gainers = [...holdings]
@@ -92,19 +113,42 @@ export default function PerformancePage() {
     .sort((a, b) => (a.absolute_return_pct ?? 0) - (b.absolute_return_pct ?? 0))
     .slice(0, 5);
 
-  const chartData =
-    holdings.length > 0
-      ? Array.from({ length: 12 }, (_, i) => {
-          const month = new Date();
-          month.setMonth(month.getMonth() - (11 - i));
-          const factor = 0.85 + (i / 11) * 0.25;
-          return {
-            month: month.toLocaleDateString('en-IN', { month: 'short' }),
-            Invested: holdings.reduce((s, h) => s + h.invested_value, 0) * (0.7 + i * 0.025),
-            Value: holdings.reduce((s, h) => s + (h.current_value ?? 0), 0) * factor,
-          };
-        })
-      : [];
+  const chartData = snapshots.map((s) => ({
+    date: new Date(s.snapshot_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+    Invested: s.invested_value,
+    Value: s.portfolio_value ?? s.invested_value,
+  }));
+
+  const handleRecordSnapshot = async () => {
+    if (holdings.length === 0) return;
+    setIsRecordingSnapshot(true);
+    setSnapshotSuccessMsg(null);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const unrealized = totalValue - totalInvested;
+      const res = await fetch('/api/portfolio/snapshots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          snapshot_date: today,
+          invested_value: Math.round(totalInvested * 100) / 100,
+          portfolio_value: Math.round(totalValue * 100) / 100,
+          unrealized_pnl: Math.round(unrealized * 100) / 100,
+          realized_pnl: performance?.realized_pnl ?? 0,
+          currency: 'INR',
+          completeness_status: 'COMPLETE',
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to record snapshot');
+      await refetchSnapshots();
+      setSnapshotSuccessMsg('Current valuation snapshot successfully recorded!');
+      setTimeout(() => setSnapshotSuccessMsg(null), 4000);
+    } catch (e) {
+      console.error('Error recording snapshot:', e);
+    } finally {
+      setIsRecordingSnapshot(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -305,66 +349,148 @@ export default function PerformancePage() {
         />
       ) : (
         <>
-          {/* Performance Growth Chart */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card p-5"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
-                Portfolio Growth
-              </h2>
-              <span
-                className="text-xs px-2 py-0.5 rounded-md border text-muted"
-                style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)' }}
-              >
-                Capital Invested vs Market Valuation
-              </span>
-            </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="rgb(var(--brand-500))" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="rgb(var(--brand-500))" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorInvested" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="rgb(var(--muted))" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="rgb(var(--muted))" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 11, fill: 'rgb(var(--muted))' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tickFormatter={(v) => formatCurrency(v, true)}
-                  tick={{ fontSize: 11, fill: 'rgb(var(--muted))' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="Invested"
-                  stroke="rgb(var(--muted))"
-                  strokeWidth={1.5}
-                  fill="url(#colorInvested)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="Value"
-                  stroke="rgb(var(--brand-500))"
-                  strokeWidth={2}
-                  fill="url(#colorValue)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </motion.div>
+          {/* Performance Growth Chart OR Accumulating Historical Valuation Snapshots */}
+          {snapshots.length >= 2 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="card p-5"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                  <h2 className="text-sm font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
+                    Portfolio Growth
+                  </h2>
+                  <p className="text-xs text-muted mt-0.5">
+                    Grounded trajectory from {snapshots.length} verified valuation snapshots
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-xs px-2.5 py-1 rounded-md border text-muted"
+                    style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)' }}
+                  >
+                    Capital Invested vs Market Valuation
+                  </span>
+                  <button
+                    onClick={handleRecordSnapshot}
+                    disabled={isRecordingSnapshot}
+                    className="text-xs px-2.5 py-1 rounded-md bg-brand-500/10 text-brand-400 border border-brand-500/20 hover:bg-brand-500/20 transition-colors"
+                  >
+                    {isRecordingSnapshot ? 'Recording...' : '+ Record Today'}
+                  </button>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="rgb(var(--brand-500))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="rgb(var(--brand-500))" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorInvested" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="rgb(var(--muted))" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="rgb(var(--muted))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: 'rgb(var(--muted))' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={(v) => formatCurrency(v, true)}
+                    tick={{ fontSize: 11, fill: 'rgb(var(--muted))' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="Invested"
+                    stroke="rgb(var(--muted))"
+                    strokeWidth={1.5}
+                    fill="url(#colorInvested)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="Value"
+                    stroke="rgb(var(--brand-500))"
+                    strokeWidth={2}
+                    fill="url(#colorValue)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="card p-6 border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm space-y-4"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                    <History className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-100">
+                      Accumulating Historical Valuation Snapshots
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      FINOVA adheres to strict financial integrity: retrospective return curves are never synthesized or fabricated.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                    {snapshots.length} of 2 Snapshots Recorded
+                  </span>
+                  <button
+                    onClick={handleRecordSnapshot}
+                    disabled={isRecordingSnapshot}
+                    className="btn-primary text-xs py-1.5 px-3"
+                  >
+                    {isRecordingSnapshot ? 'Recording...' : 'Record Snapshot Now'}
+                  </button>
+                </div>
+              </div>
+
+              {snapshotSuccessMsg && (
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{snapshotSuccessMsg}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-800">
+                  <div className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Invested Capital</div>
+                  <div className="text-sm font-bold text-slate-200 mt-1">{formatCurrency(totalInvested)}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-800">
+                  <div className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Current Valuation</div>
+                  <div className="text-sm font-bold text-slate-200 mt-1">{formatCurrency(totalValue)}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-800">
+                  <div className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Active Holdings</div>
+                  <div className="text-sm font-bold text-slate-200 mt-1">{holdings.length} Positions</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-800">
+                  <div className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">History Status</div>
+                  <div className="text-sm font-bold text-amber-400 mt-1">
+                    {snapshots.length === 1 ? '1 Snapshot Saved' : 'Awaiting 2nd Point'}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-800/80 pt-3">
+                Daily snapshots are captured during market settlement. Once at least 2 consecutive valuation points are registered, your full interactive trajectory and benchmark comparison will render automatically above.
+              </p>
+            </motion.div>
+          )}
 
           {/* Gainers & Losers */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

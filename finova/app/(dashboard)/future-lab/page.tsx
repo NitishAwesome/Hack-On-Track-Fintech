@@ -77,6 +77,13 @@ async function fetchGoals() {
   return json.data || [];
 }
 
+async function fetchNews() {
+  const res = await fetch('/api/news');
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.articles || [];
+}
+
 interface GoalRowDecorated {
   id: string;
   goal_name: string;
@@ -117,6 +124,12 @@ export default function PortfolioFutureLabPage() {
     queryKey: ['investment-goals'],
     queryFn: fetchGoals,
     staleTime: 30000,
+  });
+
+  const { data: newsArticles = [] } = useQuery({
+    queryKey: ['portfolio-news-future-lab'],
+    queryFn: fetchNews,
+    staleTime: 60000,
   });
 
   // Calculate allocation deterministically & immediately
@@ -374,9 +387,10 @@ export default function PortfolioFutureLabPage() {
             strategyName={STRATEGY_TEMPLATES[selectedStrategy].name}
           />
 
-          {/* Review Your Existing Holdings (X-Ray Holding Outlook) */}
+          {/* Your Holdings — What Should You Research Next? */}
           <ExistingHoldingsReview
             instruments={xrayData?.consolidated_instruments || []}
+            articles={newsArticles}
             onExploreAlternatives={() => setShowEducationModal(true)}
           />
 

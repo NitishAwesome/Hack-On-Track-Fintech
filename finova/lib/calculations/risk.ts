@@ -118,6 +118,8 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
   const emptyResult: RiskMetrics = {
     risk_score: 0,
     risk_label: 'Conservative',
+    is_assessed: false,
+    observed_exposure_label: 'Not Assessed — No Active Holdings',
     hhi: 0,
     equity_weight: 0,
     broker_count: 0,
@@ -139,7 +141,7 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
     concentration_warnings: [],
     diversification_observations: [],
     positive_observations: [],
-    data_quality_warnings: [],
+    data_quality_warnings: ['Portfolio has zero recorded holdings. Risk assessment not applicable until positions are created.'],
     hhi_scaled: 0,
     risk_factors: [],
     operational_risk: {
@@ -432,6 +434,13 @@ export function buildRiskMetrics(holdings: HoldingWithMetrics[]): RiskMetrics {
   return {
     risk_score: riskScore,
     risk_label: riskLabel,
+    is_assessed: true,
+    observed_exposure_label:
+      riskScore < 34
+        ? 'Lower Observed Exposure Risk'
+        : riskScore < 67
+        ? 'Moderate Observed Exposure Risk'
+        : 'Higher Observed Exposure Risk',
     hhi,
     hhi_scaled: hhiScaled,
     equity_weight: equityWeight,

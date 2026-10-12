@@ -128,7 +128,7 @@ export function KeyRiskIndicatorsGrid({
         ? 'N/A'
         : `${xraySummary.cross_broker_overlap_valued_pct.toFixed(1)}%`,
       sub: isSingleBroker
-        ? 'Single broker tracked'
+        ? 'N/A — Additional Broker Data Required'
         : `${xraySummary.cross_broker_overlaps_count} duplicate stock(s)`,
       icon: <Briefcase className="w-4 h-4 text-brand-500" />,
       status:
@@ -136,7 +136,7 @@ export function KeyRiskIndicatorsGrid({
           ? 'warning'
           : 'healthy',
       tooltip: isSingleBroker
-        ? 'With only one tracked broker, cross-broker overlap is not assessable.'
+        ? 'With only one tracked broker, cross-broker overlap is not assessable (Additional Broker Data Required).'
         : 'Duplicate identical holdings held across different broker accounts.',
     },
   ];

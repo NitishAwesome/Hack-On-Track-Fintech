@@ -270,7 +270,59 @@ export function generateSmartRiskObservations(
     });
   }
 
-  // 9. Positive Diversification Observation (if healthy)
+  // 9. Alternative Asset & Fixed-Income Exposure (Section 18 requirement)
+  if (xray.alternatives_breakdown?.has_alternatives) {
+    const alts = xray.alternatives_breakdown;
+    
+    // REIT / InvIT Observation
+    if (alts.reits_invits.trusts_count > 0) {
+      const reitPct = alts.reits_invits.combined_weight_pct.toFixed(1);
+      observations.push({
+        id: 'obs-reit-invit-exposure',
+        category: 'asset_class',
+        severity: alts.reits_invits.combined_weight_pct > 25 ? 'warning' : 'info',
+        title: `Commercial Real Estate & Infrastructure Allocation (${reitPct}%)`,
+        calculatedFigure: `${reitPct}% across ${alts.reits_invits.trusts_count} trust(s)`,
+        whyItMatters:
+          'REITs and InvITs provide quarterly cash distributions from tenant leases and infrastructure tariffs. However, they are sensitive to rising benchmark bond yields and commercial occupancy vacancy cycles, differing fundamentally from standard operating equities.',
+        contributingHoldings: alts.reits_invits.trusts.map(
+          (t) => `${t.name} (${t.symbol}): ${t.percentage_of_valued.toFixed(1)}% of valued capital`
+        ),
+        coverageLimitation: coverageNote,
+        neutralNextStep:
+          'Review underlying property occupancy and remaining concession lifespans in the dedicated REIT/InvIT discovery hubs.',
+      });
+    }
+
+    // Bond & Fixed Income Observation
+    if (alts.bonds.positions_count > 0) {
+      const bondPct = alts.bonds.bond_portfolio_weight_pct.toFixed(1);
+      const sov = alts.bonds.credit_rating_distribution.find((r) =>
+        r.rating_tier.toLowerCase().includes('sovereign')
+      );
+      const sovNote = sov ? ` (${sov.percentage_of_valued.toFixed(1)}% Sovereign)` : '';
+      observations.push({
+        id: 'obs-bond-credit-maturity',
+        category: 'asset_class',
+        severity: 'info',
+        title: `Fixed-Income & Bond Allocation (${bondPct}%)`,
+        calculatedFigure: `${alts.bonds.positions_count} debt security position(s)${sovNote}`,
+        whyItMatters:
+          'Contractual coupon debt dampens equity volatility. While sovereign G-Secs carry zero INR default risk, corporate debt carries issuer credit risk and longer-tenor bonds drop in market price when interest rates rise.',
+        contributingHoldings: alts.bonds.issuer_concentration.map(
+          (iss) => `${iss.issuer}: Invested ${formatIndianCurrency(iss.invested_value)}`
+        ),
+        coverageLimitation:
+          alts.bonds.unpriced_positions_count > 0
+            ? `${alts.bonds.unpriced_positions_count} bond holding(s) trade infrequently on secondary exchanges.`
+            : 'Based on verified trade disclosures.',
+        neutralNextStep:
+          'Inspect your bond maturity ladder in Investment X-Ray to ensure cash flow redemption matches your liquidity needs.',
+      });
+    }
+  }
+
+  // 10. Positive Diversification Observation (if healthy)
   if (risk.top_holding_weight < 0.25 && (consolidated_instruments.length < 5 || risk.top_five_holding_weight < 0.6) && overlaps.length === 0) {
     observations.push({
       id: 'obs-healthy-diversification',
@@ -407,14 +459,37 @@ export function generateRiskExplanation(
   xray: UnifiedXRayAnalysis,
   risk: RiskMetrics
 ): RiskExplanation {
+  if (xray.consolidated_instruments.length === 0 || risk.is_assessed === false) {
+    return {
+      narrative:
+        'No active portfolio holdings were detected. Portfolio risk and concentration screening requires recorded positions to measure single-stock tilts, sector allocations, and asset-class exposures.',
+      primaryDrivers: [
+        'Zero active investment holdings recorded across connected broker accounts.',
+        'Concentration metrics and risk screening cannot be calculated without deployed capital.',
+      ],
+      riskClassificationRationale:
+        'An empty portfolio is classified as "Not Assessed — No Active Holdings" rather than Low Risk, because mathematical risk screening models cannot evaluate unallocated capital.',
+      factorBreakdownSummary:
+        'Screening Score: Not Assessed (requires active portfolio holdings).',
+    };
+  }
+
   const topInst = xray.consolidated_instruments[0];
   const topWeightPct = (xray.summary.top_holding_weight).toFixed(1);
   const top3WeightPct = (xray.summary.top_3_holdings_weight).toFixed(1);
   const equityPct = (risk.equity_weight * 100).toFixed(1);
   const hhiVal = xray.summary.hhi;
 
+  const exposureCategory =
+    risk.observed_exposure_label ||
+    (risk.risk_label === 'Aggressive'
+      ? 'Higher Observed Exposure Risk'
+      : risk.risk_label === 'Moderate'
+      ? 'Moderate Observed Exposure Risk'
+      : 'Lower Observed Exposure Risk');
+
   const topDisplayName = topInst ? `${topInst.name} (${topInst.symbol})` : 'Top Holding';
-  const narrative = `Your largest investment (${topDisplayName}) accounts for approximately ${topWeightPct}% of your valued portfolio. The top three holdings represent ${top3WeightPct}%, and equities account for ${equityPct}%. These exposures explain the ${risk.risk_label} screening result.`;
+  const narrative = `Your largest investment (${topDisplayName}) accounts for approximately ${topWeightPct}% of your valued portfolio. The top three holdings represent ${top3WeightPct}%, and equities account for ${equityPct}%. These exposures explain the ${exposureCategory} screening classification.`;
 
   const primaryDrivers: string[] = [];
 
@@ -462,13 +537,13 @@ export function generateRiskExplanation(
 
   const riskClassificationRationale =
     risk.risk_label === 'Aggressive'
-      ? 'A portfolio with substantial single-stock, sector, or equity concentration is categorized as Higher Observed Screening Risk because adverse company-specific or cyclical events will exert a dominant impact on capital.'
+      ? 'A portfolio with substantial single-stock, sector, or equity concentration is categorized as Higher Observed Exposure Risk because adverse company-specific or cyclical events will exert a dominant impact on capital.'
       : risk.risk_label === 'Moderate'
-      ? 'A portfolio with moderate concentration or balanced equity exposure is categorized as Moderate Observed Screening Risk, reflecting intermediate dispersion with some sector or stock tilts.'
-      : 'A portfolio with low concentration (HHI < 1,500), distributed position sizes, and multi-asset exposure is categorized as Lower Observed Screening Risk.';
+      ? 'A portfolio with moderate concentration or balanced equity exposure is categorized as Moderate Observed Exposure Risk, reflecting intermediate dispersion with some sector or stock tilts.'
+      : 'A portfolio with low concentration (HHI < 1,500), distributed position sizes, and multi-asset exposure is categorized as Lower Observed Exposure Risk.';
 
   const factorBreakdownSummary =
-    `Screening Score: ${risk.risk_score} / 100 based on Diversification/HHI (35%), Equity Allocation (35%), Single-Stock Exposure (18%), and Sector Concentration (12%).`;
+    `Screening Score: ${risk.risk_score} / 100 based on Diversification/HHI (35%), Equity Allocation (35%), Single-Stock Exposure (18%), and Sector Concentration (12%). These heuristic factors screen exposure but do not predict future losses.`;
 
   return {
     narrative,

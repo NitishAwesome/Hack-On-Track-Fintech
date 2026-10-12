@@ -12,6 +12,7 @@
 // ============================================================
 
 import React from 'react';
+import Link from 'next/link';
 import {
   PieChart,
   Pie,
@@ -27,6 +28,7 @@ import {
   Shield,
   Coins,
   Building,
+  ArrowRight,
 } from 'lucide-react';
 import {
   type StrategyAllocationResult,
@@ -255,6 +257,15 @@ export const SimulatedAllocationDisplay: React.FC<SimulatedAllocationDisplayProp
             <p className="text-[10px] text-slate-400 mt-1">
               Contractual coupon cash flows and emergency liquidity cushion.
             </p>
+            <div className="pt-2">
+              <Link
+                href="/bonds"
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
+              >
+                <span>Explore Bond Options</span>
+                <ArrowRight className="w-2.5 h-2.5" />
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -301,6 +312,22 @@ export const SimulatedAllocationDisplay: React.FC<SimulatedAllocationDisplayProp
             <p className="text-[10px] text-slate-400 mt-1">
               Quarterly NDCF dividend distributions from commercial properties.
             </p>
+            <div className="pt-2 flex items-center gap-3">
+              <Link
+                href="/reit"
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-pink-400 hover:text-pink-300 transition-colors"
+              >
+                <span>Explore REIT Options</span>
+                <ArrowRight className="w-2.5 h-2.5" />
+              </Link>
+              <Link
+                href="/invit"
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-cyan-400 hover:text-cyan-300 transition-colors"
+              >
+                <span>Explore InvIT Options</span>
+                <ArrowRight className="w-2.5 h-2.5" />
+              </Link>
+            </div>
           </div>
         </div>
       </div>

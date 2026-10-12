@@ -1,25 +1,16 @@
 import type { Metadata } from 'next';
-import { AlternativeInvestmentExplorer } from '@/components/explorer/AlternativeInvestmentExplorer';
+import { BondsDiscoveryView } from '@/components/alternatives/BondsDiscoveryView';
 
 export const metadata: Metadata = {
-  title: 'Bonds & Fixed Income Explorer — FINOVA',
+  title: 'Bonds & Fixed Income Screener — FINOVA',
   description:
-    'Learn how bonds, G-Secs, and debentures work in India, coupon versus yield, credit rating risks, and duration sensitivity.',
+    'Screener for Indian Sovereign G-Secs, PSU Bonds, and Corporate NCDs. Understand contractual coupon vs YTM, credit rating opinions, and duration risks.',
 };
 
 export default function BondsPage() {
   return (
     <div className="page-container space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Bonds & Fixed Income Securities
-        </h1>
-        <p className="text-sm text-muted mt-1">
-          Explore Government Securities, SDLs, and Corporate NCDs. Understand coupon vs yield, maturity, and duration risks.
-        </p>
-      </div>
-
-      <AlternativeInvestmentExplorer initialCategory="bond" />
+      <BondsDiscoveryView />
     </div>
   );
 }

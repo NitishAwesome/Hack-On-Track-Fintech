@@ -89,9 +89,16 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
       {/* Header and Category Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/40 pb-4">
         <div>
-          <h3 className="text-base font-bold text-foreground tracking-tight">Market Movers</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-bold text-foreground tracking-tight">
+              Top Movers Among Tracked Stocks
+            </h3>
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
+              Tracked Universe (20 NSE Equities)
+            </span>
+          </div>
           <p className="text-xs text-muted mt-0.5">
-            Discover active equities across the FINOVA benchmark tracking universe.
+            Rankings reflect latest available market quotes across the FINOVA tracked universe. Does not screen all 2,000+ NSE listed securities.
           </p>
         </div>
 
@@ -148,14 +155,15 @@ export function TrackedMoversSection({ onSelectStock }: TrackedMoversSectionProp
         </div>
       </div>
 
-      {/* Limited-Universe Disclosure Banner (Mandatory as per Section 6) */}
-      <div className="flex items-start gap-2 p-2.5 rounded-xl bg-zinc-900/50 border border-zinc-800/80 text-[11px] text-muted">
-        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-        <span>
-          <strong className="text-zinc-300">Tracking Scope Disclosure:</strong>{' '}
-          {moversData?.universeDisclosure ||
-            'Top movers among tracked FINOVA universe (20 major NSE benchmark equities). Free-tier market data does not screen the entire 2,000+ NSE listed universe in real-time.'}
-        </span>
+      {/* Intraday & Tracking Scope Disclosure Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-zinc-900/50 border border-zinc-800/80 text-[11px] text-muted">
+        <div className="flex items-start gap-2">
+          <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <span>
+            <strong className="text-zinc-300">Session &amp; Scope Context:</strong>{' '}
+            Prices reflect latest available provider feed (EOD or ~15m delayed exchange quotes). Movement percentages measure change from previous completed session close; they do not represent verified tick-by-tick live intraday order books.
+          </span>
+        </div>
       </div>
 
       {/* Content Grid */}

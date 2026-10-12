@@ -15,6 +15,7 @@ import type {
   BrokerAccount,
   AssetClass,
   Exchange,
+  ObservedExposureRiskLabel,
 } from '../../types/portfolio.ts';
 import { roundCurrency, roundPercent, roundQuantity } from './portfolio.ts';
 import { isPriceStale, buildRiskMetrics, computeHHI } from './risk.ts';
@@ -132,7 +133,8 @@ export interface UnifiedXRayAnalysis {
     hhi: number;
     hhi_label: 'Low Concentration' | 'Moderate Concentration' | 'High Concentration';
     risk_score: number;
-    risk_label: 'Conservative' | 'Moderate' | 'Aggressive';
+    risk_label: 'Conservative' | 'Moderate' | 'Aggressive' | ObservedExposureRiskLabel;
+    observed_exposure_label?: ObservedExposureRiskLabel;
     top_sector: string | null;
     top_sector_weight: number;
     top_asset_class: string;
@@ -189,6 +191,59 @@ export interface UnifiedXRayAnalysis {
   };
   risk_reduction_actions: RiskReductionAction[];
   portfolio_interpretation: PortfolioInterpretation;
+  alternatives_breakdown?: AlternativeHoldingsAnalysis;
+}
+
+export interface AlternativeHoldingsAnalysis {
+  has_alternatives: boolean;
+  total_alternatives_invested: number;
+  total_alternatives_value: number | null;
+  alternatives_percentage_of_valued: number;
+  reits_invits: {
+    total_invested: number;
+    total_current_value: number | null;
+    combined_weight_pct: number;
+    trusts_count: number;
+    trusts: Array<{
+      canonical_key: string;
+      symbol: string;
+      name: string;
+      asset_class: 'reit' | 'invit';
+      invested_value: number;
+      current_value: number | null;
+      percentage_of_valued: number;
+      is_quoted: boolean;
+      distribution_info: string;
+    }>;
+  };
+  bonds: {
+    total_invested: number;
+    total_current_value: number | null;
+    bond_portfolio_weight_pct: number;
+    positions_count: number;
+    priced_positions_count: number;
+    unpriced_positions_count: number;
+    pricing_liquidity_warning: string | null;
+    estimated_annual_coupon_income: number | null;
+    issuer_concentration: Array<{
+      issuer: string;
+      invested_value: number;
+      current_value: number | null;
+      percentage_of_valued: number;
+    }>;
+    credit_rating_distribution: Array<{
+      rating_tier: string;
+      invested_value: number;
+      current_value: number | null;
+      percentage_of_valued: number;
+    }>;
+    maturity_ladder: {
+      under_3_years: { value: number; percentage: number; count: number };
+      three_to_seven_years: { value: number; percentage: number; count: number };
+      over_seven_years: { value: number; percentage: number; count: number };
+      unspecified: { value: number; percentage: number; count: number };
+    };
+  };
 }
 
 /**
@@ -676,6 +731,11 @@ export function computeUnifiedXRay(
   >();
 
   for (const inst of consolidatedInstruments) {
+    // Strictly adhere to PS2 Section 16: Do not force equity-specific sector analysis onto debt/bonds
+    if (inst.asset_class === 'bond') {
+      continue;
+    }
+
     const rawSector = inst.sector?.trim();
     const isClassified = Boolean(
       rawSector && rawSector.length > 0 && rawSector.toLowerCase() !== 'unclassified'
@@ -983,6 +1043,216 @@ export function computeUnifiedXRay(
   }
   researchPrioritiesList.push('Review overall asset allocation against your stated investment horizon and risk budget.');
 
+  // 8. Alternatives & Fixed-Income Breakdown (REITs, InvITs, and Bonds)
+  const reitInvitList = consolidatedInstruments.filter(
+    (i) => i.asset_class === 'reit' || i.asset_class === 'invit'
+  );
+  const bondList = consolidatedInstruments.filter((i) => i.asset_class === 'bond');
+  const hasAlternatives = reitInvitList.length > 0 || bondList.length > 0;
+
+  let totalAltsInvested = 0;
+  let totalAltsValued: number | null = null;
+  let hasAnyAltsValued = false;
+
+  for (const inst of [...reitInvitList, ...bondList]) {
+    totalAltsInvested += inst.total_invested_value;
+    if (inst.current_value !== null) {
+      hasAnyAltsValued = true;
+      totalAltsValued = (totalAltsValued ?? 0) + inst.current_value;
+    }
+  }
+
+  const altsPctOfValued =
+    hasAnyAltsValued && marketValuedCapital && marketValuedCapital > 0
+      ? roundPercent(((totalAltsValued ?? 0) / marketValuedCapital) * 100)
+      : 0;
+
+  // REITs & InvITs
+  let reitInvitInvested = 0;
+  let reitInvitValued: number | null = null;
+  let hasReitValued = false;
+
+  const trustBreakdown = reitInvitList.map((t) => {
+    reitInvitInvested += t.total_invested_value;
+    if (t.current_value !== null) {
+      hasReitValued = true;
+      reitInvitValued = (reitInvitValued ?? 0) + t.current_value;
+    }
+    const tWeight =
+      t.current_value !== null && marketValuedCapital && marketValuedCapital > 0
+        ? roundPercent((t.current_value / marketValuedCapital) * 100)
+        : 0;
+
+    return {
+      canonical_key: t.canonical_key,
+      symbol: t.symbol,
+      name: t.name,
+      asset_class: t.asset_class as 'reit' | 'invit',
+      invested_value: t.total_invested_value,
+      current_value: t.current_value,
+      percentage_of_valued: tWeight,
+      is_quoted: t.is_quoted,
+      distribution_info:
+        t.asset_class === 'reit'
+          ? 'Quarterly SEBI NDCF real estate rental cash distributions'
+          : 'Quarterly infrastructure toll/tariff cash distributions with capital amortization',
+    };
+  });
+
+  const reitCombinedWeight =
+    hasReitValued && marketValuedCapital && marketValuedCapital > 0
+      ? roundPercent(((reitInvitValued ?? 0) / marketValuedCapital) * 100)
+      : 0;
+
+  // Bonds
+  let bondInvested = 0;
+  let bondValued: number | null = null;
+  let hasBondValued = false;
+  let bondUnpricedCount = 0;
+  let bondPricedCount = 0;
+
+  const issuerMap = new Map<string, { invested: number; valued: number | null }>();
+  const ratingMap = new Map<string, { invested: number; valued: number | null }>();
+  const maturityLadder = {
+    under_3_years: { value: 0, percentage: 0, count: 0 },
+    three_to_seven_years: { value: 0, percentage: 0, count: 0 },
+    over_seven_years: { value: 0, percentage: 0, count: 0 },
+    unspecified: { value: 0, percentage: 0, count: 0 },
+  };
+
+  for (const b of bondList) {
+    bondInvested += b.total_invested_value;
+    if (b.current_value !== null) {
+      hasBondValued = true;
+      bondValued = (bondValued ?? 0) + b.current_value;
+      bondPricedCount += 1;
+    } else {
+      bondUnpricedCount += 1;
+    }
+
+    const issuerName =
+      b.name.includes('Government') || b.symbol.startsWith('GS') || b.symbol.includes('GSEC')
+        ? 'Government of India (Sovereign)'
+        : b.name.split(' ')[0] || 'Listed Issuer';
+
+    if (!issuerMap.has(issuerName)) {
+      issuerMap.set(issuerName, { invested: 0, valued: null });
+    }
+    const iss = issuerMap.get(issuerName)!;
+    iss.invested += b.total_invested_value;
+    if (b.current_value !== null) {
+      iss.valued = (iss.valued ?? 0) + b.current_value;
+    }
+
+    const isSovereign =
+      b.name.includes('Government') || b.symbol.startsWith('GS') || b.symbol.includes('GSEC');
+    const ratingTier = isSovereign ? 'Sovereign (Zero Credit Risk)' : 'AAA / High Grade Corporate';
+
+    if (!ratingMap.has(ratingTier)) {
+      ratingMap.set(ratingTier, { invested: 0, valued: null });
+    }
+    const rtier = ratingMap.get(ratingTier)!;
+    rtier.invested += b.total_invested_value;
+    if (b.current_value !== null) {
+      rtier.valued = (rtier.valued ?? 0) + b.current_value;
+    }
+
+    const bVal = b.current_value ?? b.total_invested_value;
+    const matchYear = b.symbol.match(/20(\d{2})/) || b.name.match(/20(\d{2})/);
+    if (matchYear) {
+      const year = parseInt(`20${matchYear[1]}`, 10);
+      const currentYear = new Date().getFullYear();
+      const diffYears = year - currentYear;
+      if (diffYears < 3) {
+        maturityLadder.under_3_years.value += bVal;
+        maturityLadder.under_3_years.count += 1;
+      } else if (diffYears <= 7) {
+        maturityLadder.three_to_seven_years.value += bVal;
+        maturityLadder.three_to_seven_years.count += 1;
+      } else {
+        maturityLadder.over_seven_years.value += bVal;
+        maturityLadder.over_seven_years.count += 1;
+      }
+    } else {
+      maturityLadder.three_to_seven_years.value += bVal;
+      maturityLadder.three_to_seven_years.count += 1;
+    }
+  }
+
+  const bondTotalBase = (bondValued ?? bondInvested) || 1;
+  maturityLadder.under_3_years.percentage = roundPercent(
+    (maturityLadder.under_3_years.value / bondTotalBase) * 100
+  );
+  maturityLadder.three_to_seven_years.percentage = roundPercent(
+    (maturityLadder.three_to_seven_years.value / bondTotalBase) * 100
+  );
+  maturityLadder.over_seven_years.percentage = roundPercent(
+    (maturityLadder.over_seven_years.value / bondTotalBase) * 100
+  );
+
+  const bondPortfolioWeight =
+    hasBondValued && marketValuedCapital && marketValuedCapital > 0
+      ? roundPercent(((bondValued ?? 0) / marketValuedCapital) * 100)
+      : 0;
+
+  const issuerConcentration = Array.from(issuerMap.entries()).map(([issuer, data]) => {
+    const val = data.valued;
+    const pct =
+      val !== null && marketValuedCapital && marketValuedCapital > 0
+        ? roundPercent((val / marketValuedCapital) * 100)
+        : 0;
+    return {
+      issuer,
+      invested_value: roundCurrency(data.invested),
+      current_value: val !== null ? roundCurrency(val) : null,
+      percentage_of_valued: pct,
+    };
+  });
+
+  const creditRatingDistribution = Array.from(ratingMap.entries()).map(([rating_tier, data]) => {
+    const val = data.valued;
+    const pct =
+      val !== null && marketValuedCapital && marketValuedCapital > 0
+        ? roundPercent((val / marketValuedCapital) * 100)
+        : 0;
+    return {
+      rating_tier,
+      invested_value: roundCurrency(data.invested),
+      current_value: val !== null ? roundCurrency(val) : null,
+      percentage_of_valued: pct,
+    };
+  });
+
+  const alternativesBreakdown: AlternativeHoldingsAnalysis = {
+    has_alternatives: hasAlternatives,
+    total_alternatives_invested: roundCurrency(totalAltsInvested),
+    total_alternatives_value: totalAltsValued !== null ? roundCurrency(totalAltsValued) : null,
+    alternatives_percentage_of_valued: altsPctOfValued,
+    reits_invits: {
+      total_invested: roundCurrency(reitInvitInvested),
+      total_current_value: reitInvitValued !== null ? roundCurrency(reitInvitValued) : null,
+      combined_weight_pct: reitCombinedWeight,
+      trusts_count: trustBreakdown.length,
+      trusts: trustBreakdown,
+    },
+    bonds: {
+      total_invested: roundCurrency(bondInvested),
+      total_current_value: bondValued !== null ? roundCurrency(bondValued) : null,
+      bond_portfolio_weight_pct: bondPortfolioWeight,
+      positions_count: bondList.length,
+      priced_positions_count: bondPricedCount,
+      unpriced_positions_count: bondUnpricedCount,
+      pricing_liquidity_warning:
+        bondUnpricedCount > 0
+          ? `${bondUnpricedCount} bond position(s) lack active secondary market quotes; yield calculations excluded.`
+          : null,
+      estimated_annual_coupon_income: null,
+      issuer_concentration: issuerConcentration,
+      credit_rating_distribution: creditRatingDistribution,
+      maturity_ladder: maturityLadder,
+    },
+  };
+
   const compositionSummary =
     `Your portfolio contains ${groupingMap.size} distinct instrument(s) across ${assetClassesCount} asset class(es) and ${classifiedSectorsCount} classified sector(s), tracked across ${Math.max(distinctBrokerAccountsCount, 1)} broker account(s). Total capital invested is ${formatIndianCurrency(totalInvested)}, with valued market capital of ${marketValuedCapital !== null ? formatIndianCurrency(marketValuedCapital) : 'partially available'}.`;
 
@@ -1026,6 +1296,7 @@ export function computeUnifiedXRay(
       hhi_label: hhiLabel,
       risk_score: riskMetrics.risk_score,
       risk_label: riskMetrics.risk_label,
+      observed_exposure_label: riskMetrics.observed_exposure_label,
       top_sector: topSector,
       top_sector_weight: roundPercent(topSectorWeight * 100),
       top_asset_class: topAssetClass,
@@ -1037,6 +1308,7 @@ export function computeUnifiedXRay(
     asset_class_breakdown: assetClassBreakdown,
     broker_breakdown: brokerBreakdown,
     sector_breakdown: sectorBreakdown,
+    alternatives_breakdown: alternativesBreakdown,
     data_quality: {
       total_positions: holdings.length,
       quoted_positions: pricedPositionsCount,

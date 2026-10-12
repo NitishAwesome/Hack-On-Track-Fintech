@@ -249,7 +249,7 @@ Please respond adhering strictly to the system instructions.`;
             break;
           }
         }
-      } catch (_err) {
+      } catch {
         // Try next candidate model
       }
     }

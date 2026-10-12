@@ -31,28 +31,34 @@ export function RiskOverviewCard({
 }: RiskOverviewCardProps) {
   const [showMethodologyModal, setShowMethodologyModal] = useState(false);
 
-  const score = baseMetrics.risk_score;
-  const angle = -135 + (score / 100) * 270;
-  const color =
-    score < 34
-      ? 'rgb(var(--gain))'
-      : score < 67
-      ? 'rgb(var(--warning))'
-      : 'rgb(var(--loss))';
+  const isUnassessed = baseMetrics.is_assessed === false || xraySummary.total_positions_count === 0;
 
-  const labelBadgeClass =
-    baseMetrics.risk_label === 'Conservative'
-      ? 'bg-gain/10 text-gain border-gain/20'
-      : baseMetrics.risk_label === 'Moderate'
-      ? 'bg-warning/10 text-warning border-warning/20'
-      : 'bg-loss/10 text-loss border-loss/20';
+  const score = isUnassessed ? 0 : baseMetrics.risk_score;
+  const angle = isUnassessed ? -135 : -135 + (score / 100) * 270;
+  const color = isUnassessed
+    ? 'rgb(var(--muted))'
+    : score < 34
+    ? 'rgb(var(--gain))'
+    : score < 67
+    ? 'rgb(var(--warning))'
+    : 'rgb(var(--loss))';
 
-  const riskDisplayCategory =
-    baseMetrics.risk_label === 'Conservative'
-      ? 'Lower observed exposure risk'
-      : baseMetrics.risk_label === 'Moderate'
-      ? 'Moderate observed exposure risk'
-      : 'Higher observed exposure risk';
+  const labelBadgeClass = isUnassessed
+    ? 'bg-slate-800 text-slate-400 border-slate-700'
+    : baseMetrics.risk_label === 'Conservative'
+    ? 'bg-gain/10 text-gain border-gain/20'
+    : baseMetrics.risk_label === 'Moderate'
+    ? 'bg-warning/10 text-warning border-warning/20'
+    : 'bg-loss/10 text-loss border-loss/20';
+
+  const riskDisplayCategory = isUnassessed
+    ? 'Not Assessed — No Active Holdings'
+    : baseMetrics.observed_exposure_label ||
+      (baseMetrics.risk_label === 'Conservative'
+        ? 'Lower Observed Exposure Risk'
+        : baseMetrics.risk_label === 'Moderate'
+        ? 'Moderate Observed Exposure Risk'
+        : 'Higher Observed Exposure Risk');
 
   return (
     <div className="card p-6 relative overflow-hidden border border-border">
@@ -116,11 +122,11 @@ export function RiskOverviewCard({
 
           <div className="text-center -mt-2">
             <span className="text-4xl font-extrabold font-mono tracking-tight" style={{ color }}>
-              {score}
+              {isUnassessed ? '—' : score}
             </span>
-            <span className="text-xs text-muted font-mono ml-1">/ 100</span>
+            <span className="text-xs text-muted font-mono ml-1">{isUnassessed ? '' : '/ 100'}</span>
             <p className="text-[11px] text-muted uppercase tracking-wider font-semibold mt-0.5">
-              Screening Score
+              {isUnassessed ? 'Not Assessed' : 'Screening Score'}
             </p>
           </div>
         </div>

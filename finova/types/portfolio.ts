@@ -174,9 +174,17 @@ export interface SectorAllocation {
   unquoted_count?: number;
 }
 
+export type ObservedExposureRiskLabel =
+  | 'Lower Observed Exposure Risk'
+  | 'Moderate Observed Exposure Risk'
+  | 'Higher Observed Exposure Risk'
+  | 'Not Assessed — No Active Holdings';
+
 export interface RiskMetrics {
-  risk_score: number;           // 0–100
-  risk_label: 'Conservative' | 'Moderate' | 'Aggressive';
+  risk_score: number;           // 0–100 (0 when unassessed)
+  risk_label: 'Conservative' | 'Moderate' | 'Aggressive' | ObservedExposureRiskLabel;
+  is_assessed?: boolean;        // false when portfolio has 0 active holdings
+  observed_exposure_label?: ObservedExposureRiskLabel; // User-facing educational classification
   hhi: number;                  // 0–1 Herfindahl-Hirschman Index
   equity_weight: number;        // 0–1 fraction in equities
   broker_count: number;

@@ -10,6 +10,7 @@ import type {
   InvestmentInstrumentRow,
   InstrumentPriceRow,
   InvestmentTransactionRow,
+  PortfolioSnapshotRow,
   AssetCategory,
   ExchangeCode,
 } from '@/types/database';
@@ -515,6 +516,7 @@ interface LocalPortfolioState {
   holdings: HoldingRow[];
   custom_instruments: InvestmentInstrumentRow[];
   transactions: InvestmentTransactionRow[];
+  snapshots: PortfolioSnapshotRow[];
 }
 
 const STORAGE_KEY = 'finova_user_portfolio_v1';
@@ -525,6 +527,7 @@ let serverState: LocalPortfolioState = {
   holdings: [],
   custom_instruments: [],
   transactions: [],
+  snapshots: [],
 };
 
 export class PortfolioStorage {
@@ -543,6 +546,7 @@ export class PortfolioStorage {
             holdings: parsed.holdings || [],
             custom_instruments: parsed.custom_instruments || [],
             transactions: parsed.transactions || [],
+            snapshots: parsed.snapshots || [],
           };
         }
       } catch {
@@ -569,6 +573,7 @@ export class PortfolioStorage {
       holdings: [],
       custom_instruments: [],
       transactions: [],
+      snapshots: [],
     };
     this.dynamicPrices.clear();
     if (this.isClient()) {
@@ -1376,5 +1381,41 @@ export class PortfolioStorage {
     }
 
     return null;
+  }
+
+  // ─── Portfolio Snapshots ────────────────────────────────────
+
+  public static getSnapshots(userId: string = 'current_user'): PortfolioSnapshotRow[] {
+    const state = this.getState();
+    const snaps = state.snapshots || [];
+    return snaps
+      .filter((s) => !userId || s.user_id === userId || s.user_id === 'current_user')
+      .sort((a, b) => new Date(a.snapshot_date).getTime() - new Date(b.snapshot_date).getTime());
+  }
+
+  public static recordSnapshot(
+    snapshot: Omit<PortfolioSnapshotRow, 'id' | 'created_at'>
+  ): PortfolioSnapshotRow {
+    const state = this.getState();
+    if (!state.snapshots) {
+      state.snapshots = [];
+    }
+    const id = `snap-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+    const newSnapshot: PortfolioSnapshotRow = {
+      ...snapshot,
+      id,
+      created_at: now,
+    };
+    const existingIdx = state.snapshots.findIndex(
+      (s) => s.user_id === snapshot.user_id && s.snapshot_date === snapshot.snapshot_date
+    );
+    if (existingIdx !== -1) {
+      state.snapshots[existingIdx] = newSnapshot;
+    } else {
+      state.snapshots.push(newSnapshot);
+    }
+    this.saveState(state);
+    return newSnapshot;
   }
 }

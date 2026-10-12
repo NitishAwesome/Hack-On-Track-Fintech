@@ -19,12 +19,16 @@ export function WhyThisClassification({
 }: WhyThisClassificationProps) {
   const [isMethodologyExpanded, setIsMethodologyExpanded] = useState(false);
 
-  const riskDisplayCategory =
-    baseMetrics.risk_label === 'Conservative'
-      ? 'Lower Observed Exposure Risk'
-      : baseMetrics.risk_label === 'Moderate'
-      ? 'Moderate Observed Exposure Risk'
-      : 'Higher Observed Exposure Risk';
+  const isUnassessed = baseMetrics.is_assessed === false;
+
+  const riskDisplayCategory = isUnassessed
+    ? 'Not Assessed — No Active Holdings'
+    : baseMetrics.observed_exposure_label ||
+      (baseMetrics.risk_label === 'Conservative'
+        ? 'Lower Observed Exposure Risk'
+        : baseMetrics.risk_label === 'Moderate'
+        ? 'Moderate Observed Exposure Risk'
+        : 'Higher Observed Exposure Risk');
 
   return (
     <div className="card p-5 space-y-4 border border-border">

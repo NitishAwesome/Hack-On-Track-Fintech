@@ -11,7 +11,7 @@ import { BrowseStocksSection } from './BrowseStocksSection';
 import { SectorDiscoverySection } from './SectorDiscoverySection';
 import { CommoditiesOverview } from './CommoditiesOverview';
 import { IpoDiscoverySection } from './IpoDiscoverySection';
-import { AlternativeInvestmentExplorer } from './AlternativeInvestmentExplorer';
+import { AlternativeInvestmentsHub } from '@/components/alternatives/AlternativeInvestmentsHub';
 
 import {
   TrendingUp,
@@ -214,10 +214,7 @@ export function InvestmentExplorerHub() {
       {/* Tab 4: Alternative Assets (REITs, InvITs, and Bonds) */}
       {activeTab === 'alts' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300">
-            <strong>Alternative Assets Module:</strong> In-depth research, dividend yield distribution analysis, and risk profiles for Indian REITs, InvITs, and Government/Corporate Bonds.
-          </div>
-          <AlternativeInvestmentExplorer initialCategory="reit" />
+          <AlternativeInvestmentsHub />
         </div>
       )}
 

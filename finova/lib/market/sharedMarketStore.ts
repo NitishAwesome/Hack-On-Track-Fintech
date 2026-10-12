@@ -18,7 +18,7 @@
 // - No countdown UI text: "Updating…" during refresh, "Updated just now" upon completion.
 // ============================================================
 
-import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
+import { useEffect, useCallback, useSyncExternalStore } from 'react';
 import type { MarketDataResponse, MarketIndex, MarketStatus } from '@/types/market';
 import type { MarketQuote } from '@/lib/services/marketData';
 import { isIndianMarketOpenNow } from '@/lib/hooks/useAutoQuotePoller';

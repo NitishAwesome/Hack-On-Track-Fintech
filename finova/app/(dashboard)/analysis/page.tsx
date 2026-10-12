@@ -17,8 +17,9 @@
 // 10. Data Completeness & Methodology Radar (quote coverage, freshness, disclaimer)
 // ============================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Layers,
@@ -45,6 +46,7 @@ import { HoldingDetailModal } from '@/components/analysis/HoldingDetailModal';
 import { PortfolioExplanationSection } from '@/components/analysis/PortfolioExplanationSection';
 import { RiskReductionActionPlan } from '@/components/analysis/RiskReductionActionPlan';
 import { DataCompletenessSection } from '@/components/analysis/DataCompletenessSection';
+import { AlternativesXRaySection } from '@/components/analysis/AlternativesXRaySection';
 
 async function fetchXRay(): Promise<UnifiedXRayAnalysis> {
   const res = await fetch('/api/portfolio/xray');
@@ -56,7 +58,8 @@ async function fetchXRay(): Promise<UnifiedXRayAnalysis> {
   return payload.data;
 }
 
-export default function InvestmentXRayPage() {
+function InvestmentXRayContent() {
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { data, isLoading, isError, error, isFetching } = useQuery({
     queryKey: ['portfolio-xray'],
@@ -64,13 +67,26 @@ export default function InvestmentXRayPage() {
     staleTime: 30000,
   });
 
+  const holdingParam = searchParams.get('holding') || searchParams.get('symbol');
+  const sectorParam = searchParams.get('sector');
+
   // Cross-component filter states
   const [selectedAssetClassFilter, setSelectedAssetClassFilter] = useState<string>('all');
-  const [selectedSectorFilter, setSelectedSectorFilter] = useState<string>('all');
+  const [selectedSectorFilter, setSelectedSectorFilter] = useState<string>(sectorParam || 'all');
 
-  // Holding detail modal state
-  const [selectedInstrument, setSelectedInstrument] =
+  // Holding detail modal state (supports manual selection or deep-linked param)
+  const [userSelectedInstrument, setUserSelectedInstrument] =
     useState<ConsolidatedInstrumentExposure | null>(null);
+  const [modalDismissed, setModalDismissed] = useState(false);
+
+  const matchedParamInstrument =
+    holdingParam && data && !modalDismissed
+      ? data.consolidated_instruments.find(
+          (inst) => inst.symbol.toUpperCase() === holdingParam.trim().toUpperCase()
+        ) || null
+      : null;
+
+  const selectedInstrument = userSelectedInstrument ?? matchedParamInstrument;
 
   if (isLoading) {
     return (
@@ -193,6 +209,8 @@ export default function InvestmentXRayPage() {
           setSelectedAssetClassFilter(ac);
         }}
       />
+      {/* 3b. Alternatives & Fixed Income X-Ray Section */}
+      <AlternativesXRaySection data={data} />
 
       {/* 4. Section 3: Sector Analysis (Major Feature) */}
       <SectorAnalysisSection
@@ -205,14 +223,20 @@ export default function InvestmentXRayPage() {
           const match = data.consolidated_instruments.find(
             (inst) => inst.symbol.toUpperCase() === symbol.toUpperCase()
           );
-          if (match) setSelectedInstrument(match);
+          if (match) {
+            setUserSelectedInstrument(match);
+            setModalDismissed(false);
+          }
         }}
       />
 
       {/* 5. Section 4: Diversification & Concentration Intelligence */}
       <DiversificationConcentrationSection
         data={data}
-        onSelectInstrument={(inst) => setSelectedInstrument(inst)}
+        onSelectInstrument={(inst) => {
+          setUserSelectedInstrument(inst);
+          setModalDismissed(false);
+        }}
       />
 
       {/* 6. Section 5: Portfolio Risk Overview (Unified with Risk Radar) */}
@@ -225,7 +249,10 @@ export default function InvestmentXRayPage() {
         selectedSectorFilter={selectedSectorFilter}
         onSelectAssetClass={setSelectedAssetClassFilter}
         onSelectSector={setSelectedSectorFilter}
-        onViewDetailedAnalysis={(inst) => setSelectedInstrument(inst)}
+        onViewDetailedAnalysis={(inst) => {
+          setUserSelectedInstrument(inst);
+          setModalDismissed(false);
+        }}
       />
 
       {/* 8. Section 8: Your Portfolio Explained */}
@@ -240,8 +267,32 @@ export default function InvestmentXRayPage() {
       {/* 11. Modal: Holding Deep Dive & Evidence-Based Outlook */}
       <HoldingDetailModal
         instrument={selectedInstrument}
-        onClose={() => setSelectedInstrument(null)}
+        onClose={() => {
+          setUserSelectedInstrument(null);
+          setModalDismissed(true);
+        }}
       />
     </div>
+  );
+}
+
+export default function InvestmentXRayPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="page-container space-y-6">
+          <div className="h-20 bg-muted/20 animate-pulse rounded-xl" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+          </div>
+          <SkeletonCard lines={6} />
+        </div>
+      }
+    >
+      <InvestmentXRayContent />
+    </Suspense>
   );
 }
