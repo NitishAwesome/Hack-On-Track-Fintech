@@ -14,7 +14,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
 import {
   Shield,
   BarChart3,
@@ -57,10 +57,10 @@ export function PortfolioHealthSnapshot({
           borderColor: 'rgb(var(--border))',
         }}
       >
-        <div className="h-4 w-44 bg-slate-700/30 rounded" />
+        <div className="h-4 w-44 bg-surface-raised/30 dark:bg-slate-700/30 rounded" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-16 bg-slate-800/20 rounded-xl" />
+            <div key={i} className="h-16 bg-surface-raised/20 dark:bg-slate-800/20 rounded-xl" />
           ))}
         </div>
       </div>
@@ -181,10 +181,10 @@ export function PortfolioHealthSnapshot({
           <p
             className={`text-[10px] font-semibold ${
               riskScore > 65
-                ? 'text-rose-400'
+                ? 'text-rose-700 dark:text-rose-400'
                 : riskScore > 45
-                ? 'text-amber-400'
-                : 'text-emerald-400'
+                ? 'text-amber-700 dark:text-amber-400'
+                : 'text-emerald-700 dark:text-emerald-400'
             }`}
           >
             {riskLabel} Orientation

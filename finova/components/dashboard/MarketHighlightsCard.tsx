@@ -76,9 +76,9 @@ export function MarketHighlightsCard() {
           <div className="flex-1 space-y-2">
             {articles.map((item, idx) => {
               const iconColors = [
-                { bg: 'bg-emerald-500/10', text: 'text-emerald-400', Icon: TrendingUp },
+                { bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-400', Icon: TrendingUp },
                 { bg: 'bg-brand/10', text: 'text-brand', Icon: TrendingDown },
-                { bg: 'bg-amber-500/10', text: 'text-amber-400', Icon: TrendingUp },
+                { bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', Icon: TrendingUp },
               ];
               const { bg, text, Icon: ItemIcon } = iconColors[idx % iconColors.length];
               return (

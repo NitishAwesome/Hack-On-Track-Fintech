@@ -6,6 +6,7 @@ import { SlidersHorizontal, ArrowRight, ShieldAlert, CheckCircle2, Layers } from
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { formatCurrency } from '@/lib/utils';
 import type { HoldingWithMetrics, AssetAllocation } from '@/types/portfolio';
+import { valuationBasis } from '@/lib/calculations/valuationBasis';
 
 interface PortfolioExposureCardProps {
   holdings: HoldingWithMetrics[];
@@ -26,16 +27,14 @@ export function PortfolioExposureCard({
 }: PortfolioExposureCardProps) {
   const [viewTab, setViewTab] = useState<'holdings' | 'sectors'>('holdings');
 
-  const portfolioTotal = useMemo(() => {
-    if (totalValue != null && totalValue > 0) return totalValue;
-    return holdings.reduce((sum, h) => sum + (h.current_value ?? h.invested_value ?? 0), 0);
-  }, [totalValue, holdings]);
+  const basis = useMemo(() => valuationBasis(holdings), [holdings]);
+  const portfolioTotal = totalValue ?? basis.total;
 
   // Sorted holdings by valuation
   const sortedHoldings = useMemo(() => {
-    return [...holdings]
+    return [...basis.holdings]
       .map((h) => {
-        const val = h.current_value ?? h.invested_value ?? 0;
+        const val = basis.valueOf(h);
         const weight = portfolioTotal > 0 ? (val / portfolioTotal) * 100 : 0;
         return {
           ...h,
@@ -44,13 +43,13 @@ export function PortfolioExposureCard({
         };
       })
       .sort((a, b) => b.val - a.val);
-  }, [holdings, portfolioTotal]);
+  }, [basis, portfolioTotal]);
 
   // Aggregated sectors
   const sectorList = useMemo(() => {
     const map = new Map<string, number>();
-    for (const h of holdings) {
-      const val = h.current_value ?? h.invested_value ?? 0;
+    for (const h of basis.holdings) {
+      const val = basis.valueOf(h);
       const sec = h.sector || 'Unclassified';
       map.set(sec, (map.get(sec) || 0) + val);
     }
@@ -62,7 +61,7 @@ export function PortfolioExposureCard({
         color: SECTOR_PALETTE[i % SECTOR_PALETTE.length],
       }))
       .sort((a, b) => b.val - a.val);
-  }, [holdings, portfolioTotal]);
+  }, [basis, portfolioTotal]);
 
   const top3Weight = useMemo(() => {
     return sortedHoldings.slice(0, 3).reduce((sum, h) => sum + h.weight, 0);
@@ -113,7 +112,7 @@ export function PortfolioExposureCard({
               onClick={() => setViewTab('holdings')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
                 viewTab === 'holdings'
-                  ? 'bg-brand text-white shadow-xs'
+                  ? 'bg-brand text-foreground dark:text-white shadow-xs'
                   : 'text-muted hover:text-foreground'
               }`}
             >
@@ -124,7 +123,7 @@ export function PortfolioExposureCard({
               onClick={() => setViewTab('sectors')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
                 viewTab === 'sectors'
-                  ? 'bg-brand text-white shadow-xs'
+                  ? 'bg-brand text-foreground dark:text-white shadow-xs'
                   : 'text-muted hover:text-foreground'
               }`}
             >
@@ -175,7 +174,7 @@ export function PortfolioExposureCard({
                   <div
                     className="h-full rounded-full transition-all duration-300"
                     style={{
-                      width: `${Math.max(h.weight, 2)}%`,
+                      width: `${h.weight}%`,
                       background: 'linear-gradient(90deg, rgb(var(--brand-500)), rgb(var(--brand-400)))',
                     }}
                   />
@@ -219,7 +218,7 @@ export function PortfolioExposureCard({
                   <div
                     className="h-full rounded-full transition-all duration-300"
                     style={{
-                      width: `${Math.max(s.weight, 2)}%`,
+                      width: `${s.weight}%`,
                       backgroundColor: s.color,
                     }}
                   />
@@ -238,14 +237,14 @@ export function PortfolioExposureCard({
               <>
                 <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                 <span className="text-[11px]">
-                  Top 3 represent <strong className="text-foreground">{top3Weight.toFixed(0)}%</strong> of value
+                  Top 3: <strong className="text-foreground">{top3Weight.toFixed(0)}%</strong> · {basis.label}
                 </span>
               </>
             ) : (
               <>
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                 <span className="text-[11px]">
-                  Top 3 represent <strong className="text-foreground">{top3Weight.toFixed(0)}%</strong> of value
+                  Top 3: <strong className="text-foreground">{top3Weight.toFixed(0)}%</strong> · {basis.label}
                 </span>
               </>
             )}

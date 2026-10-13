@@ -33,7 +33,7 @@ export function HoldingRow({ holding, className }: HoldingRowProps) {
       <td className="py-3 pl-3 pr-4">
         <div className="flex items-center gap-3">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm text-white"
+            className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm text-foreground dark:text-white"
             style={{
               backgroundColor: holding.avatarColor,
             }}

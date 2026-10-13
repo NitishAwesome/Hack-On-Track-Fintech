@@ -70,10 +70,10 @@ export function PortfolioPerformanceSection({
         }}
       >
         <div className="flex justify-between items-center mb-6">
-          <div className="h-4 w-36 bg-slate-700/30 rounded" />
-          <div className="h-6 w-24 bg-slate-700/20 rounded" />
+          <div className="h-4 w-36 bg-surface-raised/30 dark:bg-slate-700/30 rounded" />
+          <div className="h-6 w-24 bg-surface-raised/20 dark:bg-slate-700/20 rounded" />
         </div>
-        <div className="flex-1 bg-slate-800/10 rounded-xl" />
+        <div className="flex-1 bg-surface-raised/10 dark:bg-slate-800/10 rounded-xl" />
       </div>
     );
   }

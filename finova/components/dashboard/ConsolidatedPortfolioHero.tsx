@@ -86,7 +86,7 @@ export function ConsolidatedPortfolioHero({
 
           <Link
             href="/analysis"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-all hover:opacity-95"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-foreground dark:text-white shadow-sm transition-all hover:opacity-95"
             style={{
               background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
             }}

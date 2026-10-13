@@ -38,14 +38,14 @@ export function AskFinovaCommandSection() {
                 color: '#A855F7',
               }}
             >
-              <Sparkles className="w-5 h-5 text-purple-400" />
+              <Sparkles className="w-5 h-5 text-purple-700 dark:text-purple-400" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
                   Ask FINOVA
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
                   AI Intelligence
                 </span>
               </div>
@@ -58,14 +58,14 @@ export function AskFinovaCommandSection() {
           {/* Example Question Chips */}
           <div className="flex items-center gap-1.5 flex-wrap pt-1">
             <span className="text-[11px] font-semibold text-muted flex items-center gap-1 mr-1">
-              <HelpCircle className="w-3 h-3 text-purple-400" />
+              <HelpCircle className="w-3 h-3 text-purple-700 dark:text-purple-400" />
               Try asking:
             </span>
             {SUGGESTED_QUESTIONS.map((q) => (
               <Link
                 key={q}
                 href={`/insights?q=${encodeURIComponent(q)}`}
-                className="px-3 py-1 rounded-xl text-xs font-semibold bg-surface-raised/70 hover:bg-surface-raised border border-border text-foreground hover:text-purple-400 transition-all hover-card inline-flex items-center gap-1.5 shadow-xs"
+                className="px-3 py-1 rounded-xl text-xs font-semibold bg-surface-raised/70 hover:bg-surface-raised border border-border text-foreground hover:text-purple-700 dark:hover:text-purple-400 transition-all hover-card inline-flex items-center gap-1.5 shadow-xs"
               >
                 <span>&ldquo;{q}&rdquo;</span>
                 <ArrowRight className="w-2.5 h-2.5 opacity-60" />
@@ -78,7 +78,7 @@ export function AskFinovaCommandSection() {
         <div className="shrink-0 flex items-center">
           <Link
             href="/insights"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-foreground dark:text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md"
             style={{
               background: 'linear-gradient(135deg, rgb(168, 85, 247), rgb(14, 165, 233))',
             }}

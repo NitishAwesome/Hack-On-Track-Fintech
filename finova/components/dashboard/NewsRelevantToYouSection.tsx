@@ -44,7 +44,7 @@ export function NewsRelevantToYouSection() {
             <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
               News Relevant to You
             </h2>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
               Verified Providers
             </span>
           </div>

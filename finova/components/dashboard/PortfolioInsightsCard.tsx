@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { HoldingWithMetrics, PortfolioSummary } from '@/types/portfolio';
 import type { BrokerAccountRow } from '@/types/database';
+import { valuationBasis } from '@/lib/calculations/valuationBasis';
 
 interface PortfolioInsightsCardProps {
   summary: PortfolioSummary | null;
@@ -45,27 +46,28 @@ export function PortfolioInsightsCard({
   }
 
   // Compute portfolio metrics
-  const totalVal = summary?.total_current_value ?? holdings.reduce((sum, h) => sum + (h.current_value ?? h.invested_value ?? 0), 0);
+  const basis = valuationBasis(holdings);
+  const totalVal = summary?.total_current_value ?? basis.total;
 
   // 1. Largest Holding
-  const sortedHoldings = [...holdings].sort((a, b) => {
-    const valA = a.current_value ?? a.invested_value ?? 0;
-    const valB = b.current_value ?? b.invested_value ?? 0;
+  const sortedHoldings = [...basis.holdings].sort((a, b) => {
+    const valA = basis.valueOf(a);
+    const valB = basis.valueOf(b);
     return valB - valA;
   });
   const largestHolding = sortedHoldings[0];
-  const largestVal = largestHolding ? (largestHolding.current_value ?? largestHolding.invested_value ?? 0) : 0;
+  const largestVal = largestHolding ? basis.valueOf(largestHolding) : 0;
   const largestPct = totalVal > 0 ? (largestVal / totalVal) * 100 : 0;
 
   // 2. Top Sector
   const sectorMap = new Map<string, number>();
-  for (const h of holdings) {
-    const val = h.current_value ?? h.invested_value ?? 0;
+  for (const h of basis.holdings) {
+    const val = basis.valueOf(h);
     const s = h.sector || 'Others';
     sectorMap.set(s, (sectorMap.get(s) || 0) + val);
   }
 
-  let topSector = 'Equities';
+  let topSector = 'Unavailable';
   let topSectorPct = 0;
   for (const [sec, val] of sectorMap.entries()) {
     const pct = totalVal > 0 ? (val / totalVal) * 100 : 0;
@@ -112,7 +114,7 @@ export function PortfolioInsightsCard({
           {/* Observation 1: Largest Holding */}
           <div className="p-2.5 rounded-xl border border-border/70 bg-surface-raised/40 flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0">
                 <Award className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
@@ -132,7 +134,7 @@ export function PortfolioInsightsCard({
           {/* Observation 2: Top Sector */}
           <div className="p-2.5 rounded-xl border border-border/70 bg-surface-raised/40 flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20 flex items-center justify-center shrink-0">
                 <PieChart className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
@@ -152,7 +154,7 @@ export function PortfolioInsightsCard({
           {/* Observation 3: Diversification */}
           <div className="p-2.5 rounded-xl border border-border/70 bg-surface-raised/40 flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
                 <Layers className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
@@ -182,7 +184,7 @@ export function PortfolioInsightsCard({
                 className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
                   isHighConcentration
                     ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
                 }`}
               >
                 {isHighConcentration ? (
@@ -216,7 +218,7 @@ export function PortfolioInsightsCard({
           {/* Observation 5: Quote Freshness */}
           <div className="p-2.5 rounded-xl border border-border/70 bg-surface-raised/40 flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/20 flex items-center justify-center shrink-0">
                 <Clock className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">

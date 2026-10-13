@@ -1,4 +1,5 @@
 'use client';
+import { useReducedMotionConfig } from 'framer-motion';
 
 import React from 'react';
 import {
@@ -56,6 +57,7 @@ export function PortfolioChart({
   gradientId = 'portfolioChartGradient',
   height = 150,
 }: PortfolioChartProps) {
+  const reducedMotion = useReducedMotionConfig();
   const mounted = React.useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   if (!mounted) {
@@ -64,7 +66,7 @@ export function PortfolioChart({
         className="w-full flex items-center justify-center opacity-30 animate-pulse"
         style={{ height }}
       >
-        <div className="w-full h-full bg-slate-800/20 rounded-lg" />
+        <div className="w-full h-full bg-surface-raised/20 dark:bg-slate-800/20 rounded-lg" />
       </div>
     );
   }
@@ -127,7 +129,7 @@ export function PortfolioChart({
             strokeWidth={2}
             fill={`url(#${gradientId})`}
             filter="url(#subtleGlow)"
-            isAnimationActive={true}
+            isAnimationActive={!reducedMotion}
             animationDuration={800}
             activeDot={{
               r: 5,

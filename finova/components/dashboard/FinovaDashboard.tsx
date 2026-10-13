@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { usePrivateQuery } from '@/lib/hooks/usePrivateQuery';
 import Link from 'next/link';
 import { RefreshCw, Plus, Upload } from 'lucide-react';
 
@@ -22,26 +23,30 @@ import type { PortfolioSummary, AssetAllocation, HoldingWithMetrics } from '@/ty
 import type { BrokerAccountRow, InvestmentTransactionRow } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 
+async function loadPortfolioResource(path: string) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error('Portfolio data could not be loaded. Try Refresh.');
+  return response.json();
+}
+
 export function FinovaDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [userName, setUserName] = useState<string>('Investor');
 
-  // Summary & Allocation
-  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
-  const [allocations, setAllocations] = useState<AssetAllocation[]>([]);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-
-  // Holdings
-  const [holdings, setHoldings] = useState<HoldingWithMetrics[]>([]);
-  const [holdingsLoading, setHoldingsLoading] = useState(true);
-
-  // Broker Accounts
-  const [brokers, setBrokers] = useState<BrokerAccountRow[]>([]);
-  const [brokersLoading, setBrokersLoading] = useState(true);
-
-  // Transactions
-  const [transactions, setTransactions] = useState<InvestmentTransactionRow[]>([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const summaryQuery = usePrivateQuery({ queryKey: ['portfolio-summary'], queryFn: () => loadPortfolioResource('/api/portfolio/summary') });
+  const holdingsQuery = usePrivateQuery({ queryKey: ['holdings'], queryFn: () => loadPortfolioResource('/api/portfolio/holdings') });
+  const brokersQuery = usePrivateQuery({ queryKey: ['brokers'], queryFn: () => loadPortfolioResource('/api/brokers') });
+  const transactionsQuery = usePrivateQuery({ queryKey: ['transactions', 'dashboard'], queryFn: () => loadPortfolioResource('/api/portfolio/transactions') });
+  const summary: PortfolioSummary | null = summaryQuery.data?.summary ?? null;
+  const allocations: AssetAllocation[] = summaryQuery.data?.assetAllocation ?? [];
+  const holdings: HoldingWithMetrics[] = holdingsQuery.data?.holdings ?? [];
+  const brokers: BrokerAccountRow[] = brokersQuery.data?.brokers ?? [];
+  const transactions: InvestmentTransactionRow[] = transactionsQuery.data?.transactions ?? [];
+  const summaryLoading = summaryQuery.isLoading;
+  const holdingsLoading = holdingsQuery.isLoading;
+  const brokersLoading = brokersQuery.isLoading;
+  const transactionsLoading = transactionsQuery.isLoading;
+  const loadError = [summaryQuery, holdingsQuery, brokersQuery, transactionsQuery].some((q) => q.isError);
 
   // Fetch current user display name
   useEffect(() => {
@@ -60,89 +65,14 @@ export function FinovaDashboard() {
     loadUser();
   }, []);
 
-  // Fetch Summary
-  const fetchSummary = useCallback(async () => {
-    try {
-      setSummaryLoading(true);
-      const res = await fetch('/api/portfolio/summary');
-      if (!res.ok) return;
-      const data = await res.json();
-      setSummary(data.summary || null);
-      setAllocations(data.assetAllocation || []);
-    } catch {
-      // ignore
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, []);
-
-  // Fetch Holdings
-  const fetchHoldings = useCallback(async () => {
-    try {
-      setHoldingsLoading(true);
-      const res = await fetch('/api/portfolio/holdings');
-      if (!res.ok) return;
-      const data = await res.json();
-      setHoldings(data.holdings || []);
-    } catch {
-      // ignore
-    } finally {
-      setHoldingsLoading(false);
-    }
-  }, []);
-
-  // Fetch Brokers
-  const fetchBrokers = useCallback(async () => {
-    try {
-      setBrokersLoading(true);
-      const res = await fetch('/api/brokers');
-      if (!res.ok) return;
-      const data = await res.json();
-      setBrokers(data.brokers || []);
-    } catch {
-      // ignore
-    } finally {
-      setBrokersLoading(false);
-    }
-  }, []);
-
-  // Fetch Transactions
-  const fetchTransactions = useCallback(async () => {
-    try {
-      setTransactionsLoading(true);
-      const res = await fetch('/api/portfolio/transactions');
-      if (!res.ok) return;
-      const data = await res.json();
-      setTransactions(data.transactions || []);
-    } catch {
-      // ignore
-    } finally {
-      setTransactionsLoading(false);
-    }
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    let active = true;
-    if (active) {
-      fetchSummary();
-      fetchHoldings();
-      fetchBrokers();
-      fetchTransactions();
-    }
-    return () => {
-      active = false;
-    };
-  }, [fetchSummary, fetchHoldings, fetchBrokers, fetchTransactions]);
-
-  // Sync button handler
+  // Refresh recorded positions and quotes.
   const handleSyncAll = async () => {
     setIsRefreshing(true);
     await Promise.allSettled([
-      fetchSummary(),
-      fetchHoldings(),
-      fetchBrokers(),
-      fetchTransactions(),
+      summaryQuery.refetch(),
+      holdingsQuery.refetch(),
+      brokersQuery.refetch(),
+      transactionsQuery.refetch(),
     ]);
     setIsRefreshing(false);
   };
@@ -162,7 +92,7 @@ export function FinovaDashboard() {
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-muted ml-4 pl-3 border-l-2 border-border-subtle">
-            FINOVA Command Center · Unified portfolio analytics, live market feeds &amp; intelligence.
+            {loadError ? 'Some portfolio data could not be loaded. Use Refresh to try again.' : 'FINOVA Command Center · Recorded investments, latest available quotes & intelligence.'}
           </p>
         </div>
 
@@ -172,10 +102,10 @@ export function FinovaDashboard() {
             onClick={handleSyncAll}
             disabled={isRefreshing}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-border bg-surface hover:bg-surface-raised text-muted hover:text-foreground transition-all shadow-xs disabled:opacity-50"
-            title="Sync all broker holdings and market valuations"
+            title="Refresh recorded holdings and available market quotes"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Sync</span>
+            <span>Refresh</span>
           </button>
 
           <Link
@@ -188,7 +118,7 @@ export function FinovaDashboard() {
 
           <Link
             href="/holdings"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-foreground dark:text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md"
             style={{
               background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
             }}

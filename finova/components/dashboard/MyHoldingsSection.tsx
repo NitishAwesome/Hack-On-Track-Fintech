@@ -6,6 +6,7 @@ import { Briefcase, ArrowRight, TrendingUp, TrendingDown, ExternalLink } from 'l
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { formatCurrency, formatStockPrice } from '@/lib/utils';
 import type { HoldingWithMetrics } from '@/types/portfolio';
+import { valuationBasis } from '@/lib/calculations/valuationBasis';
 
 interface MyHoldingsSectionProps {
   holdings: HoldingWithMetrics[];
@@ -18,14 +19,13 @@ export function MyHoldingsSection({
   totalValue,
   isLoading,
 }: MyHoldingsSectionProps) {
-  const portfolioTotal = totalValue != null && totalValue > 0
-    ? totalValue
-    : holdings.reduce((sum, h) => sum + (h.current_value ?? h.invested_value ?? 0), 0);
+  const basis = valuationBasis(holdings);
+  const portfolioTotal = totalValue ?? basis.total;
 
   const topHoldings = [...holdings]
     .sort((a, b) => {
-      const valA = a.current_value ?? a.invested_value ?? 0;
-      const valB = b.current_value ?? b.invested_value ?? 0;
+      const valA = basis.valueOf(a);
+      const valB = basis.valueOf(b);
       return valB - valA;
     })
     .slice(0, 6);
@@ -48,7 +48,7 @@ export function MyHoldingsSection({
             </span>
           </div>
           <p className="text-xs text-muted mt-0.5">
-            Your key investment positions consolidated across Zerodha, Groww and connected brokers.
+            Consolidated manual and imported positions. Weights: {basis.label.toLowerCase()}.
           </p>
         </div>
 
@@ -80,7 +80,7 @@ export function MyHoldingsSection({
           </p>
           <Link
             href="/holdings"
-            className="mt-2 px-3.5 py-1.5 rounded-xl bg-brand text-white text-xs font-semibold shadow-xs hover:opacity-90 transition-opacity"
+            className="mt-2 px-3.5 py-1.5 rounded-xl bg-brand text-foreground dark:text-white text-xs font-semibold shadow-xs hover:opacity-90 transition-opacity"
           >
             + Add First Investment
           </Link>
@@ -101,7 +101,7 @@ export function MyHoldingsSection({
             </thead>
             <tbody className="divide-y divide-border/60">
               {topHoldings.map((h) => {
-                const currentVal = h.current_value ?? h.invested_value ?? 0;
+                const currentVal = basis.valueOf(h);
                 const weight = portfolioTotal > 0 ? (currentVal / portfolioTotal) * 100 : 0;
                 const pnl = h.absolute_return ?? 0;
                 const pnlPct = h.absolute_return_pct ?? 0;
@@ -144,7 +144,7 @@ export function MyHoldingsSection({
                     {/* Latest Price */}
                     <td className="py-3 text-right tabular-nums">
                       <div className="font-financial font-extrabold text-foreground">
-                        {formatStockPrice(h.current_price ?? h.avg_buy_price)}
+                        {h.current_price === null ? 'Unavailable' : formatStockPrice(h.current_price)}
                       </div>
                       <div className="text-[10px] text-muted font-financial">
                         Avg: {formatStockPrice(h.avg_buy_price)}
@@ -157,7 +157,7 @@ export function MyHoldingsSection({
                         <div className="w-12 h-1 rounded-full bg-surface-raised overflow-hidden">
                           <div
                             className="h-full rounded-full bg-brand"
-                            style={{ width: `${Math.max(weight, 3)}%` }}
+                            style={{ width: `${weight}%` }}
                           />
                         </div>
                         <span className="font-financial font-bold text-foreground">
@@ -173,16 +173,14 @@ export function MyHoldingsSection({
                           isPnlPositive ? 'text-gain' : 'text-loss'
                         }`}
                       >
-                        {isPnlPositive ? '+' : ''}
-                        {formatCurrency(pnl)}
+                        {h.absolute_return === null ? 'Unavailable' : `${isPnlPositive ? '+' : ''}${formatCurrency(pnl)}`}
                       </div>
                       <div
                         className={`text-[10px] font-financial font-semibold ${
                           isPnlPositive ? 'text-gain' : 'text-loss'
                         }`}
                       >
-                        {isPnlPositive ? '+' : ''}
-                        {pnlPct.toFixed(2)}%
+                        {h.absolute_return_pct === null ? '—' : `${isPnlPositive ? '+' : ''}${pnlPct.toFixed(2)}%`}
                       </div>
                     </td>
 

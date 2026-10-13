@@ -55,7 +55,7 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               {isComplete ? 'Current Value' : 'Valued Subtotal'}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
               <Wallet className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -93,7 +93,7 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Total Invested
             </span>
-            <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20">
+            <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20">
               <Landmark className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -127,8 +127,8 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
             <div
               className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
                 isPositiveReturn
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
+                  : 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20'
               }`}
             >
               {isPositiveReturn ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
@@ -163,7 +163,7 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Total Return
             </span>
-            <div className="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-500/20">
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-500/20">
               <Percent className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -194,7 +194,7 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Holdings
             </span>
-            <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/20">
+            <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-400 flex items-center justify-center shrink-0 border border-purple-500/20">
               <Layers className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -221,7 +221,7 @@ export function PortfolioSummaryMetrics({ summary, isLoading }: PortfolioSummary
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Broker Accounts
             </span>
-            <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center shrink-0 border border-sky-500/20">
+            <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-700 dark:text-sky-400 flex items-center justify-center shrink-0 border border-sky-500/20">
               <Building2 className="w-3.5 h-3.5" />
             </div>
           </div>

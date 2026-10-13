@@ -6,6 +6,7 @@ import { formatCurrency } from '@/lib/utils';
 import type { AssetAllocation, HoldingWithMetrics } from '@/types/portfolio';
 import type { BrokerAccountRow } from '@/types/database';
 import { TrendingUp, Layers, Building2 } from 'lucide-react';
+import { valuationBasis } from '@/lib/calculations/valuationBasis';
 
 interface PortfolioOverviewCardProps {
   allocations: AssetAllocation[];
@@ -134,6 +135,8 @@ function DualWaveLineGraph({ items, activeIndex, onHoverIndex }: DualWaveLineGra
       <div className="relative w-full aspect-[22/10] sm:aspect-[24/11] max-h-[165px]">
         <svg
           viewBox="0 0 338 140"
+          role="img"
+          aria-label="Illustrative allocation decoration; curve shapes do not show price or portfolio history. Read the percentage labels for actual weights."
           className="w-full h-full overflow-visible select-none"
           preserveAspectRatio="xMidYMid meet"
         >
@@ -282,6 +285,7 @@ export function PortfolioOverviewCard({
   allocations, holdings, brokers, totalValue, isLoading,
 }: PortfolioOverviewCardProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const basis = useMemo(() => valuationBasis(holdings), [holdings]);
 
   const assetData = useMemo(() =>
     allocations
@@ -295,12 +299,12 @@ export function PortfolioOverviewCard({
   [allocations]);
 
   const sectorData = useMemo(() => {
-    const total = holdings.reduce((acc, h) => acc + (h.current_value ?? h.invested_value ?? 0), 0);
+    const total = basis.total;
     if (total === 0) return [];
     const map = new Map<string, number>();
-    for (const h of holdings) {
+    for (const h of basis.holdings) {
       const key = h.sector || 'Others';
-      map.set(key, (map.get(key) || 0) + (h.current_value ?? h.invested_value ?? 0));
+      map.set(key, (map.get(key) || 0) + basis.valueOf(h));
     }
     return Array.from(map.entries())
       .map(([name, val], i) => ({
@@ -308,22 +312,18 @@ export function PortfolioOverviewCard({
         color: SECTOR_PALETTE[i % SECTOR_PALETTE.length],
       }))
       .sort((a, b) => b.value - a.value);
-  }, [holdings]);
+  }, [basis]);
 
   const brokerData = useMemo(() => {
-    const total = holdings.reduce((acc, h) => acc + (h.current_value ?? h.invested_value ?? 0), 0);
+    const total = basis.total;
     if (total === 0) {
-      return brokers.map((b, i) => ({
-        name: b.display_name || b.broker_name, value: 0,
-        percent: 100 / Math.max(brokers.length, 1),
-        color: BROKER_PALETTE[i % BROKER_PALETTE.length],
-      }));
+      return [];
     }
     const map = new Map<string, number>();
-    for (const h of holdings) {
+    for (const h of basis.holdings) {
       const b = brokers.find((x) => x.id === h.broker_account_id);
       const name = b?.display_name || b?.broker_name || 'Manual';
-      map.set(name, (map.get(name) || 0) + (h.current_value ?? h.invested_value ?? 0));
+      map.set(name, (map.get(name) || 0) + basis.valueOf(h));
     }
     return Array.from(map.entries())
       .map(([name, val], i) => ({
@@ -331,9 +331,9 @@ export function PortfolioOverviewCard({
         color: BROKER_PALETTE[i % BROKER_PALETTE.length],
       }))
       .sort((a, b) => b.value - a.value);
-  }, [holdings, brokers]);
+  }, [basis, brokers]);
 
-  const displayTotal = totalValue ?? holdings.reduce((acc, h) => acc + (h.current_value ?? h.invested_value ?? 0), 0);
+  const displayTotal = totalValue ?? basis.total;
   const smartDefault = assetData.length <= 1 && sectorData.length > 1 ? 'sector' : 'asset';
   const [activeTab, setActiveTab] = useState<'asset' | 'sector' | 'broker'>(smartDefault);
   const currentData = activeTab === 'asset' ? assetData : activeTab === 'sector' ? sectorData : brokerData;
@@ -375,7 +375,7 @@ export function PortfolioOverviewCard({
               onClick={() => { setActiveTab(id); setActiveIndex(null); }}
               className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 ${
                 activeTab === id
-                  ? 'bg-brand text-white shadow-xs'
+                  ? 'bg-brand text-foreground dark:text-white shadow-xs'
                   : 'text-muted hover:text-foreground'
               }`}>
               <Icon className="w-3 h-3" />{label}
@@ -460,7 +460,7 @@ export function PortfolioOverviewCard({
                       {displayTotal > 0 ? formatCurrency(displayTotal) : '₹0'}
                     </span>
                     <span className="text-[9px] uppercase font-bold text-muted tracking-wider mt-1">
-                      Current Value
+                      {totalValue === null ? basis.label : 'Current Value'}
                     </span>
                   </>
                 )}

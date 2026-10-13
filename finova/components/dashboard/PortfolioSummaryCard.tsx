@@ -113,7 +113,7 @@ export function PortfolioSummaryCard({
                   className={cn(
                     'relative px-2.5 py-1 font-semibold rounded-md transition-all duration-150',
                     isSelected
-                      ? 'text-white'
+                      ? 'text-foreground dark:text-white'
                       : 'hover:text-foreground'
                   )}
                   style={{

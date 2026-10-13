@@ -38,12 +38,12 @@ export function BrokerAccountsSection({
         }}
       >
         <div className="flex justify-between items-center mb-6">
-          <div className="h-4 w-32 bg-slate-700/30 rounded" />
-          <div className="h-4 w-20 bg-slate-700/20 rounded" />
+          <div className="h-4 w-32 bg-surface-raised/30 dark:bg-slate-700/30 rounded" />
+          <div className="h-4 w-20 bg-surface-raised/20 dark:bg-slate-700/20 rounded" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 bg-slate-800/10 rounded-xl" />
+            <div key={i} className="h-20 bg-surface-raised/10 dark:bg-slate-800/10 rounded-xl" />
           ))}
         </div>
       </div>
@@ -202,7 +202,7 @@ export function BrokerAccountsSection({
             </p>
             <Link
               href="/brokers"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-foreground dark:text-white shadow-sm"
               style={{
                 background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
               }}

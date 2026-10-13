@@ -73,11 +73,11 @@ export function AssetAllocationSection({
           borderColor: 'rgb(var(--border))',
         }}
       >
-        <div className="h-4 w-32 bg-slate-700/30 rounded mb-4" />
-        <div className="h-4 w-full bg-slate-700/20 rounded-full mb-6" />
+        <div className="h-4 w-32 bg-surface-raised/30 dark:bg-slate-700/30 rounded mb-4" />
+        <div className="h-4 w-full bg-surface-raised/20 dark:bg-slate-700/20 rounded-full mb-6" />
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-6 w-full bg-slate-800/10 rounded" />
+            <div key={i} className="h-6 w-full bg-surface-raised/10 dark:bg-slate-800/10 rounded" />
           ))}
         </div>
       </div>
@@ -267,7 +267,7 @@ export function AssetAllocationSection({
             </p>
             <Link
               href="/holdings"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-foreground dark:text-white shadow-sm"
               style={{
                 background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
               }}
