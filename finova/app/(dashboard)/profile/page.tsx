@@ -378,7 +378,7 @@ export default function ProfilePage() {
           <div className="pt-2">
             <Link
               href="/login"
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium text-white shadow-sm"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium text-foreground dark:text-white shadow-sm"
               style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
             >
               Sign In to Finova
@@ -424,7 +424,7 @@ export default function ProfilePage() {
         >
           <div className="flex items-center gap-4">
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-black shadow-md flex-shrink-0"
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-foreground dark:text-white text-2xl font-black shadow-md flex-shrink-0"
               style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
             >
               {initials}
@@ -497,7 +497,7 @@ export default function ProfilePage() {
                 />
               </div>
               {validationErrors.fullName && (
-                <p className="text-[11px] text-rose-400 font-medium">{validationErrors.fullName}</p>
+                <p className="text-[11px] text-rose-700 dark:text-rose-400 font-medium">{validationErrors.fullName}</p>
               )}
             </div>
 
@@ -551,7 +551,7 @@ export default function ProfilePage() {
                 />
               </div>
               {validationErrors.phone && (
-                <p className="text-[11px] text-rose-400 font-medium">{validationErrors.phone}</p>
+                <p className="text-[11px] text-rose-700 dark:text-rose-400 font-medium">{validationErrors.phone}</p>
               )}
             </div>
 
@@ -572,7 +572,7 @@ export default function ProfilePage() {
                       className={`p-3 rounded-xl text-left transition-all border ${
                         isSelected
                           ? 'border-brand bg-brand/10 shadow-sm'
-                          : 'border-border bg-surface-raised hover:border-slate-600'
+                          : 'border-border bg-surface-raised hover:border-border dark:hover:border-slate-600'
                       }`}
                     >
                       <p className={`text-xs font-bold ${isSelected ? 'text-brand' : 'text-foreground'}`}>
@@ -592,14 +592,14 @@ export default function ProfilePage() {
 
             {/* Save Feedback Alerts */}
             {saveError && (
-              <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs flex items-center gap-2.5">
+              <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2.5">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{saveError}</span>
               </div>
             )}
 
             {saved && (
-              <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs flex items-center gap-2.5">
+              <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 <span>Changes saved successfully to your cloud profile!</span>
               </div>
@@ -610,7 +610,7 @@ export default function ProfilePage() {
               id="btn-save-profile"
               type="submit"
               disabled={saving}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm transition-all"
+              className="w-full py-2.5 rounded-xl text-sm font-semibold text-foreground dark:text-white disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm transition-all"
               style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
             >
               {saving ? (
@@ -657,7 +657,7 @@ export default function ProfilePage() {
                     : 'Email and Encrypted Password'}
                 </p>
               </div>
-              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full border bg-slate-800 border-slate-700 text-slate-300 uppercase">
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full border bg-surface-raised dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-slate-300 uppercase">
                 {authProvider}
               </span>
             </div>
@@ -730,7 +730,7 @@ export default function ProfilePage() {
                     </div>
 
                     {passwordChangeError && (
-                      <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs flex items-center gap-2">
+                      <div className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
                         <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                         <span>{passwordChangeError}</span>
                       </div>
@@ -750,7 +750,7 @@ export default function ProfilePage() {
                       <button
                         type="submit"
                         disabled={passwordChanging}
-                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-brand text-white hover:opacity-95 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-brand text-foreground dark:text-white hover:opacity-95 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
                       >
                         {passwordChanging ? (
                           <>
@@ -772,7 +772,7 @@ export default function ProfilePage() {
             )}
 
             {passwordChangeSuccess && (
-              <div className="p-3 rounded-lg text-xs flex items-center gap-2 border bg-emerald-500/10 border-emerald-500/30 text-emerald-400">
+              <div className="p-3 rounded-lg text-xs flex items-center gap-2 border bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 <span>{passwordChangeSuccess}</span>
               </div>
@@ -782,8 +782,8 @@ export default function ProfilePage() {
               <div
                 className={`p-3 rounded-lg text-xs flex items-center gap-2 border ${
                   resetStatus.success
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                    : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400'
                 }`}
               >
                 {resetStatus.success ? (
@@ -800,7 +800,7 @@ export default function ProfilePage() {
             <button
               id="btn-profile-signout"
               onClick={handleSignOut}
-              className="px-4 py-2 rounded-xl text-xs font-bold border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 transition-colors"
+              className="px-4 py-2 rounded-xl text-xs font-bold border border-rose-500/30 text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               Sign out of this session
@@ -826,11 +826,11 @@ export default function ProfilePage() {
               </p>
             </div>
             {hasAllAgreements ? (
-              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-full">
+              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-full">
                 All Consents Verified
               </span>
             ) : (
-              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full">
+              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full">
                 Consent Audit Incomplete
               </span>
             )}
@@ -854,7 +854,7 @@ export default function ProfilePage() {
               </div>
               <div className="text-right">
                 {termsRecord?.accepted_at ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     {new Date(termsRecord.accepted_at).toLocaleDateString('en-IN', {
                       day: 'numeric',
@@ -863,7 +863,7 @@ export default function ProfilePage() {
                     })}
                   </span>
                 ) : (
-                  <span className="text-[11px] font-semibold text-amber-400">
+                  <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
                     No Audit Record Found
                   </span>
                 )}
@@ -887,7 +887,7 @@ export default function ProfilePage() {
               </div>
               <div className="text-right">
                 {privacyRecord?.accepted_at ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     {new Date(privacyRecord.accepted_at).toLocaleDateString('en-IN', {
                       day: 'numeric',
@@ -896,7 +896,7 @@ export default function ProfilePage() {
                     })}
                   </span>
                 ) : (
-                  <span className="text-[11px] font-semibold text-amber-400">
+                  <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
                     No Audit Record Found
                   </span>
                 )}
@@ -920,7 +920,7 @@ export default function ProfilePage() {
               </div>
               <div className="text-right">
                 {riskRecord?.accepted_at ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     {new Date(riskRecord.accepted_at).toLocaleDateString('en-IN', {
                       day: 'numeric',
@@ -929,7 +929,7 @@ export default function ProfilePage() {
                     })}
                   </span>
                 ) : (
-                  <span className="text-[11px] font-semibold text-amber-400">
+                  <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
                     No Audit Record Found
                   </span>
                 )}
@@ -939,13 +939,13 @@ export default function ProfilePage() {
 
           {!hasAllAgreements && (
             <div className="pt-2 border-t border-border/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-500/5 p-3 rounded-xl border border-amber-500/20">
-              <div className="text-xs text-amber-300 leading-relaxed">
+              <div className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
                 One or more mandatory agreement audit records are missing from your account history. SEBI and Finova compliance require individual review and explicit acceptance.
               </div>
               <button
                 type="button"
                 onClick={openConsentReview}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400 flex items-center gap-1.5 flex-shrink-0 transition-colors cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-foreground dark:text-slate-950 hover:bg-amber-400 flex items-center gap-1.5 flex-shrink-0 transition-colors cursor-pointer"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Review & Accept Missing Agreements
@@ -954,7 +954,7 @@ export default function ProfilePage() {
           )}
 
           {agreementSuccess && (
-            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
               <span>{agreementSuccess}</span>
             </div>
@@ -967,7 +967,7 @@ export default function ProfilePage() {
             <div className="bg-card border border-border rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5 text-foreground">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-700 dark:text-amber-400">
                     <ShieldCheck className="w-5 h-5" />
                   </div>
                   <div>
@@ -987,7 +987,7 @@ export default function ProfilePage() {
               </div>
 
               {consentError && (
-                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{consentError}</span>
                 </div>
@@ -1120,7 +1120,7 @@ export default function ProfilePage() {
                       !consentChoices.privacy_policy &&
                       !consentChoices.risk_disclosure)
                   }
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand text-slate-950 hover:bg-brand-hover disabled:opacity-50 flex items-center gap-2 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand text-foreground dark:text-slate-950 hover:bg-brand-hover disabled:opacity-50 flex items-center gap-2 transition-colors cursor-pointer"
                 >
                   {recordingAgreements ? (
                     <Loader2 className="w-4 h-4 animate-spin" />

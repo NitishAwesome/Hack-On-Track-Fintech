@@ -44,7 +44,7 @@ export default function SettingsPage() {
 
   // Market Data Preferences
   const [autoUpdateQuotes, setAutoUpdateQuotes] = useState(true);
-  const [quoteRefreshInterval, setQuoteRefreshInterval] = useState(3);
+  const [quoteRefreshInterval, setQuoteRefreshInterval] = useState(30);
   const [defaultDisplayMetric, setDefaultDisplayMetric] = useState<'percent' | 'absolute'>('percent');
 
   // Accessibility Preferences
@@ -52,6 +52,7 @@ export default function SettingsPage() {
 
   // Save feedback state
   const [savedBadge, setSavedBadge] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -64,7 +65,8 @@ export default function SettingsPage() {
 
       const storedInterval = localStorage.getItem('finova_quote_interval');
       if (storedInterval !== null) {
-        setQuoteRefreshInterval(Number(storedInterval));
+        const seconds = Number(storedInterval);
+        setQuoteRefreshInterval(Number.isFinite(seconds) ? Math.min(300, Math.max(2, seconds)) : 30);
       }
 
       const storedMetric = localStorage.getItem('finova_default_metric');
@@ -82,33 +84,40 @@ export default function SettingsPage() {
   }, []);
 
   const triggerSaveNotification = (label: string) => {
+    setSaveError(null);
+    window.dispatchEvent(new Event('finova-preferences'));
     setSavedBadge(label);
     setTimeout(() => setSavedBadge(null), 2500);
   };
 
   const handleToggleAutoUpdate = (enabled: boolean) => {
+    const previous = autoUpdateQuotes;
     setAutoUpdateQuotes(enabled);
     try {
       localStorage.setItem('finova_quote_autoupdate', String(enabled));
       triggerSaveNotification('Market refresh preference saved');
     } catch {
-      // Ignore
+      setAutoUpdateQuotes(previous);
+      setSaveError('Could not save the refresh preference on this device.');
     }
   };
 
   const handleSelectInterval = (seconds: number) => {
+    const previous = quoteRefreshInterval;
     // Floor at 2s per prompt requirements
-    const safeSeconds = Math.max(2, seconds);
+    const safeSeconds = Math.min(300, Math.max(2, seconds));
     setQuoteRefreshInterval(safeSeconds);
     try {
       localStorage.setItem('finova_quote_interval', String(safeSeconds));
       triggerSaveNotification(`Quote poll interval set to ${safeSeconds}s`);
     } catch {
-      // Ignore
+      setQuoteRefreshInterval(previous);
+      setSaveError('Could not save the refresh interval on this device.');
     }
   };
 
   const handleToggleReducedMotion = (enabled: boolean) => {
+    const previous = reducedMotion;
     setReducedMotion(enabled);
     try {
       localStorage.setItem('finova_reduced_motion', String(enabled));
@@ -119,17 +128,20 @@ export default function SettingsPage() {
       }
       triggerSaveNotification('Motion preference updated');
     } catch {
-      // Ignore
+      setReducedMotion(previous);
+      setSaveError('Could not save the motion preference on this device.');
     }
   };
 
   const handleSelectDisplayMetric = (metric: 'percent' | 'absolute') => {
+    const previous = defaultDisplayMetric;
     setDefaultDisplayMetric(metric);
     try {
       localStorage.setItem('finova_default_metric', metric);
       triggerSaveNotification('Price display metric saved');
     } catch {
-      // Ignore
+      setDefaultDisplayMetric(previous);
+      setSaveError('Could not save the price display preference on this device.');
     }
   };
 
@@ -151,7 +163,8 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {savedBadge && (
+        {saveError && <p className="text-xs text-muted" role="alert">{saveError}</p>}
+        {savedBadge && !saveError && (
           <motion.div
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -222,7 +235,7 @@ export default function SettingsPage() {
                   : 'border-border bg-surface-raised text-muted hover:text-foreground hover:bg-surface'
               }`}
             >
-              <div className="p-2 rounded-lg bg-surface border border-border text-cyan-400">
+              <div className="p-2 rounded-lg bg-surface border border-border text-cyan-700 dark:text-cyan-400">
                 <Moon className="w-5 h-5" />
               </div>
               <div>
@@ -243,7 +256,7 @@ export default function SettingsPage() {
                   : 'border-border bg-surface-raised text-muted hover:text-foreground hover:bg-surface'
               }`}
             >
-              <div className="p-2 rounded-lg bg-surface border border-border text-purple-400">
+              <div className="p-2 rounded-lg bg-surface border border-border text-purple-700 dark:text-purple-400">
                 <Laptop className="w-5 h-5" />
               </div>
               <div>
@@ -322,7 +335,7 @@ export default function SettingsPage() {
                   onClick={() => handleSelectInterval(sec)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                     quoteRefreshInterval === sec
-                      ? 'bg-brand text-white border-brand shadow-sm'
+                      ? 'bg-brand text-foreground dark:text-white border-brand shadow-sm'
                       : 'bg-surface border-border text-muted hover:text-foreground hover:bg-surface-raised'
                   }`}
                 >
@@ -346,7 +359,7 @@ export default function SettingsPage() {
                 onClick={() => handleSelectDisplayMetric('percent')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                   defaultDisplayMetric === 'percent'
-                    ? 'bg-brand text-white border-brand'
+                    ? 'bg-brand text-foreground dark:text-white border-brand'
                     : 'bg-surface border-border text-muted hover:text-foreground'
                 }`}
               >
@@ -357,7 +370,7 @@ export default function SettingsPage() {
                 onClick={() => handleSelectDisplayMetric('absolute')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                   defaultDisplayMetric === 'absolute'
-                    ? 'bg-brand text-white border-brand'
+                    ? 'bg-brand text-foreground dark:text-white border-brand'
                     : 'bg-surface border-border text-muted hover:text-foreground'
                 }`}
               >
@@ -377,7 +390,7 @@ export default function SettingsPage() {
       >
         <div className="border-b border-border/60 pb-3">
           <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-            <Eye className="w-4 h-4 text-purple-400" />
+            <Eye className="w-4 h-4 text-purple-700 dark:text-purple-400" />
             Accessibility &amp; Motion
           </h2>
           <p className="text-xs text-muted mt-0.5">
@@ -417,7 +430,7 @@ export default function SettingsPage() {
           className="card p-5 border border-border hover:border-brand transition-all group flex flex-col justify-between space-y-3"
         >
           <div className="space-y-1.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center">
               <User className="w-4 h-4" />
             </div>
             <h3 className="text-sm font-bold text-foreground group-hover:text-brand transition-colors">
@@ -437,7 +450,7 @@ export default function SettingsPage() {
           className="card p-5 border border-border hover:border-brand transition-all group flex flex-col justify-between space-y-3"
         >
           <div className="space-y-1.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
               <Wallet className="w-4 h-4" />
             </div>
             <h3 className="text-sm font-bold text-foreground group-hover:text-brand transition-colors">
@@ -457,7 +470,7 @@ export default function SettingsPage() {
           className="card p-5 border border-border hover:border-brand transition-all group flex flex-col justify-between space-y-3"
         >
           <div className="space-y-1.5">
-            <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20 flex items-center justify-center">
               <Bell className="w-4 h-4" />
             </div>
             <h3 className="text-sm font-bold text-foreground group-hover:text-brand transition-colors">
@@ -492,7 +505,7 @@ export default function SettingsPage() {
 
         <div className="space-y-3 text-xs">
           <div className="p-3.5 rounded-xl border border-border bg-surface-raised flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0">
+            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex-shrink-0">
               <Database className="w-4 h-4" />
             </div>
             <div className="space-y-0.5 flex-1">
@@ -504,7 +517,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="p-3.5 rounded-xl border border-border bg-surface-raised flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex-shrink-0">
+            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 flex-shrink-0">
               <Shield className="w-4 h-4" />
             </div>
             <div className="space-y-0.5 flex-1">

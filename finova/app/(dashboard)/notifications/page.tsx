@@ -13,7 +13,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
+import { useSession } from '@/components/providers/QueryProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
@@ -51,6 +52,8 @@ interface NotificationItem {
 const STORAGE_KEY = 'finova_read_notification_ids';
 
 export default function NotificationsPage() {
+  const { userId } = useSession();
+  const storageKey = `${STORAGE_KEY}:${userId || 'guest'}`;
   const [activeCategory, setActiveCategory] = useState<NotificationCategory>('all');
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [isClient, setIsClient] = useState(false);
@@ -58,20 +61,22 @@ export default function NotificationsPage() {
   // Load read state from localStorage
   useEffect(() => {
     setIsClient(true);
+    setReadIds(new Set());
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(storageKey);
       if (stored) {
-        setReadIds(new Set(JSON.parse(stored)));
+        const ids: unknown = JSON.parse(stored);
+        setReadIds(new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []));
       }
     } catch {
       // Ignore localStorage read errors
     }
-  }, []);
+  }, [storageKey]);
 
   const saveReadIds = (newSet: Set<string>) => {
     setReadIds(newSet);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(newSet)));
+      localStorage.setItem(storageKey, JSON.stringify(Array.from(newSet)));
     } catch {
       // Ignore localStorage write errors
     }
@@ -128,10 +133,10 @@ export default function NotificationsPage() {
 
     list.push({
       id: `market-status-${todayStr}`,
-      title: isMarketOpen ? 'Indian Markets Active (NSE/BSE)' : 'Indian Markets Closed',
+      title: isMarketOpen ? 'Usual Indian trading hours (calendar estimate)' : 'Outside usual Indian trading hours',
       message: isMarketOpen
-        ? 'Live market session in progress (09:15 – 15:30 IST). Latest stock quotes are actively auto-updating.'
-        : 'NSE/BSE trading session is currently closed. FINOVA displays official previous-close valuations with verified timestamps.',
+        ? 'Usual hours are 09:15–15:30 IST on weekdays. Holidays and actual exchange activity are not verified by this calendar estimate. Check each quote timestamp.'
+        : 'FINOVA displays the latest available provider quotes with their original timestamps. This calendar estimate does not verify exchange session status.',
       category: 'market',
       severity: 'info',
       timestamp: 'Today, ' + istTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
@@ -289,7 +294,7 @@ export default function NotificationsPage() {
               Notifications &amp; Activity
             </h1>
             {isClient && unreadCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-brand text-white shadow-sm">
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-brand text-foreground dark:text-white shadow-sm">
                 {unreadCount} new
               </span>
             )}
@@ -332,7 +337,7 @@ export default function NotificationsPage() {
               onClick={() => setActiveCategory(cat.id)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                 isActive
-                  ? 'bg-brand text-white shadow-sm'
+                  ? 'bg-brand text-foreground dark:text-white shadow-sm'
                   : 'bg-surface border border-border text-muted hover:text-foreground hover:bg-surface-raised'
               }`}
             >
@@ -340,7 +345,7 @@ export default function NotificationsPage() {
               {cat.count !== undefined && (
                 <span
                   className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-surface-raised text-muted'
+                    isActive ? 'bg-white/20 text-foreground dark:text-white' : 'bg-surface-raised text-muted'
                   }`}
                 >
                   {cat.count}
