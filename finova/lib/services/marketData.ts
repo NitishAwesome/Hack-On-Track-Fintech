@@ -44,20 +44,20 @@ export function getIndianMarketStatus(date = new Date()): {
   const totalMinutes = hour * 60 + minute;
 
   if (isWeekend) {
-    return { status: 'CLOSED', label: 'Market Closed (Weekend)', isTradingDay: false };
+    return { status: 'CLOSED', label: 'Outside usual trading hours (calendar estimate)', isTradingDay: false };
   }
 
   // Pre-open: 9:00 AM to 9:15 AM IST (540 to 555 mins)
   if (totalMinutes >= 540 && totalMinutes < 555) {
-    return { status: 'PRE_OPEN', label: 'Pre-Open Session', isTradingDay: true };
+    return { status: 'PRE_OPEN', label: 'Usual pre-open hours (calendar estimate)', isTradingDay: true };
   }
 
   // Regular trading: 9:15 AM to 3:30 PM IST (555 to 930 mins)
   if (totalMinutes >= 555 && totalMinutes < 930) {
-    return { status: 'OPEN', label: 'Market Open', isTradingDay: true };
+    return { status: 'OPEN', label: 'Usual trading hours (calendar estimate)', isTradingDay: true };
   }
 
-  return { status: 'CLOSED', label: 'Market Closed', isTradingDay: true };
+  return { status: 'CLOSED', label: 'Outside usual trading hours (calendar estimate)', isTradingDay: true };
 }
 
 interface IndexCacheEntry {
@@ -481,13 +481,23 @@ export class MarketDataService {
     const cached = chartMemoryCache.get(cacheKey);
 
     if (!options?.forceRefresh && cached && cached.expiresAt > now) {
-      return cached.data;
+      const quote = await this.getQuote(cleanSym, cleanEx, options);
+      return { ...cached.data, previousClose: quote?.previousClose ?? null, dayChange: quote?.day_change ?? null, dayChangePercent: quote?.day_change_pct ?? null, quoteTimestamp: quote?.price_timestamp ?? null, ...(quote ? { currentPrice: quote.price } : {}) };
     }
 
     try {
       if (typeof this.provider.fetchHistoricalChart === 'function') {
-        const chartData = await this.provider.fetchHistoricalChart(cleanSym, cleanEx, validRange);
+        const [chartData, quote] = await Promise.all([
+          this.provider.fetchHistoricalChart(cleanSym, cleanEx, validRange),
+          this.getQuote(cleanSym, cleanEx, options),
+        ]);
         if (chartData && chartData.points.length > 0) {
+          // Daily movement belongs to the canonical quote, never to a range-start close.
+          chartData.previousClose = quote?.previousClose ?? null;
+          chartData.dayChange = quote?.day_change ?? null;
+          chartData.dayChangePercent = quote?.day_change_pct ?? null;
+          chartData.quoteTimestamp = quote?.price_timestamp ?? null;
+          if (quote) chartData.currentPrice = quote.price;
           const ttl = validRange === '1D' ? CACHE_TTL_OPEN_MS : CACHE_TTL_CLOSED_MS;
           chartMemoryCache.set(cacheKey, {
             data: chartData,
@@ -527,7 +537,7 @@ export class MarketDataService {
 
     // Sort gainers (highest positive percentage change)
     const gainers = [...validQuotes]
-      .filter((q) => (q.day_change_pct ?? 0) >= 0)
+      .filter((q) => q.day_change_pct !== null && Number.isFinite(q.day_change_pct) && q.day_change_pct >= 0)
       .sort((a, b) => (b.day_change_pct ?? 0) - (a.day_change_pct ?? 0));
 
     // Sort losers (lowest / most negative percentage change)

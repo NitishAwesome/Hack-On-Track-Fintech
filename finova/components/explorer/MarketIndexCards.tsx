@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { MarketSparkline } from '@/components/shared/MarketSparkline';
 import type { MarketIndex } from '@/types/market';
 import { TrendingUp, TrendingDown, Clock, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
 import { useSharedMarketIndices } from '@/lib/market/sharedMarketStore';
@@ -43,23 +44,23 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
     switch (status) {
       case 'OPEN':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Market Open
+            Usual trading hours (estimate)
           </span>
         );
       case 'PRE_OPEN':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            Pre-Open
+            Usual pre-open hours (estimate)
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-surface-raised text-muted border border-border">
             <span className="w-1.5 h-1.5 rounded-full bg-muted" />
-            Market Closed
+            Outside usual hours (estimate)
           </span>
         );
     }
@@ -96,13 +97,13 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
               {marketStatus === 'OPEN'
                 ? isRefreshing
                   ? 'Updating…'
-                  : 'Updated just now'
-                : 'Market Closed — Previous Close'}
+                  : 'Latest available quote'
+                : 'Outside usual hours · calendar estimate'}
             </span>
           </div>
           <span className="text-xs text-muted hidden md:flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            Verified Market Feed
+            Yahoo Finance · provider feed
           </span>
           <button
             onClick={handleManualRefresh}
@@ -125,7 +126,7 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
       )}
 
       {error && !data?.indices?.length && (
-        <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-300 text-sm flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-700 dark:text-amber-300 text-sm flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}. Displaying fallback status.</span>
         </div>
@@ -171,60 +172,20 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
 
                 <div className="mt-3 flex items-baseline justify-between">
                   <div className="text-xl font-extrabold text-foreground tracking-tight">
-                    ₹{idx.value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {idx.value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts
                   </div>
                   <div
                     className={`text-xs font-semibold flex items-center gap-1 ${
                       isPositive ? 'text-emerald-500' : 'text-rose-500'
                     }`}
                   >
-                    <span>{isPositive ? '+' : ''}{changeVal.toFixed(2)}</span>
-                    <span>({isPositive ? '+' : ''}{changePctVal.toFixed(2)}%)</span>
+                    <span>{idx.change === null ? '—' : `${isPositive ? '+' : ''}${changeVal.toFixed(2)}`}</span>
+                    <span>{idx.changePercent === null ? '—' : `(${isPositive ? '+' : ''}${changePctVal.toFixed(2)}%)`}</span>
                   </div>
                 </div>
 
                 <div className="h-9 my-1">
-                    <svg viewBox="0 0 100 24" className="w-full h-full overflow-visible">
-                      <defs>
-                        <linearGradient id={`idx-spark-grad-${idx.symbol}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={isPositive ? 'rgb(var(--gain))' : 'rgb(var(--loss))'} stopOpacity="0.3" />
-                          <stop offset="100%" stopColor={isPositive ? 'rgb(var(--gain))' : 'rgb(var(--loss))'} stopOpacity="0.0" />
-                        </linearGradient>
-                      </defs>
-                      {isPositive ? (
-                        <>
-                          <path
-                            d="M 2 19 L 14 16 L 26 17 L 38 12 L 50 14 L 62 9 L 74 11 L 86 5 L 98 3 L 98 24 L 2 24 Z"
-                            fill={`url(#idx-spark-grad-${idx.symbol})`}
-                          />
-                          <path
-                            d="M 2 19 L 14 16 L 26 17 L 38 12 L 50 14 L 62 9 L 74 11 L 86 5 L 98 3"
-                            fill="none"
-                            stroke="rgb(var(--gain))"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <circle cx="98" cy="3" r="2.5" fill="rgb(var(--gain))" />
-                        </>
-                      ) : (
-                        <>
-                          <path
-                            d="M 2 4 L 14 7 L 26 5 L 38 12 L 50 10 L 62 16 L 74 14 L 86 19 L 98 21 L 98 24 L 2 24 Z"
-                            fill={`url(#idx-spark-grad-${idx.symbol})`}
-                          />
-                          <path
-                            d="M 2 4 L 14 7 L 26 5 L 38 12 L 50 10 L 62 16 L 74 14 L 86 19 L 98 21"
-                            fill="none"
-                            stroke="rgb(var(--loss))"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <circle cx="98" cy="21" r="2.5" fill="rgb(var(--loss))" />
-                        </>
-                      )}
-                    </svg>
+                    <MarketSparkline symbol={idx.symbol} />
                   </div>
 
                   <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted">

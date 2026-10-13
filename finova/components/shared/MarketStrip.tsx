@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { MarketSparkline } from '@/components/shared/MarketSparkline';
 import { TrendingUp, TrendingDown, RefreshCw, AlertCircle } from 'lucide-react';
 import type { MarketIndex } from '@/types/market';
 import { cn } from '@/lib/utils';
@@ -74,7 +75,7 @@ export function MarketStrip({ className }: MarketStripProps) {
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    className="flex-1 min-w-[195px] md:min-w-0 px-3.5 sm:px-4 py-2 rounded-xl border border-border bg-surface-raised/50 animate-pulse flex items-center justify-between"
+                    className="flex-1 min-w-[240px] sm:min-w-[300px] px-3.5 sm:px-4 py-2 rounded-xl border border-border bg-surface-raised/50 animate-pulse flex items-center justify-between"
                   >
                     <div className="space-y-1.5">
                       <div className="h-2.5 w-14 bg-muted/20 rounded" />
@@ -91,7 +92,7 @@ export function MarketStrip({ className }: MarketStripProps) {
 
             {/* 2. Success State: Real Market Items in a single horizontal row on desktop, swipeable on mobile */}
             {!loading && data && data.success && data.indices.length > 0 && (
-              <div className="flex items-center gap-2.5 sm:gap-3.5 overflow-x-auto md:overflow-visible no-scrollbar py-0.5 scroll-smooth">
+              <div className="flex items-center gap-2.5 sm:gap-3.5 overflow-x-auto no-scrollbar py-0.5 scroll-smooth">
                 {EXPECTED_INDICES.map((cfg) => {
                   const idx = data.indices.find(
                     (item: MarketIndex) => item.symbol.toUpperCase() === cfg.symbol.toUpperCase()
@@ -102,7 +103,7 @@ export function MarketStrip({ className }: MarketStripProps) {
                     return (
                       <div
                         key={cfg.symbol}
-                        className="flex-1 min-w-[195px] md:min-w-0 px-3.5 sm:px-4 py-2 rounded-xl border transition-colors flex items-center justify-between gap-2.5 flex-shrink-0"
+                        className="flex-1 min-w-[240px] sm:min-w-[300px] px-3.5 sm:px-4 py-2 rounded-xl border transition-colors flex items-center justify-between gap-2.5 flex-shrink-0"
                         style={{
                           backgroundColor: 'rgb(var(--surface-raised) / 0.35)',
                           borderColor: 'rgb(var(--border))',
@@ -137,7 +138,8 @@ export function MarketStrip({ className }: MarketStripProps) {
                   return (
                     <div
                       key={idx.symbol}
-                      className="flex-1 min-w-[210px] md:min-w-0 px-3.5 sm:px-4 py-2 rounded-xl border transition-all hover:border-brand/40 group flex items-center justify-between gap-3 flex-shrink-0 bg-surface shadow-xs"
+                      title={`${idx.source} · Quote ${new Date(idx.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`}
+                      className="flex-1 min-w-[240px] sm:min-w-[300px] px-3.5 sm:px-4 py-2 rounded-xl border transition-all hover:border-brand/40 group flex items-center justify-between gap-3 flex-shrink-0 bg-surface shadow-xs"
                       style={{
                         borderColor: 'rgb(var(--border))',
                       }}
@@ -168,47 +170,7 @@ export function MarketStrip({ className }: MarketStripProps) {
 
                       {/* Middle: Real Mini Price Chart Sparkline */}
                       <div className="hidden sm:block w-14 h-7 shrink-0 opacity-85 group-hover:opacity-100 transition-opacity">
-                        <svg viewBox="0 0 52 22" className="w-full h-full overflow-visible">
-                          <defs>
-                            <linearGradient id={`sparkline-grad-${idx.symbol}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={isPositive ? 'rgb(var(--gain))' : 'rgb(var(--loss))'} stopOpacity="0.35" />
-                              <stop offset="100%" stopColor={isPositive ? 'rgb(var(--gain))' : 'rgb(var(--loss))'} stopOpacity="0.0" />
-                            </linearGradient>
-                          </defs>
-                          {isPositive ? (
-                            <>
-                              <path
-                                d="M 2 17 L 8 14 L 14 16 L 20 11 L 26 13 L 32 8 L 38 10 L 44 5 L 50 3 L 50 22 L 2 22 Z"
-                                fill={`url(#sparkline-grad-${idx.symbol})`}
-                              />
-                              <path
-                                d="M 2 17 L 8 14 L 14 16 L 20 11 L 26 13 L 32 8 L 38 10 L 44 5 L 50 3"
-                                fill="none"
-                                stroke="rgb(var(--gain))"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                              <circle cx="50" cy="3" r="2" fill="rgb(var(--gain))" />
-                            </>
-                          ) : (
-                            <>
-                              <path
-                                d="M 2 4 L 8 7 L 14 5 L 20 11 L 26 9 L 32 14 L 38 12 L 44 17 L 50 19 L 50 22 L 2 22 Z"
-                                fill={`url(#sparkline-grad-${idx.symbol})`}
-                              />
-                              <path
-                                d="M 2 4 L 8 7 L 14 5 L 20 11 L 26 9 L 32 14 L 38 12 L 44 17 L 50 19"
-                                fill="none"
-                                stroke="rgb(var(--loss))"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                              <circle cx="50" cy="19" r="2" fill="rgb(var(--loss))" />
-                            </>
-                          )}
-                        </svg>
+                        <MarketSparkline symbol={idx.symbol} />
                       </div>
 
                       {/* Right: Absolute & Percentage Change */}
@@ -298,19 +260,17 @@ export function MarketStrip({ className }: MarketStripProps) {
               />
               <span className="font-medium text-foreground/80">
                 {isMarketOpen
-                  ? 'Market Open'
+                  ? 'Usual trading hours*'
                   : isPreOpen
-                  ? 'Pre-Open'
-                  : 'Market Closed'}
+                  ? 'Usual pre-open hours*'
+                  : 'Outside usual hours*'}
               </span>
             </div>
 
             {/* Accurate Timestamp & wording */}
             {formattedTime && (
               <span className="text-[10px] opacity-75">
-                {isMarketOpen
-                  ? `Latest ${formattedTime}`
-                  : `Last updated ${formattedTime}`}
+                {`Retrieved ${formattedTime} · *Calendar estimate`}
               </span>
             )}
 

@@ -78,18 +78,22 @@ const state: SharedMarketState = {
   lastQuotesFetchTime: null,
 
   marketStatus: isIndianMarketOpenNow() ? 'OPEN' : 'CLOSED',
-  marketStatusLabel: isIndianMarketOpenNow() ? 'Market Open' : 'Market Closed',
+  marketStatusLabel: isIndianMarketOpenNow() ? 'Usual trading hours (calendar estimate)' : 'Outside usual trading hours (calendar estimate)',
 };
 
 // Store subscribers
 const indicesListeners = new Set<() => void>();
 const quotesListeners = new Set<() => void>();
+let indicesVersion = 0;
+let quotesVersion = 0;
 
 function notifyIndicesListeners() {
+  indicesVersion++;
   indicesListeners.forEach((listener) => listener());
 }
 
 function notifyQuotesListeners() {
+  quotesVersion++;
   quotesListeners.forEach((listener) => listener());
 }
 
@@ -101,11 +105,20 @@ let quotesBackoffCount = 0;
 
 // Subscribed stock symbols across the entire app
 const activeSubscribedStockSymbols = new Set<string>();
+const symbolSubscriberCounts = new Map<string, number>();
 
 // Timer IDs for the singleton pollers
 let indicesTimerId: NodeJS.Timeout | null = null;
 let quotesTimerId: NodeJS.Timeout | null = null;
 let pollersInitialized = false;
+
+function pollingPreference() {
+  if (typeof window === 'undefined') return { enabled: true, interval: 30000 };
+  try {
+    const interval = Number(window.localStorage.getItem('finova_quote_interval') || 30);
+    return { enabled: window.localStorage.getItem('finova_quote_autoupdate') !== 'false', interval: Math.max(2000, Math.min(300000, (Number.isFinite(interval) ? interval : 30) * 1000)) };
+  } catch { return { enabled: true, interval: 30000 }; }
+}
 
 // ============================================================
 // 3. Central Indices Fetcher & Poller
@@ -131,7 +144,7 @@ export async function fetchCanonicalIndices(force = false): Promise<MarketDataRe
     const json: MarketDataResponse = await res.json();
     state.indicesResponse = json;
     state.marketStatus = json.marketStatus || (isIndianMarketOpenNow() ? 'OPEN' : 'CLOSED');
-    state.marketStatusLabel = json.marketStatusLabel || (json.marketStatus === 'OPEN' ? 'Market Open' : 'Market Closed');
+    state.marketStatusLabel = json.marketStatusLabel || 'Market session status unavailable';
     state.indicesError = null;
     state.lastIndicesFetchTime = new Date();
     indicesBackoffCount = 0;
@@ -146,13 +159,14 @@ export async function fetchCanonicalIndices(force = false): Promise<MarketDataRe
           exchange: canonical === 'SENSEX' ? 'BSE' : 'NSE',
           price: idx.value,
           currency: 'INR',
-          previousClose: idx.previousClose ?? idx.value,
-          day_change: idx.change ?? 0,
-          day_change_pct: idx.changePercent ?? 0,
+          previousClose: idx.previousClose ?? null,
+          day_change: idx.change ?? null,
+          day_change_pct: idx.changePercent ?? null,
           high_52w: null,
           low_52w: null,
           volume: null,
-          status: 'DELAYED',
+          status: json.freshnessState === 'CACHED_STALE' ? 'STALE' : 'DELAYED',
+          isStaleFallback: json.freshnessState === 'CACHED_STALE',
           price_timestamp: idx.timestamp,
           received_at: new Date().toISOString(),
           source: idx.source,
@@ -183,6 +197,8 @@ function scheduleNextIndicesPoll() {
     indicesTimerId = null;
   }
 
+  if (!pollingPreference().enabled) return;
+
   // 1. Tab hidden check
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
     return;
@@ -194,9 +210,9 @@ function scheduleNextIndicesPoll() {
   }
 
   // 3. Open market: 2–3s (2500ms) with exponential backoff on errors
-  let delay = 2500;
+  let delay = pollingPreference().interval;
   if (indicesBackoffCount > 0) {
-    delay = Math.min(2500 * Math.pow(2, indicesBackoffCount), 30000);
+    delay = Math.min(delay * Math.pow(2, indicesBackoffCount), 300000);
   }
 
   indicesTimerId = setTimeout(async () => {
@@ -285,6 +301,8 @@ function scheduleNextQuotesPoll() {
     quotesTimerId = null;
   }
 
+  if (!pollingPreference().enabled) return;
+
   // 1. Tab hidden check
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
     return;
@@ -301,9 +319,9 @@ function scheduleNextQuotesPoll() {
   }
 
   // 4. Open market: 2–3s (2500ms) with exponential backoff on errors
-  let delay = 2500;
+  let delay = pollingPreference().interval;
   if (quotesBackoffCount > 0) {
-    delay = Math.min(2500 * Math.pow(2, quotesBackoffCount), 30000);
+    delay = Math.min(delay * Math.pow(2, quotesBackoffCount), 300000);
   }
 
   quotesTimerId = setTimeout(async () => {
@@ -329,6 +347,9 @@ function scheduleNextQuotesPoll() {
 function ensureGlobalPollersStarted() {
   if (pollersInitialized || typeof window === 'undefined') return;
   pollersInitialized = true;
+  const reschedule = () => { scheduleNextIndicesPoll(); scheduleNextQuotesPoll(); };
+  window.addEventListener('storage', reschedule);
+  window.addEventListener('finova-preferences', reschedule);
 
   // Initial fetch for indices
   void fetchCanonicalIndices(false).then(() => {
@@ -393,9 +414,10 @@ export function useSharedMarketIndices(): SharedMarketIndicesResult {
     };
   }, []);
 
-  const getSnapshot = useCallback(() => state.indicesResponse, []);
+  const getSnapshot = useCallback(() => indicesVersion, []);
 
-  const data = useSyncExternalStore(subscribe, getSnapshot, () => null);
+  useSyncExternalStore(subscribe, getSnapshot, () => 0);
+  const data = state.indicesResponse;
 
   const isRefreshing = state.isRefreshingIndices;
   const loading = !data && state.indicesError === null;
@@ -403,12 +425,7 @@ export function useSharedMarketIndices(): SharedMarketIndicesResult {
   const marketStatusLabel = data?.marketStatusLabel || state.marketStatusLabel;
 
   // Clean, honest status label (NO countdowns)
-  let updateStatusLabel = 'Latest available';
-  if (marketStatus === 'OPEN') {
-    updateStatusLabel = isRefreshing ? 'Updating…' : 'Updated just now';
-  } else {
-    updateStatusLabel = 'Market Closed — Previous Close';
-  }
+  const updateStatusLabel = isRefreshing ? 'Retrieving quotes…' : data?.freshnessState === 'CACHED_STALE' ? 'Cached quotes — check quote times' : 'Latest available — check quote times';
 
   // Format timestamp concisely
   const lastUpdatedTime = data?.lastUpdated
@@ -463,8 +480,10 @@ export function useSharedStockQuotes(symbols: string[]): SharedStockQuotesResult
     ensureGlobalPollersStarted();
 
     // Register symbols into active set
-    symbols.forEach((s) => {
-      if (s) activeSubscribedStockSymbols.add(s.toUpperCase());
+    const subscribed = [...new Set(symbols.filter(Boolean).map(s => s.toUpperCase()))];
+    subscribed.forEach((s) => {
+      symbolSubscriberCounts.set(s, (symbolSubscriberCounts.get(s) || 0) + 1);
+      activeSubscribedStockSymbols.add(s);
     });
 
     // Initial fetch for these symbols
@@ -476,8 +495,10 @@ export function useSharedStockQuotes(symbols: string[]): SharedStockQuotesResult
     }
 
     return () => {
-      symbols.forEach((s) => {
-        if (s) activeSubscribedStockSymbols.delete(s.toUpperCase());
+      subscribed.forEach((s) => {
+        const count = (symbolSubscriberCounts.get(s) || 1) - 1;
+        if (count > 0) symbolSubscriberCounts.set(s, count);
+        else { symbolSubscriberCounts.delete(s); activeSubscribedStockSymbols.delete(s); }
       });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -490,7 +511,7 @@ export function useSharedStockQuotes(symbols: string[]): SharedStockQuotesResult
     };
   }, []);
 
-  const getSnapshot = useCallback(() => state.lastQuotesFetchTime?.getTime() || 0, []);
+  const getSnapshot = useCallback(() => quotesVersion, []);
 
   // Sync to quotes updates
   useSyncExternalStore(subscribe, getSnapshot, () => 0);
@@ -508,14 +529,7 @@ export function useSharedStockQuotes(symbols: string[]): SharedStockQuotesResult
 
   const marketOpen = isIndianMarketOpenNow() && state.marketStatus !== 'CLOSED';
 
-  let updateStatusLabel = 'Latest available';
-  if (!marketOpen) {
-    updateStatusLabel = 'Market Closed — Previous Close';
-  } else if (state.isRefreshingQuotes) {
-    updateStatusLabel = 'Updating…';
-  } else if (state.lastQuotesFetchTime) {
-    updateStatusLabel = 'Updated just now';
-  }
+  const updateStatusLabel = state.isRefreshingQuotes ? 'Retrieving quotes…' : 'Latest available — check quote times';
 
   const refreshNow = useCallback(async () => {
     await fetchCanonicalQuotes(symbols, true);

@@ -25,6 +25,9 @@ export interface MarketQuote {
   day_change: number | null;
   day_change_pct: number | null;
   previousClose?: number | null;
+  sessionOpen?: number | null;
+  dayHigh?: number | null;
+  dayLow?: number | null;
   high_52w: number | null;
   low_52w: number | null;
   volume: number | null;
@@ -68,6 +71,9 @@ export interface HistoricalChartResponse {
   volume?: number | null;
   source: string;
   lastUpdated: string;
+  quoteTimestamp?: string | null;
+  retrievedAt?: string;
+  priceBasis?: string;
 }
 
 export interface MarketDataProvider {
@@ -285,6 +291,9 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
         price_timestamp: validation.normalizedTimestamp || metrics.tradeTimestamp,
         received_at: new Date().toISOString(),
         previousClose: metrics.previousClose,
+        sessionOpen: Number.isFinite(meta.regularMarketOpen) ? meta.regularMarketOpen : null,
+        dayHigh: Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : null,
+        dayLow: Number.isFinite(meta.regularMarketDayLow) ? meta.regularMarketDayLow : null,
         day_change: metrics.change,
         day_change_pct: metrics.changePercent,
         high_52w: high52w,
@@ -401,7 +410,7 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
 
       for (let i = 0; i < timestamps.length; i++) {
         const ts = timestamps[i];
-        const c = closes[i] ?? opens[i];
+        const c = closes[i];
         if (typeof c === 'number' && !isNaN(c) && c > 0) {
           points.push({
             timestamp: ts * 1000,
@@ -425,8 +434,6 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
 
       const previousClose = typeof meta?.previousClose === 'number' && meta.previousClose > 0
         ? Number(meta.previousClose.toFixed(2))
-        : typeof meta?.chartPreviousClose === 'number' && meta.chartPreviousClose > 0
-        ? Number(meta.chartPreviousClose.toFixed(2))
         : null;
 
       const dayChange = previousClose !== null
@@ -469,6 +476,9 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
         volume,
         source: this.sourceLabel,
         lastUpdated: new Date().toISOString(),
+        quoteTimestamp: meta?.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
+        retrievedAt: new Date().toISOString(),
+        priceBasis: 'Provider close prices; FINOVA does not independently verify corporate-action adjustments. Excludes dividends.',
       };
     } catch {
       return null;
