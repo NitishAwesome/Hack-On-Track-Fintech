@@ -9,7 +9,7 @@
 // and persistent conversation history.
 // ============================================================
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { BarChart3, Shield, FlaskConical, Compass } from 'lucide-react';
 import { FinovaIntelligenceWorkspace } from '@/components/insights/FinovaIntelligenceWorkspace';
@@ -37,20 +37,20 @@ export default function InsightsPage() {
           href="/future-lab"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-surface hover:bg-surface-raised transition-colors text-foreground"
         >
-          <FlaskConical className="w-3.5 h-3.5 text-purple-400" />
+          <FlaskConical className="w-3.5 h-3.5 text-purple-700 dark:text-purple-400" />
           <span>Future Lab</span>
         </Link>
         <Link
           href="/explore"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-surface hover:bg-surface-raised transition-colors text-foreground"
         >
-          <Compass className="w-3.5 h-3.5 text-emerald-400" />
+          <Compass className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
           <span>Investment Explorer</span>
         </Link>
       </div>
 
       {/* Primary Experience: Complete AI Research Assistant & Diagnostics Hub */}
-      <FinovaIntelligenceWorkspace />
+      <Suspense><FinovaIntelligenceWorkspace /></Suspense>
     </div>
   );
 }

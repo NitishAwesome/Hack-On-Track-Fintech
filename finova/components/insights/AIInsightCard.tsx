@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -52,7 +52,7 @@ export function AIInsightCard({ insightType = 'portfolio_summary' }: AIInsightCa
             className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
           >
-            <Sparkles className="w-3.5 h-3.5 text-white" />
+            <Sparkles className="w-3.5 h-3.5 text-foreground dark:text-white" />
           </div>
           <div className="text-left">
             <p className="text-sm font-semibold" style={{ color: 'rgb(var(--foreground))' }}>

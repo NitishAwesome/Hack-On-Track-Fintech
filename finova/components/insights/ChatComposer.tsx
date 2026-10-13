@@ -17,6 +17,7 @@ interface ChatComposerProps {
   isGenerating?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  initialQuestion?: string;
 }
 
 export function ChatComposer({
@@ -25,8 +26,10 @@ export function ChatComposer({
   isGenerating = false,
   disabled = false,
   placeholder = 'Ask FINOVA Intelligence about your portfolio, stock comparisons, news, or regulations...',
+  initialQuestion = '',
 }: ChatComposerProps) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialQuestion.slice(0, 2000));
+  useEffect(() => { setText(initialQuestion.slice(0, 2000)); }, [initialQuestion]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const MAX_CHARS = 2000;
@@ -102,7 +105,7 @@ export function ChatComposer({
             <button
               type="button"
               onClick={onStop}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors text-white"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors text-foreground dark:text-white"
               style={{ backgroundColor: 'rgb(var(--destructive, 220, 38, 38))' }}
               title="Stop generating"
             >
@@ -114,7 +117,7 @@ export function ChatComposer({
               type="button"
               onClick={() => handleSubmit()}
               disabled={!text.trim() || disabled}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-brand text-white hover:opacity-90 cursor-pointer"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-brand text-foreground dark:text-white hover:opacity-90 cursor-pointer"
             >
               <span>Send</span>
               <Send className="w-3 h-3" />

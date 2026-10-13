@@ -92,7 +92,7 @@ export function InsightPreviewSection() {
             <div className="flex items-center gap-2 text-[11px] text-muted pt-1">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
               <span>
-                Demonstrative illustration. Finova will connect to live licensed news wires and portfolio analysis models upon general release.
+                Demo illustration. The signed-in workspace provides portfolio context and sourced news when its providers are available.
               </span>
             </div>
           </div>

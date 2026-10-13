@@ -7,7 +7,7 @@
 // ============================================================
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
 import { motion } from 'framer-motion';
 import {
   Sparkles,
@@ -83,7 +83,7 @@ export function PortfolioIntelligenceHub() {
                 background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
               }}
             >
-              <Sparkles className="w-4 h-4 text-white" />
+              <Sparkles className="w-4 h-4 text-foreground dark:text-white" />
             </div>
             <div>
               <h2 className="text-lg font-bold" style={{ color: 'rgb(var(--foreground))' }}>
@@ -123,7 +123,7 @@ export function PortfolioIntelligenceHub() {
             id="refresh-intelligence-btn"
             onClick={() => refetch()}
             disabled={isFetching}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm transition-all hover:opacity-95 disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-foreground dark:text-white shadow-sm transition-all hover:opacity-95 disabled:opacity-50"
             style={{
               background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
             }}

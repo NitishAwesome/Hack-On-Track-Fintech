@@ -13,7 +13,10 @@
 // ============================================================
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useReducedMotionConfig } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
+import { useSearchParams } from 'next/navigation';
 import {
   Sparkles,
   MessageSquare,
@@ -30,6 +33,9 @@ import type { AIChatConversation, AIChatMessage } from '@/types/chat';
 
 export function FinovaIntelligenceWorkspace() {
   const queryClient = useQueryClient();
+  const reducedMotion = useReducedMotionConfig();
+  const searchParams = useSearchParams();
+  const question = searchParams.get('question') || searchParams.get('q') || (searchParams.get('symbol') ? `What should I research about ${searchParams.get('symbol')}?` : '');
 
   // Active view: 'chat' | 'diagnostics'
   const [activeView, setActiveView] = useState<'chat' | 'diagnostics'>('chat');
@@ -37,6 +43,7 @@ export function FinovaIntelligenceWorkspace() {
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
+  const [conversationError, setConversationError] = useState<string | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -46,6 +53,7 @@ export function FinovaIntelligenceWorkspace() {
   const {
     data: convData,
     isLoading: convsLoading,
+    error: convsError,
     refetch: refetchConvs,
   } = useQuery({
     queryKey: ['ai-conversations'],
@@ -53,7 +61,7 @@ export function FinovaIntelligenceWorkspace() {
       const res = await fetch('/api/ai/conversations');
       if (!res.ok) {
         // Unauthenticated or error
-        return { conversations: [], persistenceStatus: 'session_fallback' };
+        throw new Error('Conversation history could not be loaded. Please retry.');
       }
       return res.json();
     },
@@ -63,7 +71,7 @@ export function FinovaIntelligenceWorkspace() {
     () => convData?.conversations || [],
     [convData?.conversations]
   );
-  const persistenceStatus: string = convData?.persistenceStatus || 'persisted';
+  const persistenceStatus: string = convData?.persistenceStatus || (convsLoading ? 'loading' : 'unavailable');
 
   // If activeConversationId not set and we have conversations, select the first one on initial load only
   useEffect(() => {
@@ -79,12 +87,14 @@ export function FinovaIntelligenceWorkspace() {
   const {
     data: msgData,
     isLoading: msgsLoading,
+    error: msgsError,
+    refetch: refetchMessages,
   } = useQuery({
     queryKey: ['ai-messages', activeConversationId],
     queryFn: async () => {
       if (!activeConversationId) return { messages: [] };
       const res = await fetch(`/api/ai/conversations/${activeConversationId}`);
-      if (!res.ok) return { messages: [] };
+      if (!res.ok) throw new Error('This conversation could not be loaded. Please retry.');
       return res.json();
     },
     enabled: Boolean(activeConversationId),
@@ -103,11 +113,13 @@ export function FinovaIntelligenceWorkspace() {
 
   // Scroll to bottom on new message
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [localMessages, isGenerating]);
+    messagesEndRef.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth' });
+  }, [localMessages, isGenerating, reducedMotion]);
 
   // 3. New Chat Handler
   const handleNewChat = async () => {
+    if (isGenerating) return;
+    setConversationError(null);
     // Immediately clear active chat and messages to show the clean welcome workspace
     setActiveConversationId(undefined);
     setLocalMessages([]);
@@ -120,6 +132,7 @@ export function FinovaIntelligenceWorkspace() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'New Research Chat' }),
       });
+      if (!res.ok) throw new Error('The conversation could not be saved. You can retry from this draft.');
       if (res.ok) {
         const data = await res.json();
         if (data.conversation?.id) {
@@ -127,8 +140,8 @@ export function FinovaIntelligenceWorkspace() {
           queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
         }
       }
-    } catch {
-      // If network fails, stay in draft new chat mode (activeConversationId = undefined)
+    } catch (error) {
+      setConversationError(error instanceof Error ? error.message : 'The conversation could not be saved. You can retry from this draft.');
     } finally {
       setIsCreatingNewChat(false);
     }
@@ -239,23 +252,27 @@ export function FinovaIntelligenceWorkspace() {
   // 5. Rename Conversation
   const handleRename = async (id: string, newTitle: string) => {
     try {
-      await fetch(`/api/ai/conversations/${id}`, {
+      const res = await fetch(`/api/ai/conversations/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newTitle }),
       });
+      if (!res.ok) throw new Error('Could not rename this conversation.');
+      setConversationError(null);
       refetchConvs();
-    } catch {
-      // Ignore
+    } catch (error) {
+      setConversationError(error instanceof Error ? error.message : 'Conversation update failed.');
     }
   };
 
   // 6. Delete Conversation
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`/api/ai/conversations/${id}`, {
+      const res = await fetch(`/api/ai/conversations/${id}`, {
         method: 'DELETE',
       });
+      if (!res.ok) throw new Error('Could not delete this conversation.');
+      setConversationError(null);
       if (activeConversationId === id) {
         const remaining = conversations.filter((c) => c.id !== id);
         if (remaining.length > 0) {
@@ -266,12 +283,14 @@ export function FinovaIntelligenceWorkspace() {
         }
       }
       refetchConvs();
-    } catch {
-      // Ignore
+    } catch (error) {
+      setConversationError(error instanceof Error ? error.message : 'Conversation deletion failed.');
     }
   };
 
   return (
+    <>
+    {(conversationError || convsError) && <p role="alert" className="text-xs text-muted p-3">{conversationError || convsError?.message} <button type="button" className="underline" onClick={() => refetchConvs()}>Retry history</button></p>}
     <div className="flex flex-col h-[calc(100vh-8rem)] min-h-[640px] rounded-xl border overflow-hidden bg-card shadow-xs" style={{ borderColor: 'rgb(var(--border))' }}>
       {/* Top Workspace Header */}
       <div className="px-4 py-3 border-b flex items-center justify-between gap-3 bg-card/80 backdrop-blur-xs z-10" style={{ borderColor: 'rgb(var(--border))' }}>
@@ -351,6 +370,8 @@ export function FinovaIntelligenceWorkspace() {
               conversations={conversations}
               activeConversationId={activeConversationId}
               onSelectConversation={(id) => {
+                if (isGenerating) return;
+                setLocalMessages([]);
                 setActiveConversationId(id);
                 setSidebarOpenMobile(false);
               }}
@@ -374,7 +395,7 @@ export function FinovaIntelligenceWorkspace() {
           {/* Main Chat Workspace */}
           <div className="flex-1 flex flex-col h-full overflow-hidden bg-background/50">
             {/* Persistence Status Notice if unmigrated */}
-            {persistenceStatus === 'pending_migration' && (
+            {['pending_migration', 'session_fallback', 'persisted'].includes(persistenceStatus) && (
               <div
                 className="px-4 py-2 text-[11px] flex items-center justify-between border-b"
                 style={{
@@ -386,7 +407,7 @@ export function FinovaIntelligenceWorkspace() {
                 <div className="flex items-center gap-1.5">
                   <Database className="w-3.5 h-3.5 flex-shrink-0" />
                   <span>
-                    Database persistence migration pending owner approval. Active session storage is engaged.
+                    {persistenceStatus === 'persisted' ? 'Conversation history is stored in your account.' : 'Conversation history is using temporary server storage and may be lost after a server restart.'}
                   </span>
                 </div>
               </div>
@@ -394,6 +415,7 @@ export function FinovaIntelligenceWorkspace() {
 
             {/* Message Area */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+              {msgsError && <p role="alert" className="text-xs text-muted">{msgsError.message} <button type="button" className="underline" onClick={() => refetchMessages()}>Retry conversation</button></p>}
               {msgsLoading && localMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-xs text-muted space-y-2">
                   <div className="w-5 h-5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
@@ -449,6 +471,7 @@ export function FinovaIntelligenceWorkspace() {
             <div className="p-3 sm:p-4 border-t bg-card/70 backdrop-blur-xs" style={{ borderColor: 'rgb(var(--border))' }}>
               <div className="max-w-3xl mx-auto">
                 <ChatComposer
+                  initialQuestion={question}
                   onSend={handleSendMessage}
                   onStop={handleStop}
                   isGenerating={isGenerating}
@@ -460,5 +483,6 @@ export function FinovaIntelligenceWorkspace() {
         </div>
       )}
     </div>
+    </>
   );
 }

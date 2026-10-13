@@ -99,7 +99,7 @@ export function ChatSidebar({
           type="button"
           onClick={onNewChat}
           disabled={isCreatingNewChat}
-          className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 bg-brand text-white hover:opacity-90 transition-all cursor-pointer shadow-xs disabled:opacity-75"
+          className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 bg-brand text-foreground dark:text-white hover:opacity-90 transition-all cursor-pointer shadow-xs disabled:opacity-75"
         >
           {isCreatingNewChat ? (
             <>
