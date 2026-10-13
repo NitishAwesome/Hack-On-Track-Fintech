@@ -9,7 +9,14 @@ export const INDEX_IDENTITIES: Record<string, { symbol: string; name: string; ex
   BANKNIFTY: { symbol: 'BANKNIFTY', name: 'Nifty Bank Index', exchange: 'NSE' },
 };
 export function normalizeResearchSymbol(value: string) {
-  const symbol = value.trim().toUpperCase().replace(/\.(NS|BO)$/, '');
+  // Card links encode Yahoo's caret tickers; route params can retain that encoding.
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    return ''; // Malformed URL symbols remain unsupported by the research route.
+  }
+  const symbol = decoded.trim().toUpperCase().replace(/\.(NS|BO)$/, '');
   return ({ '^NSEI': 'NIFTY50', '^BSESN': 'SENSEX', '^NSEBANK': 'BANKNIFTY' } as Record<string, string>)[symbol] || symbol;
 }
 export function validateWatchlistInstrument(symbol: unknown, exchange: unknown = 'NSE') {

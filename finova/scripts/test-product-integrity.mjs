@@ -159,6 +159,35 @@ await test('safe destinations, catalog sectors, official provenance and stable r
   for (const item of ipo.categories.listed) { assert.match(item.official_link, /^https:\/\/nsearchives.nseindia.com/); assert.equal(item.price_band, null); }
 });
 
+await test('index research accepts encoded card URLs and canonical symbols without treating indices as equities', async () => {
+  const notFound = new Error('Research not found');
+  const route = loader({
+    'next/navigation': { notFound: () => { throw notFound; } },
+    './DedicatedStockDetailClient': { DedicatedStockDetailClient: () => null },
+  })('app/(research)/explore/stocks/[symbol]/page.tsx');
+  const { resolveYahooFinanceSymbol } = load('lib/market/symbolMapper.ts');
+  for (const [ticker, canonical] of [['^NSEI', 'NIFTY50'], ['^BSESN', 'SENSEX'], ['^NSEBANK', 'BANKNIFTY']]) {
+    for (const symbol of [ticker, encodeURIComponent(ticker), canonical]) {
+      const props = { params: Promise.resolve({ symbol }) };
+      const page = await route.default(props);
+      const instrument = page.props.children.props.initialStock;
+      assert.equal(instrument.symbol, canonical);
+      assert.equal(instrument.name, INDEX_IDENTITIES[canonical].name);
+      assert.equal(instrument.exchange, 'INDEX');
+      assert.equal(resolveYahooFinanceSymbol(instrument.symbol, instrument.exchange), ticker);
+      assert.ok((await route.generateMetadata(props)).title.startsWith(canonical));
+    }
+  }
+  for (const [symbol, canonical] of [['RELIANCE', 'RELIANCE'], ['reliance.ns', 'RELIANCE'], ['M%26M', 'M&M']]) {
+    const page = await route.default({ params: Promise.resolve({ symbol }) });
+    assert.equal(page.props.children.props.initialStock.symbol, canonical);
+    assert.equal(page.props.children.props.initialStock.exchange, 'NSE');
+  }
+  for (const symbol of ['UNKNOWN', '^UNKNOWN', '%ZZ', '%2F', '%255ENSEI']) {
+    await assert.rejects(route.default({ params: Promise.resolve({ symbol }) }), error => error === notFound);
+  }
+});
+
 await test('daily movement comes from the quote; selected-period movement remains separate', async () => {
   const quote = { symbol: 'TCS', exchange: 'NSE', price: 120, previousClose: 118, day_change: 2, day_change_pct: 1.69, price_timestamp: '2026-10-13T09:30:00Z', isValid: true, status: 'DELAYED' };
   MarketDataService.setProvider({ id: 'offline-test', sourceLabel: 'Offline provider', fetchQuote: async () => quote, fetchQuotes: async () => new Map([['TCS', quote]]), fetchHistoricalChart: async () => ({ symbol: 'TCS', points: [point('2026-09-13', 100), point('2026-10-13', 120)], currentPrice: 120, previousClose: 100, dayChange: 20, dayChangePercent: 20, periodChange: 20, periodChangePercent: 20, priceBasis: 'Unadjusted close' }), fetchIndices: async () => [] });
