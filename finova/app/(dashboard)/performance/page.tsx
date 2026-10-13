@@ -1,7 +1,10 @@
 'use client';
+import { useReducedMotionConfig } from 'framer-motion';
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
+import { buildPortfolioSummary } from '@/lib/calculations/portfolio';
 import { motion } from 'framer-motion';
 import {
   AreaChart,
@@ -78,73 +81,76 @@ function CustomTooltip({
 }
 
 export default function PerformancePage() {
-  const { data: perfData, isLoading: isPerfLoading } = useQuery({
+  const reducedMotion = useReducedMotionConfig();
+  const queryClient = useQueryClient();
+  const { data: perfData, isLoading: isPerfLoading, error: perfError } = useQuery({
     queryKey: ['portfolio-performance'],
     queryFn: fetchPerformanceData,
   });
 
-  const { data: holdingsData, isLoading: isHoldingsLoading } = useQuery({
+  const { data: holdingsData, isLoading: isHoldingsLoading, isError: holdingsError } = useQuery({
     queryKey: ['holdings'],
     queryFn: fetchHoldings,
   });
 
-  const { data: snapData, isLoading: isSnapLoading, refetch: refetchSnapshots } = useQuery({
+  const { data: snapData, isLoading: isSnapLoading, error: snapError, refetch: refetchSnapshots } = useQuery({
     queryKey: ['portfolio-snapshots'],
     queryFn: fetchSnapshots,
   });
 
   const [isRecordingSnapshot, setIsRecordingSnapshot] = useState(false);
   const [snapshotSuccessMsg, setSnapshotSuccessMsg] = useState<string | null>(null);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
 
   const holdings: HoldingWithMetrics[] = holdingsData?.holdings ?? [];
   const performance: PerformanceSummary | undefined = perfData?.performance;
-  const snapshots: PortfolioSnapshotRow[] = snapData?.snapshots ?? [];
+  const snapshots: PortfolioSnapshotRow[] = (snapData?.snapshots ?? []).filter(
+    (s: PortfolioSnapshotRow) => s.completeness_status === 'COMPLETE' && s.portfolio_value !== null && Number.isFinite(s.portfolio_value)
+  );
 
   const isLoading = isPerfLoading || isHoldingsLoading || isSnapLoading;
 
-  const totalInvested = holdings.reduce((s, h) => s + h.invested_value, 0);
-  const totalValue = holdings.reduce((s, h) => s + (h.current_value ?? h.invested_value), 0);
+  const summary = buildPortfolioSummary(holdings);
+  const totalInvested = summary.total_invested_value;
+  const totalValue = summary.total_current_value;
+  const canRecord = !holdingsError && holdings.length > 0 && summary.is_valuation_complete && totalValue !== null;
 
   // Sort by absolute return % for gainers/losers
   const gainers = [...holdings]
+    .filter((h) => h.absolute_return_pct !== null && h.absolute_return_pct > 0)
     .sort((a, b) => (b.absolute_return_pct ?? 0) - (a.absolute_return_pct ?? 0))
     .slice(0, 5);
   const losers = [...holdings]
+    .filter((h) => h.absolute_return_pct !== null && h.absolute_return_pct < 0)
     .sort((a, b) => (a.absolute_return_pct ?? 0) - (b.absolute_return_pct ?? 0))
     .slice(0, 5);
 
   const chartData = snapshots.map((s) => ({
     date: new Date(s.snapshot_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
     Invested: s.invested_value,
-    Value: s.portfolio_value ?? s.invested_value,
+    Value: s.portfolio_value,
   }));
 
   const handleRecordSnapshot = async () => {
-    if (holdings.length === 0) return;
+    if (!canRecord || totalValue === null) return;
     setIsRecordingSnapshot(true);
     setSnapshotSuccessMsg(null);
+    setSnapshotError(null);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const unrealized = totalValue - totalInvested;
       const res = await fetch('/api/portfolio/snapshots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          snapshot_date: today,
-          invested_value: Math.round(totalInvested * 100) / 100,
-          portfolio_value: Math.round(totalValue * 100) / 100,
-          unrealized_pnl: Math.round(unrealized * 100) / 100,
-          realized_pnl: performance?.realized_pnl ?? 0,
-          currency: 'INR',
-          completeness_status: 'COMPLETE',
-        }),
       });
-      if (!res.ok) throw new Error('Failed to record snapshot');
+      if (!res.ok) {
+        const result = await res.json();
+        throw new Error(result.error || 'Failed to record snapshot');
+      }
       await refetchSnapshots();
+      await queryClient.invalidateQueries({ queryKey: ['portfolio-snapshots'] });
       setSnapshotSuccessMsg('Current valuation snapshot successfully recorded!');
       setTimeout(() => setSnapshotSuccessMsg(null), 4000);
     } catch (e) {
-      console.error('Error recording snapshot:', e);
+      setSnapshotError(e instanceof Error ? e.message : 'Failed to record snapshot');
     } finally {
       setIsRecordingSnapshot(false);
     }
@@ -265,10 +271,10 @@ export default function PerformancePage() {
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
                   Cash Income
                 </span>
-                <Coins className="w-4 h-4 text-teal-400" />
+                <Coins className="w-4 h-4 text-teal-700 dark:text-teal-400" />
               </div>
               <div
-                className="text-xl font-bold tracking-tight text-teal-400"
+                className="text-xl font-bold tracking-tight text-teal-700 dark:text-teal-400"
                 style={{ fontVariantNumeric: 'tabular-nums' }}
               >
                 +{formatCurrency(performance.total_income)}
@@ -329,7 +335,7 @@ export default function PerformancePage() {
         style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)' }}
       >
         <div className="flex items-center gap-2 text-muted">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+          <ShieldCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
           <span>
             <strong>Accounting Integrity:</strong> Realized P&amp;L reflects sale proceeds minus acquisition cost (WAC). Trade fees are incorporated into net proceeds, ensuring zero double-counting in Combined Net Return.
           </span>
@@ -362,7 +368,7 @@ export default function PerformancePage() {
                     Portfolio Growth
                   </h2>
                   <p className="text-xs text-muted mt-0.5">
-                    Grounded trajectory from {snapshots.length} verified valuation snapshots
+                    Recorded value history from {snapshots.length} complete valuation snapshots; deposits and withdrawals also affect this chart.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -374,7 +380,7 @@ export default function PerformancePage() {
                   </span>
                   <button
                     onClick={handleRecordSnapshot}
-                    disabled={isRecordingSnapshot}
+                    disabled={isRecordingSnapshot || !canRecord}
                     className="text-xs px-2.5 py-1 rounded-md bg-brand-500/10 text-brand-400 border border-brand-500/20 hover:bg-brand-500/20 transition-colors"
                   >
                     {isRecordingSnapshot ? 'Recording...' : '+ Record Today'}
@@ -408,6 +414,7 @@ export default function PerformancePage() {
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Area
+                    isAnimationActive={!reducedMotion}
                     type="monotone"
                     dataKey="Invested"
                     stroke="rgb(var(--muted))"
@@ -415,6 +422,7 @@ export default function PerformancePage() {
                     fill="url(#colorInvested)"
                   />
                   <Area
+                    isAnimationActive={!reducedMotion}
                     type="monotone"
                     dataKey="Value"
                     stroke="rgb(var(--brand-500))"
@@ -428,29 +436,29 @@ export default function PerformancePage() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="card p-6 border border-slate-700/60 bg-slate-900/40 backdrop-blur-sm space-y-4"
+              className="card p-6 border border-border/60 dark:border-slate-700/60 bg-surface/40 dark:bg-slate-900/40 backdrop-blur-sm space-y-4"
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
                     <History className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-semibold text-slate-100">
+                    <h2 className="text-base font-semibold text-foreground dark:text-slate-100">
                       Accumulating Historical Valuation Snapshots
                     </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-muted dark:text-slate-400 mt-0.5">
                       FINOVA adheres to strict financial integrity: retrospective return curves are never synthesized or fabricated.
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                  <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
                     {snapshots.length} of 2 Snapshots Recorded
                   </span>
                   <button
                     onClick={handleRecordSnapshot}
-                    disabled={isRecordingSnapshot}
+                    disabled={isRecordingSnapshot || !canRecord}
                     className="btn-primary text-xs py-1.5 px-3"
                   >
                     {isRecordingSnapshot ? 'Recording...' : 'Record Snapshot Now'}
@@ -458,36 +466,37 @@ export default function PerformancePage() {
                 </div>
               </div>
 
+              {(snapshotError || snapError || perfError) && <p className="text-xs text-muted" role="alert">{snapshotError || snapError?.message || perfError?.message}</p>}
               {snapshotSuccessMsg && (
-                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
                   <span>{snapshotSuccessMsg}</span>
                 </div>
               )}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-800">
-                  <div className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Invested Capital</div>
-                  <div className="text-sm font-bold text-slate-200 mt-1">{formatCurrency(totalInvested)}</div>
+                <div className="p-3 rounded-lg bg-surface-raised/40 dark:bg-slate-800/40 border border-border dark:border-slate-800">
+                  <div className="text-[11px] text-muted dark:text-slate-400 uppercase tracking-wider font-medium">Invested Capital</div>
+                  <div className="text-sm font-bold text-foreground dark:text-slate-200 mt-1">{formatCurrency(totalInvested)}</div>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-800">
-                  <div className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Current Valuation</div>
-                  <div className="text-sm font-bold text-slate-200 mt-1">{formatCurrency(totalValue)}</div>
+                <div className="p-3 rounded-lg bg-surface-raised/40 dark:bg-slate-800/40 border border-border dark:border-slate-800">
+                  <div className="text-[11px] text-muted dark:text-slate-400 uppercase tracking-wider font-medium">Current Valuation</div>
+                  <div className="text-sm font-bold text-foreground dark:text-slate-200 mt-1">{totalValue === null ? 'Unavailable' : formatCurrency(totalValue)}</div>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-800">
-                  <div className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">Active Holdings</div>
-                  <div className="text-sm font-bold text-slate-200 mt-1">{holdings.length} Positions</div>
+                <div className="p-3 rounded-lg bg-surface-raised/40 dark:bg-slate-800/40 border border-border dark:border-slate-800">
+                  <div className="text-[11px] text-muted dark:text-slate-400 uppercase tracking-wider font-medium">Active Holdings</div>
+                  <div className="text-sm font-bold text-foreground dark:text-slate-200 mt-1">{holdings.length} Positions</div>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-800/40 border border-slate-800">
-                  <div className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">History Status</div>
-                  <div className="text-sm font-bold text-amber-400 mt-1">
+                <div className="p-3 rounded-lg bg-surface-raised/40 dark:bg-slate-800/40 border border-border dark:border-slate-800">
+                  <div className="text-[11px] text-muted dark:text-slate-400 uppercase tracking-wider font-medium">History Status</div>
+                  <div className="text-sm font-bold text-amber-700 dark:text-amber-400 mt-1">
                     {snapshots.length === 1 ? '1 Snapshot Saved' : 'Awaiting 2nd Point'}
                   </div>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-800/80 pt-3">
-                Daily snapshots are captured during market settlement. Once at least 2 consecutive valuation points are registered, your full interactive trajectory and benchmark comparison will render automatically above.
+              <p className="text-xs text-muted dark:text-slate-400 leading-relaxed border-t border-border/80 dark:border-slate-800/80 pt-3">
+                Record snapshots on two different dates to see recorded value history. Recording requires prices for every holding and no stale fallback quotes. This chart is not a cash-flow-adjusted return or benchmark comparison.
               </p>
             </motion.div>
           )}

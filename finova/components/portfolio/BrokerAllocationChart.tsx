@@ -1,4 +1,5 @@
 'use client';
+import { useReducedMotionConfig } from 'framer-motion';
 
 import {
   PieChart, Pie, Cell, Tooltip,
@@ -26,6 +27,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
 }
 
 export function BrokerAllocationChart({ data }: BrokerAllocationChartProps) {
+  const reducedMotion = useReducedMotionConfig();
   if (!data.length) return null;
 
   return (
@@ -41,6 +43,7 @@ export function BrokerAllocationChart({ data }: BrokerAllocationChartProps) {
       <ResponsiveContainer width="100%" height={260}>
         <PieChart>
           <Pie
+            isAnimationActive={!reducedMotion}
             data={data}
             cx="50%"
             cy="50%"

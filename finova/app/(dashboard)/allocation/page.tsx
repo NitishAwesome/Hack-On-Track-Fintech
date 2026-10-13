@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
 import { motion } from 'framer-motion';
 import { AllocationChart } from '@/components/portfolio/AllocationChart';
 import { BrokerAllocationChart } from '@/components/portfolio/BrokerAllocationChart';

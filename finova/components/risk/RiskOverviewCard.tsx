@@ -44,7 +44,7 @@ export function RiskOverviewCard({
     : 'rgb(var(--loss))';
 
   const labelBadgeClass = isUnassessed
-    ? 'bg-slate-800 text-slate-400 border-slate-700'
+    ? 'bg-surface-raised dark:bg-slate-800 text-muted dark:text-slate-400 border-border dark:border-slate-700'
     : baseMetrics.risk_label === 'Conservative'
     ? 'bg-gain/10 text-gain border-gain/20'
     : baseMetrics.risk_label === 'Moderate'

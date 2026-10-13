@@ -1,4 +1,5 @@
 'use client';
+import { useReducedMotionConfig } from 'framer-motion';
 
 // ============================================================
 // FINOVA — Sector Analysis (Major Feature)
@@ -134,6 +135,7 @@ export function SectorAnalysisSection({
   onSelectSector,
   onOpenInstrumentDetail,
 }: SectorAnalysisSectionProps) {
+  const reducedMotion = useReducedMotionConfig();
   const { sector_breakdown, consolidated_instruments } = data;
   const [expandedSector, setExpandedSector] = useState<string | null>(null);
 
@@ -203,6 +205,7 @@ export function SectorAnalysisSection({
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
               <Pie
+                isAnimationActive={!reducedMotion}
                 data={chartData}
                 cx="50%"
                 cy="50%"

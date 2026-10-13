@@ -12,7 +12,8 @@
 // ============================================================
 
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -251,7 +252,7 @@ export default function BrokersPage() {
             resetAddForm();
             setShowAddModal(true);
           }}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm hover:opacity-95 transition-opacity flex-shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-foreground dark:text-white shadow-sm hover:opacity-95 transition-opacity flex-shrink-0"
           style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
         >
           <Plus className="w-4 h-4" />
@@ -262,7 +263,7 @@ export default function BrokersPage() {
       {/* Security & Truthful Connection Scope Banner */}
       <div className="rounded-2xl p-4.5 text-xs sm:text-sm border border-border bg-surface-raised/40 space-y-2">
         <div className="flex items-start gap-3">
-          <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0 mt-0.5">
+          <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex-shrink-0 mt-0.5">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div className="space-y-1">
@@ -309,16 +310,16 @@ export default function BrokersPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[1, 2, 3].map((i) => (
             <div key={i} className="card p-6 space-y-4 animate-pulse border border-border">
-              <div className="h-6 w-32 bg-slate-800 rounded" />
-              <div className="h-4 w-48 bg-slate-800/60 rounded" />
-              <div className="h-14 w-full bg-slate-800/40 rounded-xl" />
+              <div className="h-6 w-32 bg-surface-raised dark:bg-slate-800 rounded" />
+              <div className="h-4 w-48 bg-surface-raised/60 dark:bg-slate-800/60 rounded" />
+              <div className="h-14 w-full bg-surface-raised/40 dark:bg-slate-800/40 rounded-xl" />
             </div>
           ))}
         </div>
       ) : brokerError ? (
         /* Issue 6 Fix: Explicit error handling with retry button */
         <div className="card p-8 text-center border border-rose-500/30 bg-rose-500/5 space-y-4 max-w-lg mx-auto">
-          <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20">
+          <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
             <AlertCircle className="w-6 h-6" />
           </div>
           <div className="space-y-1">
@@ -332,7 +333,7 @@ export default function BrokersPage() {
           <div>
             <button
               onClick={() => refetchBrokers()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border border-border bg-surface-raised hover:bg-slate-800 text-foreground transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border border-border bg-surface-raised hover:bg-surface-raised dark:hover:bg-slate-800 text-foreground transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Retry Connection
@@ -350,7 +351,7 @@ export default function BrokersPage() {
                 resetAddForm();
                 setShowAddModal(true);
               }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-foreground dark:text-white shadow-md"
               style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
             >
               <Plus className="w-4 h-4" />
@@ -375,14 +376,14 @@ export default function BrokersPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
-                className="card p-5 flex flex-col justify-between border border-border hover:border-slate-700 transition-colors group"
+                className="card p-5 flex flex-col justify-between border border-border hover:border-border dark:hover:border-slate-700 transition-colors group"
               >
                 <div>
                   {/* Top Header */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <div
-                        className="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-extrabold text-sm shadow-sm flex-shrink-0"
+                        className="w-11 h-11 rounded-2xl flex items-center justify-center text-foreground dark:text-white font-extrabold text-sm shadow-sm flex-shrink-0"
                         style={{ backgroundColor: catalogItem.brandColor || broker.color_hex || '#3B82F6' }}
                       >
                         {catalogItem.shortName || brokerName.slice(0, 2).toUpperCase()}
@@ -412,7 +413,7 @@ export default function BrokersPage() {
                           setDeletingBroker(broker);
                           setDeleteError(null);
                         }}
-                        className="p-1.5 rounded-lg hover:bg-rose-500/10 text-muted hover:text-rose-400 transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-rose-500/10 text-muted hover:text-rose-700 dark:hover:text-rose-400 transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -537,7 +538,7 @@ export default function BrokersPage() {
                       >
                         <div className="flex items-center gap-2">
                           <span
-                            className="w-6 h-6 rounded-lg text-[10px] font-bold text-white flex items-center justify-center flex-shrink-0"
+                            className="w-6 h-6 rounded-lg text-[10px] font-bold text-foreground dark:text-white flex items-center justify-center flex-shrink-0"
                             style={{ backgroundColor: b.brandColor }}
                           >
                             {b.shortName}
@@ -593,7 +594,7 @@ export default function BrokersPage() {
                           <PenTool className="w-4 h-4 text-brand" />
                           <span>Manual Entry</span>
                         </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                           Available
                         </span>
                       </div>
@@ -631,7 +632,7 @@ export default function BrokersPage() {
                           <Lock className="w-4 h-4 text-muted" />
                           <span>Official Broker API (Live Sync)</span>
                         </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-raised dark:bg-slate-800 text-muted dark:text-slate-400 border border-border dark:border-slate-700">
                           Planned Phase
                         </span>
                       </div>
@@ -713,7 +714,7 @@ export default function BrokersPage() {
                   </div>
 
                   {addMutation.isError && (
-                    <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs flex items-center gap-2">
+                    <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 flex-shrink-0" />
                       <span>{addMutation.error instanceof Error ? addMutation.error.message : 'Failed to create broker account.'}</span>
                     </div>
@@ -730,7 +731,7 @@ export default function BrokersPage() {
                     <button
                       type="submit"
                       disabled={addMutation.isPending}
-                      className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-sm disabled:opacity-60"
+                      className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-foreground dark:text-white shadow-sm disabled:opacity-60"
                       style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
                     >
                       {addMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -743,7 +744,7 @@ export default function BrokersPage() {
               {/* STEP 4: Success & Next Actions */}
               {addStep === 4 && (
                 <div className="text-center space-y-4 py-2">
-                  <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div>
@@ -881,7 +882,7 @@ export default function BrokersPage() {
                 </div>
 
                 {editMutation.isError && (
-                  <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs flex items-center gap-2">
+                  <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{editMutation.error instanceof Error ? editMutation.error.message : 'Failed to update account.'}</span>
                   </div>
@@ -898,7 +899,7 @@ export default function BrokersPage() {
                   <button
                     type="submit"
                     disabled={editMutation.isPending}
-                    className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-sm"
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-foreground dark:text-white shadow-sm"
                     style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
                   >
                     {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -940,7 +941,7 @@ export default function BrokersPage() {
                 return (
                   <>
                     <div className="flex items-center gap-3">
-                      <div className={`p-2.5 rounded-xl ${hasActiveRecords ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                      <div className={`p-2.5 rounded-xl ${hasActiveRecords ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20' : 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20'}`}>
                         {hasActiveRecords ? <AlertTriangle className="w-6 h-6" /> : <Trash2 className="w-6 h-6" />}
                       </div>
                       <div>
@@ -956,9 +957,9 @@ export default function BrokersPage() {
                     {/* Blocked Case */}
                     {hasActiveRecords ? (
                       <div className="space-y-3">
-                        <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 text-amber-300 text-xs space-y-2 leading-relaxed">
+                        <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300 text-xs space-y-2 leading-relaxed">
                           <p className="font-bold flex items-center gap-1.5">
-                            <AlertCircle className="w-4 h-4 text-amber-400" />
+                            <AlertCircle className="w-4 h-4 text-amber-700 dark:text-amber-400" />
                             Financial Ledger Protection Active
                           </p>
                           <p>
@@ -983,7 +984,7 @@ export default function BrokersPage() {
                           </button>
                           <Link
                             href={`/holdings?broker=${encodeURIComponent(deletingBroker.id)}`}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-foreground dark:text-white shadow-sm"
                             style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
                             onClick={() => setDeletingBroker(null)}
                           >
@@ -1000,7 +1001,7 @@ export default function BrokersPage() {
                         </p>
 
                         {deleteError && (
-                          <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 text-xs flex items-center gap-2">
+                          <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
                             <AlertCircle className="w-4 h-4 flex-shrink-0" />
                             <span>{deleteError}</span>
                           </div>

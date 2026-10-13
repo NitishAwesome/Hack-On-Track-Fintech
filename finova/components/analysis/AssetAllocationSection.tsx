@@ -1,4 +1,5 @@
 'use client';
+import { useReducedMotionConfig } from 'framer-motion';
 
 // ============================================================
 // FINOVA — Interactive Asset Allocation Section
@@ -92,6 +93,7 @@ export function AssetAllocationSection({
   selectedAssetClassFilter,
   onSelectAssetClass,
 }: AssetAllocationSectionProps) {
+  const reducedMotion = useReducedMotionConfig();
   const { asset_class_breakdown } = data;
 
   // Filter only asset classes with non-zero allocation
@@ -159,6 +161,7 @@ export function AssetAllocationSection({
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
               <Pie
+                isAnimationActive={!reducedMotion}
                 data={chartData}
                 cx="50%"
                 cy="50%"

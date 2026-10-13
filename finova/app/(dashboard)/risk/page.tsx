@@ -17,7 +17,8 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield,
@@ -203,7 +204,7 @@ export default function RiskRadarPage() {
             className="btn-secondary text-xs inline-flex items-center gap-1.5 py-2 px-3"
             title="Simulate rebalancing in Future Lab"
           >
-            <FlaskConical className="w-3.5 h-3.5 text-purple-400" />
+            <FlaskConical className="w-3.5 h-3.5 text-purple-700 dark:text-purple-400" />
             <span>Future Lab</span>
           </Link>
 

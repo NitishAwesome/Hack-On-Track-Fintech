@@ -1,4 +1,5 @@
 'use client';
+import { useReducedMotionConfig } from 'framer-motion';
 
 import React from 'react';
 import Link from 'next/link';
@@ -73,6 +74,7 @@ export function AssetClassRiskChart({
   assetClassBreakdown,
   equityWeight,
 }: AssetClassRiskChartProps) {
+  const reducedMotion = useReducedMotionConfig();
   const chartData = assetClassBreakdown.map((ac) => ({
     name: ac.display_name,
     value: ac.percentage_of_valued,
@@ -101,6 +103,7 @@ export function AssetClassRiskChart({
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
+                isAnimationActive={!reducedMotion}
                 data={chartData}
                 dataKey="value"
                 nameKey="name"

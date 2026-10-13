@@ -2,7 +2,8 @@
 
 import { useState, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import {
@@ -18,6 +19,7 @@ import { formatCurrency, formatCurrencySafe, formatStockPrice } from '@/lib/util
 import type { HoldingWithMetrics, AssetClass, BrokerAccount } from '@/types/portfolio';
 import { StockSearchDropdown } from '@/components/market/StockSearchDropdown';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
+import { buildPortfolioSummary } from '@/lib/calculations/portfolio';
 
 const TAB_CATEGORIES: { id: string; label: string; assetClass?: AssetClass }[] = [
   { id: 'all', label: 'All Investments' },
@@ -154,7 +156,7 @@ export default function HoldingsPage() {
   const [duplicateMode, setDuplicateMode] = useState<'replace' | 'update' | 'skip'>('replace');
   const [isRefreshingQuotes, setIsRefreshingQuotes] = useState<boolean>(false);
 
-  const { data: holdingsData, isLoading } = useQuery({ queryKey: ['holdings'], queryFn: fetchHoldings });
+  const { data: holdingsData, isLoading, error: holdingsError } = useQuery({ queryKey: ['holdings'], queryFn: fetchHoldings });
   const { data: brokersData } = useQuery({ queryKey: ['brokers'], queryFn: fetchBrokers });
 
   const holdings: HoldingWithMetrics[] = holdingsData?.holdings ?? [];
@@ -206,25 +208,17 @@ export default function HoldingsPage() {
 
   // Calculate Unified Summary
   const summaryMetrics = useMemo(() => {
-    const totalInvested = holdings.reduce((sum, h) => sum + h.invested_value, 0);
-    const pricedHoldings = holdings.filter(
-      (h) => h.current_price !== null && typeof h.current_price === 'number' && h.current_value !== null
-    );
-    const isComplete = holdings.length > 0 && pricedHoldings.length === holdings.length;
-    const pricedInvested = pricedHoldings.reduce((sum, h) => sum + h.invested_value, 0);
-    const pricedCurrent = pricedHoldings.reduce((sum, h) => sum + (h.current_value || 0), 0);
-    const totalPnL = pricedHoldings.length > 0 ? pricedCurrent - pricedInvested : null;
-    const totalReturnPct = pricedInvested > 0 && totalPnL !== null ? (totalPnL / pricedInvested) * 100 : null;
+    const summary = buildPortfolioSummary(holdings);
 
     return {
-      totalInvested,
-      pricedCurrent: pricedHoldings.length > 0 ? pricedCurrent : null,
-      totalCurrentVal: isComplete ? pricedCurrent : null,
-      isComplete,
-      totalPnL,
-      totalReturnPct,
+      totalInvested: summary.total_invested_value,
+      pricedCurrent: summary.priced_current_value ?? null,
+      totalCurrentVal: summary.total_current_value,
+      isComplete: summary.is_valuation_complete,
+      totalPnL: summary.total_absolute_return,
+      totalReturnPct: summary.total_absolute_return_pct,
       totalCount: holdings.length,
-      pricedCount: pricedHoldings.length,
+      pricedCount: summary.priced_count ?? 0,
     };
   }, [holdings]);
 
@@ -346,6 +340,7 @@ export default function HoldingsPage() {
 
   return (
     <div className="page-container space-y-6">
+      {holdingsError && <p className="text-xs text-muted" role="alert">{holdingsError.message}</p>}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -374,7 +369,7 @@ export default function HoldingsPage() {
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border bg-surface hover:bg-surface-raised text-muted hover:text-foreground transition-all shadow-xs disabled:opacity-50"
             title="Refresh dynamic quotes from market feed"
           >
-            <RefreshCw className={`w-4 h-4 text-emerald-400 ${isRefreshingQuotes ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 text-emerald-700 dark:text-emerald-400 ${isRefreshingQuotes ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh Quotes</span>
           </button>
           <Link
@@ -404,7 +399,7 @@ export default function HoldingsPage() {
               if (brokers.length > 0) setForm((p) => ({ ...p, broker_account_id: brokers[0].id }));
               setShowAddModal(true);
             }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-xs hover:opacity-95 transition-opacity"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-foreground dark:text-white shadow-xs hover:opacity-95 transition-opacity"
             style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
           >
             <Plus className="w-4 h-4" />
@@ -481,7 +476,7 @@ export default function HoldingsPage() {
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-xs ${
                 isActive
-                  ? 'bg-brand text-white shadow-sm'
+                  ? 'bg-brand text-foreground dark:text-white shadow-sm'
                   : 'bg-surface hover:bg-surface-raised text-muted hover:text-foreground border border-border'
               }`}
             >
@@ -544,7 +539,7 @@ export default function HoldingsPage() {
                   if (brokers.length > 0) setForm((p) => ({ ...p, broker_account_id: brokers[0].id }));
                   setShowAddModal(true);
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm bg-brand hover:bg-brand-hover transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-foreground dark:text-white shadow-sm bg-brand hover:bg-brand-hover transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add Investment
@@ -804,7 +799,7 @@ export default function HoldingsPage() {
                     <div className="flex items-center gap-2">
                       {hasPrice && h.absolute_return !== null ? (
                         <div className="flex items-center gap-1.5 font-mono">
-                          <span className={`font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          <span className={`font-semibold ${isPositive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                             {isPositive ? '+' : ''}{formatCurrency(h.absolute_return)}
                           </span>
                           {returnPct !== null && <PercentageBadge value={returnPct} size="sm" />}
@@ -900,16 +895,16 @@ export default function HoldingsPage() {
               initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
-              className="relative w-full max-w-lg card p-6 shadow-2xl border border-slate-700 bg-slate-900 z-10 space-y-4 max-h-[90vh] overflow-y-auto"
+              className="relative w-full max-w-lg card p-6 shadow-2xl border border-border dark:border-slate-700 bg-surface dark:bg-slate-900 z-10 space-y-4 max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-blue-400" />
+              <div className="flex items-center justify-between border-b border-border dark:border-slate-800 pb-3">
+                <h2 className="text-lg font-bold text-foreground dark:text-slate-100 flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   Add Investment Position
                 </h2>
                 <button
                   onClick={() => setShowAddModal(false)}
-                  className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  className="p-1 rounded-md text-muted dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-surface-raised dark:hover:bg-slate-800"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -928,14 +923,14 @@ export default function HoldingsPage() {
               >
                 {/* Broker Account Selection */}
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300">
+                  <label className="font-semibold text-foreground dark:text-slate-300">
                     Broker / Depository Account *
                   </label>
                   <select
                     value={form.broker_account_id}
                     onChange={(e) => setForm((p) => ({ ...p, broker_account_id: e.target.value }))}
                     required
-                    className="w-full px-3 py-2.5 rounded-lg text-sm bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2.5 rounded-lg text-sm bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700 text-foreground dark:text-slate-200 focus:outline-none focus:border-blue-500"
                   >
                     {brokers.length === 0 && <option value="">No broker accounts (create one first)</option>}
                     {brokers.map((b) => (
@@ -948,7 +943,7 @@ export default function HoldingsPage() {
 
                 {/* Asset Category */}
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300">
+                  <label className="font-semibold text-foreground dark:text-slate-300">
                     Asset Class *
                   </label>
                   <div className="grid grid-cols-3 gap-2">
@@ -965,8 +960,8 @@ export default function HoldingsPage() {
                         onClick={() => setForm((p) => ({ ...p, asset_class: item.val as AssetClass }))}
                         className={`py-2 px-3 rounded-lg font-medium border text-center transition-colors ${
                           form.asset_class === item.val
-                            ? 'bg-blue-600/20 border-blue-500 text-blue-300'
-                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                            ? 'bg-blue-600/20 border-blue-500 text-blue-600 dark:text-blue-300'
+                            : 'bg-surface-raised dark:bg-slate-800 border-border dark:border-slate-700 text-muted dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200'
                         }`}
                       >
                         {item.lbl}
@@ -993,25 +988,25 @@ export default function HoldingsPage() {
                 {/* Symbol & Name */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="font-semibold text-slate-300">Ticker Symbol *</label>
+                    <label className="font-semibold text-foreground dark:text-slate-300">Ticker Symbol *</label>
                     <input
                       type="text"
                       placeholder="e.g. ICICIBANK"
                       value={form.symbol}
                       onChange={(e) => setForm((p) => ({ ...p, symbol: e.target.value.toUpperCase() }))}
                       required
-                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono uppercase focus:outline-none focus:border-blue-500"
+                      className="w-full px-3 py-2 rounded-lg bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700 text-foreground dark:text-slate-200 font-mono uppercase focus:outline-none focus:border-blue-500"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="font-semibold text-slate-300">Instrument Name *</label>
+                    <label className="font-semibold text-foreground dark:text-slate-300">Instrument Name *</label>
                     <input
                       type="text"
                       placeholder="e.g. ICICI Bank Ltd"
                       value={form.name}
                       onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                       required
-                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
+                      className="w-full px-3 py-2 rounded-lg bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700 text-foreground dark:text-slate-200 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
@@ -1019,7 +1014,7 @@ export default function HoldingsPage() {
                 {/* Quantity & Price */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="font-semibold text-slate-300">Quantity / Units *</label>
+                    <label className="font-semibold text-foreground dark:text-slate-300">Quantity / Units *</label>
                     <input
                       type="number"
                       step="any"
@@ -1028,11 +1023,11 @@ export default function HoldingsPage() {
                       value={form.quantity}
                       onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))}
                       required
-                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                      className="w-full px-3 py-2 rounded-lg bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700 text-foreground dark:text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="font-semibold text-slate-300">Avg Purchase Price (₹) *</label>
+                    <label className="font-semibold text-foreground dark:text-slate-300">Avg Purchase Price (₹) *</label>
                     <input
                       type="number"
                       step="any"
@@ -1041,33 +1036,33 @@ export default function HoldingsPage() {
                       value={form.avg_buy_price}
                       onChange={(e) => setForm((p) => ({ ...p, avg_buy_price: e.target.value }))}
                       required
-                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                      className="w-full px-3 py-2 rounded-lg bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700 text-foreground dark:text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
 
                 {/* Live Invested Calculation */}
                 {Number(form.quantity) > 0 && Number(form.avg_buy_price) >= 0 && (
-                  <div className="p-2.5 rounded-lg bg-blue-950/30 border border-blue-900/40 text-blue-300 flex justify-between items-center font-mono">
+                  <div className="p-2.5 rounded-lg bg-blue-950/30 border border-blue-900/40 text-blue-600 dark:text-blue-300 flex justify-between items-center font-mono">
                     <span>Invested Amount:</span>
-                    <strong className="text-sm text-blue-200">
+                    <strong className="text-sm text-blue-600 dark:text-blue-200">
                       {formatCurrency(Number(form.quantity) * Number(form.avg_buy_price))}
                     </strong>
                   </div>
                 )}
 
-                <div className="pt-2 flex justify-end gap-3 border-t border-slate-800">
+                <div className="pt-2 flex justify-end gap-3 border-t border-border dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 rounded-lg font-medium border border-slate-700 text-slate-300 hover:bg-slate-800"
+                    className="px-4 py-2 rounded-lg font-medium border border-border dark:border-slate-700 text-foreground dark:text-slate-300 hover:bg-surface-raised dark:hover:bg-slate-800"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={addMutation.isPending}
-                    className="inline-flex items-center gap-2 px-5 py-2 rounded-lg font-medium text-white shadow-sm"
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-lg font-medium text-foreground dark:text-white shadow-sm"
                     style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
                   >
                     {addMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -1095,16 +1090,16 @@ export default function HoldingsPage() {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="relative w-full max-w-md card p-6 shadow-2xl border border-slate-700 bg-slate-900 z-10 space-y-4"
+              className="relative w-full max-w-md card p-6 shadow-2xl border border-border dark:border-slate-700 bg-surface dark:bg-slate-900 z-10 space-y-4"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center justify-between border-b border-border dark:border-slate-800 pb-3">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-100">Edit Position</h2>
-                  <p className="text-xs text-slate-400 font-mono">{editingHolding.symbol} • {editingHolding.name}</p>
+                  <h2 className="text-lg font-bold text-foreground dark:text-slate-100">Edit Position</h2>
+                  <p className="text-xs text-muted dark:text-slate-400 font-mono">{editingHolding.symbol} • {editingHolding.name}</p>
                 </div>
                 <button
                   onClick={() => setEditingHolding(null)}
-                  className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  className="p-1 rounded-md text-muted dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-surface-raised dark:hover:bg-slate-800"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1125,7 +1120,7 @@ export default function HoldingsPage() {
                 className="space-y-4 text-xs"
               >
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300">Quantity / Units *</label>
+                  <label className="font-semibold text-foreground dark:text-slate-300">Quantity / Units *</label>
                   <input
                     name="quantity"
                     type="number"
@@ -1133,12 +1128,12 @@ export default function HoldingsPage() {
                     min="0.000001"
                     defaultValue={editingHolding.quantity}
                     required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 rounded-lg bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700 text-foreground dark:text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300">Average Purchase Price (₹) *</label>
+                  <label className="font-semibold text-foreground dark:text-slate-300">Average Purchase Price (₹) *</label>
                   <input
                     name="avg_buy_price"
                     type="number"
@@ -1146,15 +1141,15 @@ export default function HoldingsPage() {
                     min="0"
                     defaultValue={editingHolding.avg_buy_price}
                     required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 rounded-lg bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700 text-foreground dark:text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
-                <div className="pt-2 flex justify-end gap-3 border-t border-slate-800">
+                <div className="pt-2 flex justify-end gap-3 border-t border-border dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => setEditingHolding(null)}
-                    className="px-4 py-2 rounded-lg font-medium border border-slate-700 text-slate-300 hover:bg-slate-800"
+                    className="px-4 py-2 rounded-lg font-medium border border-border dark:border-slate-700 text-foreground dark:text-slate-300 hover:bg-surface-raised dark:hover:bg-slate-800"
                   >
                     Cancel
                   </button>
@@ -1188,16 +1183,16 @@ export default function HoldingsPage() {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="relative w-full max-w-md card p-6 shadow-2xl border border-red-500/30 bg-slate-900 z-10 space-y-4"
+              className="relative w-full max-w-md card p-6 shadow-2xl border border-red-500/30 bg-surface dark:bg-slate-900 z-10 space-y-4"
             >
-              <div className="flex items-center gap-3 text-red-400">
+              <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
                 <AlertCircle className="w-6 h-6 flex-shrink-0" />
                 <h3 className="text-lg font-bold">Delete Investment Holding?</h3>
               </div>
 
-              <p className="text-sm text-slate-300 leading-relaxed">
+              <p className="text-sm text-foreground dark:text-slate-300 leading-relaxed">
                 Are you sure you want to delete your position in{' '}
-                <strong className="text-white">{deletingHolding.name} ({deletingHolding.symbol})</strong>?
+                <strong className="text-foreground dark:text-white">{deletingHolding.name} ({deletingHolding.symbol})</strong>?
                 This will remove the position and update your portfolio valuation immediately.
               </p>
 
@@ -1205,7 +1200,7 @@ export default function HoldingsPage() {
                 <button
                   type="button"
                   onClick={() => setDeletingHolding(null)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium border border-slate-700 text-slate-300 hover:bg-slate-800"
+                  className="px-4 py-2 rounded-lg text-sm font-medium border border-border dark:border-slate-700 text-foreground dark:text-slate-300 hover:bg-surface-raised dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
@@ -1239,21 +1234,21 @@ export default function HoldingsPage() {
               initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
-              className="relative w-full max-w-2xl card p-6 shadow-2xl border border-slate-700 bg-slate-900 z-10 space-y-5 max-h-[90vh] overflow-y-auto"
+              className="relative w-full max-w-2xl card p-6 shadow-2xl border border-border dark:border-slate-700 bg-surface dark:bg-slate-900 z-10 space-y-5 max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center justify-between border-b border-border dark:border-slate-800 pb-3">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                    <Upload className="w-5 h-5 text-blue-400" />
+                  <h2 className="text-lg font-bold text-foreground dark:text-slate-100 flex items-center gap-2">
+                    <Upload className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     CSV Portfolio Import
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-muted dark:text-slate-400 mt-0.5">
                     Select broker → Upload CSV → Validate & Preview → Import
                   </p>
                 </div>
                 <button
                   onClick={() => setShowImportModal(false)}
-                  className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  className="p-1 rounded-md text-muted dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 hover:bg-surface-raised dark:hover:bg-slate-800"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1262,11 +1257,11 @@ export default function HoldingsPage() {
               {/* Target Broker & Duplicate Mode */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300">Target Broker Account *</label>
+                  <label className="font-semibold text-foreground dark:text-slate-300">Target Broker Account *</label>
                   <select
                     value={importBrokerId}
                     onChange={(e) => setImportBrokerId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 rounded-lg bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700 text-foreground dark:text-slate-200 focus:outline-none focus:border-blue-500"
                   >
                     {brokers.map((b) => (
                       <option key={b.id} value={b.id}>
@@ -1277,11 +1272,11 @@ export default function HoldingsPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300">Duplicate Handling Strategy</label>
+                  <label className="font-semibold text-foreground dark:text-slate-300">Duplicate Handling Strategy</label>
                   <select
                     value={duplicateMode}
                     onChange={(e) => setDuplicateMode(e.target.value as 'replace' | 'update' | 'skip')}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 rounded-lg bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700 text-foreground dark:text-slate-200 focus:outline-none focus:border-blue-500"
                   >
                     <option value="replace">Replace Existing Position (Recommended)</option>
                     <option value="update">Update / Add to Position</option>
@@ -1293,7 +1288,7 @@ export default function HoldingsPage() {
               {/* Dropzone */}
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-700 hover:border-blue-500/60 rounded-xl p-6 text-center cursor-pointer transition-colors bg-slate-850/40"
+                className="border-2 border-dashed border-border dark:border-slate-700 hover:border-blue-500/60 rounded-xl p-6 text-center cursor-pointer transition-colors bg-surface-raised/40 dark:bg-slate-850/40"
               >
                 <input
                   ref={fileInputRef}
@@ -1302,11 +1297,11 @@ export default function HoldingsPage() {
                   onChange={handleCsvUpload}
                   className="hidden"
                 />
-                <FileText className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-slate-200">
+                <FileText className="w-8 h-8 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-foreground dark:text-slate-200">
                   Click to select a CSV file or drag and drop
                 </p>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-muted dark:text-slate-500 mt-1">
                   Supported format: broker, asset_type, symbol, isin, exchange, quantity, average_buy_price
                 </p>
                 <button
@@ -1315,7 +1310,7 @@ export default function HoldingsPage() {
                     e.stopPropagation();
                     downloadSampleCsv();
                   }}
-                  className="mt-3 text-xs text-blue-400 hover:underline inline-flex items-center gap-1"
+                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Download Sample CSV Template
@@ -1323,7 +1318,7 @@ export default function HoldingsPage() {
               </div>
 
               {csvError && (
-                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{csvError}</span>
                 </div>
@@ -1333,16 +1328,16 @@ export default function HoldingsPage() {
               {csvRows.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-300">
+                    <span className="font-semibold text-foreground dark:text-slate-300">
                       Import Preview: {csvRows.length} Rows Parsed
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-emerald-400 flex items-center gap-1">
+                      <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         {csvRows.filter((r) => r.isValid).length} Valid
                       </span>
                       {csvRows.filter((r) => !r.isValid).length > 0 && (
-                        <span className="text-rose-400 flex items-center gap-1">
+                        <span className="text-rose-700 dark:text-rose-400 flex items-center gap-1">
                           <AlertCircle className="w-3.5 h-3.5" />
                           {csvRows.filter((r) => !r.isValid).length} Errors
                         </span>
@@ -1350,23 +1345,23 @@ export default function HoldingsPage() {
                     </div>
                   </div>
 
-                  <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 divide-y divide-slate-850 text-xs font-mono">
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-border dark:border-slate-800 bg-background dark:bg-slate-950 divide-y divide-border dark:divide-slate-850 text-xs font-mono">
                     {csvRows.map((r) => (
-                      <div key={r.rowNumber} className="p-2.5 flex items-center justify-between hover:bg-slate-900">
+                      <div key={r.rowNumber} className="p-2.5 flex items-center justify-between hover:bg-surface dark:hover:bg-slate-900">
                         <div className="flex items-center gap-2">
-                          <span className={r.isValid ? 'text-emerald-400' : 'text-rose-400'}>
+                          <span className={r.isValid ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
                             {r.isValid ? '✓' : '✗'}
                           </span>
-                          <strong className="text-slate-200">{r.symbol}</strong>
-                          <span className="text-slate-500">Qty: {r.quantity}</span>
-                          <span className="text-slate-500">Price: {formatCurrencySafe(Number(r.avg_buy_price))}</span>
+                          <strong className="text-foreground dark:text-slate-200">{r.symbol}</strong>
+                          <span className="text-muted dark:text-slate-500">Qty: {r.quantity}</span>
+                          <span className="text-muted dark:text-slate-500">Price: {formatCurrencySafe(Number(r.avg_buy_price))}</span>
                         </div>
                         {r.isValid ? (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
                             Valid
                           </span>
                         ) : (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
                             {r.errors.join(', ')}
                           </span>
                         )}
@@ -1377,11 +1372,11 @@ export default function HoldingsPage() {
               )}
 
               {/* Actions */}
-              <div className="pt-2 flex justify-end gap-3 border-t border-slate-800">
+              <div className="pt-2 flex justify-end gap-3 border-t border-border dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowImportModal(false)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium border border-slate-700 text-slate-300 hover:bg-slate-800"
+                  className="px-4 py-2 rounded-lg text-sm font-medium border border-border dark:border-slate-700 text-foreground dark:text-slate-300 hover:bg-surface-raised dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
 import { motion, AnimatePresence } from 'framer-motion';
 import Papa from 'papaparse';
 import {
@@ -329,7 +330,7 @@ export default function TransactionsPage() {
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-all duration-150 shadow-sm hover:opacity-90 active:scale-95"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-foreground dark:text-white transition-all duration-150 shadow-sm hover:opacity-90 active:scale-95"
             style={{ backgroundColor: 'rgb(var(--brand-500))' }}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -396,7 +397,7 @@ export default function TransactionsPage() {
               <Coins className="w-3.5 h-3.5 text-teal-500 opacity-80" />
             </div>
             <div
-              className="text-lg sm:text-xl font-bold tracking-tight text-teal-400"
+              className="text-lg sm:text-xl font-bold tracking-tight text-teal-700 dark:text-teal-400"
               style={{ fontVariantNumeric: 'tabular-nums' }}
             >
               +{formatCurrency(metrics.totalIncome)}
@@ -528,7 +529,7 @@ export default function TransactionsPage() {
                   className={cn(
                     'px-2.5 py-1 text-[11px] font-medium rounded-md transition-all',
                     dateFilter === period
-                      ? 'bg-brand text-white shadow-xs'
+                      ? 'bg-brand text-foreground dark:text-white shadow-xs'
                       : 'text-muted hover:text-foreground'
                   )}
                 >
@@ -610,7 +611,7 @@ export default function TransactionsPage() {
               action={
                 <button
                   onClick={() => setIsAddModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand shadow-sm"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-foreground dark:text-white bg-brand shadow-sm"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Record First Transaction</span>
@@ -765,7 +766,7 @@ export default function TransactionsPage() {
                             </span>
                           </div>
                         ) : typeUpper === 'BONUS' || typeUpper === 'SPLIT' ? (
-                          <span className="text-[10px] text-purple-400 font-medium">Cost diluted</span>
+                          <span className="text-[10px] text-purple-700 dark:text-purple-400 font-medium">Cost diluted</span>
                         ) : (
                           <span className="text-muted">—</span>
                         )}
@@ -796,7 +797,7 @@ export default function TransactionsPage() {
                           </button>
                           <button
                             onClick={() => setTxToDelete(tx)}
-                            className="p-1 rounded text-muted hover:text-red-400 hover:bg-red-500/10"
+                            className="p-1 rounded text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10"
                             title="Delete Transaction"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -895,21 +896,21 @@ function TypeBadge({ type }: { type: string }) {
   switch (type) {
     case 'BUY':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
           <ArrowDownLeft className="w-3 h-3" />
           BUY
         </span>
       );
     case 'SELL':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
           <ArrowUpRight className="w-3 h-3" />
           SELL
         </span>
       );
     case 'DIVIDEND':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-teal-500/10 text-teal-400 border border-teal-500/20">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-teal-500/10 text-teal-700 dark:text-teal-400 border border-teal-500/20">
           <Coins className="w-3 h-3" />
           DIVIDEND
         </span>
@@ -924,21 +925,21 @@ function TypeBadge({ type }: { type: string }) {
       );
     case 'BONUS':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
           <Layers className="w-3 h-3" />
           BONUS
         </span>
       );
     case 'SPLIT':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
           <Layers className="w-3 h-3" />
           SPLIT
         </span>
       );
     case 'FEE':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-500/10 text-slate-300 border border-slate-500/20">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-500/10 text-foreground dark:text-slate-300 border border-slate-500/20">
           <Receipt className="w-3 h-3" />
           FEE
         </span>
@@ -1066,7 +1067,7 @@ function RecordTransactionModal({
         </div>
 
         {error && (
-          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -1318,7 +1319,7 @@ function RecordTransactionModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-1.5 text-xs font-semibold rounded-lg text-white bg-brand shadow-sm hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
+              className="px-4 py-1.5 text-xs font-semibold rounded-lg text-foreground dark:text-white bg-brand shadow-sm hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
             >
               {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <span>{isSubmitting ? 'Recording...' : 'Record Transaction'}</span>
@@ -1416,7 +1417,7 @@ function EditTransactionModal({
         </div>
 
         {error && (
-          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -1513,7 +1514,7 @@ function EditTransactionModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-1.5 text-xs font-semibold rounded-lg text-white bg-brand shadow-sm hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
+              className="px-4 py-1.5 text-xs font-semibold rounded-lg text-foreground dark:text-white bg-brand shadow-sm hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
             >
               {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <span>{isSubmitting ? 'Saving...' : 'Save Changes'}</span>
@@ -1676,7 +1677,7 @@ function TransactionDetailsModal({
                 <span className="font-semibold">{pnl.remaining_quantity_after_sale} units</span>
               </div>
               {pnl.is_oversold_warning && (
-                <div className="text-[11px] text-amber-400 pt-1 flex items-center gap-1.5">
+                <div className="text-[11px] text-amber-700 dark:text-amber-400 pt-1 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                   <span>Warning: Sale units exceeded available recorded balance.</span>
                 </div>
@@ -1687,7 +1688,7 @@ function TransactionDetailsModal({
 
         {/* Corporate Action Detail */}
         {corp && (
-          <div className="p-3 rounded-xl border bg-purple-500/10 border-purple-500/20 text-xs space-y-1 text-purple-300">
+          <div className="p-3 rounded-xl border bg-purple-500/10 border-purple-500/20 text-xs space-y-1 text-purple-700 dark:text-purple-300">
             <span className="font-bold block">Corporate Action Event</span>
             <p>{corp.notes}</p>
             <p className="text-[11px] opacity-80">
@@ -1894,14 +1895,14 @@ function ImportTradebookModal({
         </div>
 
         {error && (
-          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {importResult && (
-          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs space-y-1">
+          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs space-y-1">
             <div className="flex items-center gap-2 font-bold">
               <CheckCircle2 className="w-4 h-4" />
               <span>Import Completed Successfully</span>
@@ -1970,8 +1971,8 @@ function ImportTradebookModal({
                 </div>
               )}
               {dateWarnings.length > 0 && (
-                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-start gap-1.5">
-                  <Info className="w-3.5 h-3.5 shrink-0 text-amber-400 mt-0.5" />
+                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
+                  <Info className="w-3.5 h-3.5 shrink-0 text-amber-700 dark:text-amber-400 mt-0.5" />
                   <span>
                     Ambiguous day/month values detected ({dateWarnings.length} entries). Normalized strictly using Indian market convention (DD-MM-YYYY).
                   </span>
@@ -1997,7 +1998,7 @@ function ImportTradebookModal({
           <button
             onClick={handleConfirmImport}
             disabled={isProcessing || !parsedRows.length}
-            className="px-4 py-1.5 text-xs font-semibold rounded-lg text-white bg-brand shadow-sm hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
+            className="px-4 py-1.5 text-xs font-semibold rounded-lg text-foreground dark:text-white bg-brand shadow-sm hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
           >
             {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             <span>{isProcessing ? 'Importing...' : `Import ${parsedRows.length} Trades`}</span>
@@ -2036,7 +2037,7 @@ function ReconciliationModal({
               <h2 className="text-base font-bold" style={{ color: 'rgb(var(--foreground))' }}>
                 Holdings &amp; Tradebook Reconciliation
               </h2>
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <ShieldCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
             </div>
             <p className="text-xs text-muted">
               Audited comparison of current position balances versus transaction history
@@ -2102,16 +2103,16 @@ function ReconciliationModal({
                     </td>
                     <td className="py-2.5 px-3">
                       {r.status === 'FULL_LEDGER_MATCH' ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
                           <CheckCircle2 className="w-3 h-3" />
                           Match
                         </span>
                       ) : r.status === 'HOLDING_ONLY' ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
                           Opening Balance
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
                           Diff: {r.quantity_difference}
                         </span>
                       )}
@@ -2159,7 +2160,7 @@ function DeleteConfirmationDialog({
         }}
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-red-500/10 text-red-400">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-red-500/10 text-red-600 dark:text-red-400">
             <Trash2 className="w-5 h-5" />
           </div>
           <div>

@@ -64,12 +64,12 @@ export function AlternativesXRaySection({ data }: Props) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-pink-400" />
+              <Building2 className="w-4 h-4 text-pink-700 dark:text-pink-400" />
               <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
                 Listed Trust Exposure (REITs &amp; InvITs)
               </h3>
             </div>
-            <span className="text-xs font-mono font-bold text-pink-400">
+            <span className="text-xs font-mono font-bold text-pink-700 dark:text-pink-400">
               Combined Weight: {reits_invits.combined_weight_pct.toFixed(1)}%
             </span>
           </div>
@@ -83,7 +83,7 @@ export function AlternativesXRaySection({ data }: Props) {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-pink-400">{t.symbol}</span>
+                      <span className="text-xs font-mono font-bold text-pink-700 dark:text-pink-400">{t.symbol}</span>
                       <span className="px-1.5 py-0.5 rounded text-[10px] bg-muted/20 text-muted uppercase">
                         {t.asset_class}
                       </span>
@@ -111,7 +111,7 @@ export function AlternativesXRaySection({ data }: Props) {
                   </span>
                   <Link
                     href={`/${t.asset_class}`}
-                    className="text-pink-400 hover:text-pink-300 font-semibold inline-flex items-center gap-1"
+                    className="text-pink-700 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 font-semibold inline-flex items-center gap-1"
                   >
                     <span>Research in {t.asset_class.toUpperCase()} Hub</span>
                     <ArrowRight className="w-3 h-3" />
@@ -140,7 +140,7 @@ export function AlternativesXRaySection({ data }: Props) {
 
           {/* Pricing & Liquidity Warning if any */}
           {bonds.pricing_liquidity_warning && (
-            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-start gap-2">
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{bonds.pricing_liquidity_warning}</span>
             </div>
@@ -175,7 +175,7 @@ export function AlternativesXRaySection({ data }: Props) {
                   <div key={r.rating_tier} className="text-xs">
                     <div className="flex justify-between font-medium text-foreground">
                       <span className="truncate pr-2">{r.rating_tier}</span>
-                      <span className="font-mono text-emerald-400 font-bold">
+                      <span className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">
                         {r.percentage_of_valued.toFixed(1)}%
                       </span>
                     </div>
