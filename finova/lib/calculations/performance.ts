@@ -5,7 +5,7 @@
 // Strictly avoids fabricating missing market data or unverified metrics.
 // ============================================================
 
-import { roundCurrency, roundPercent } from './portfolio.ts';
+import { buildPortfolioSummary, roundCurrency, roundPercent } from './portfolio.ts';
 import { calculateRealizedPnL } from './realizedPnL.ts';
 import type { HoldingWithMetrics, PortfolioSummary } from '@/types/portfolio';
 import type { InvestmentTransactionRow } from '@/types/database';
@@ -36,15 +36,9 @@ export function buildPerformanceSummary(
     holdings.reduce((sum, h) => sum + (Number(h.invested_value) || 0), 0)
   );
 
-  const pricedHoldings = holdings.filter(
-    (h) => h.current_price !== null && typeof h.current_price === 'number'
-  );
-  const unquotedHoldings = holdings.filter(
-    (h) => h.current_price === null || typeof h.current_price !== 'number'
-  );
-
-  const hasUnquoted = unquotedHoldings.length > 0;
-  const isValuationComplete = holdings.length > 0 && !hasUnquoted;
+  const canonicalSummary = portfolioSummary ?? buildPortfolioSummary(holdings);
+  const hasUnquoted = canonicalSummary.has_unquoted_assets ?? false;
+  const isValuationComplete = canonicalSummary.is_valuation_complete ?? false;
 
   let currentPortfolioValue: number | null = null;
   let unrealizedPnL: number | null = null;
@@ -54,19 +48,10 @@ export function buildPerformanceSummary(
     currentPortfolioValue = 0;
     unrealizedPnL = 0;
     unrealizedPnLPct = 0;
-  } else if (portfolioSummary) {
-    currentPortfolioValue = portfolioSummary.total_current_value;
-    unrealizedPnL = portfolioSummary.total_absolute_return;
-    unrealizedPnLPct = portfolioSummary.total_absolute_return_pct;
-  } else if (pricedHoldings.length > 0) {
-    const pricedInvested = pricedHoldings.reduce((s, h) => s + (h.invested_value || 0), 0);
-    const pricedCurrent = pricedHoldings.reduce((s, h) => s + (h.current_value || 0), 0);
-
-    // Strictly null if valuation is incomplete to avoid presenting partial value as complete total
-    currentPortfolioValue = isValuationComplete ? roundCurrency(pricedCurrent) : null;
-    unrealizedPnL = roundCurrency(pricedCurrent - pricedInvested);
-    unrealizedPnLPct =
-      pricedInvested > 0 ? roundPercent((unrealizedPnL / pricedInvested) * 100) : 0;
+  } else {
+    currentPortfolioValue = canonicalSummary.total_current_value;
+    unrealizedPnL = canonicalSummary.total_absolute_return;
+    unrealizedPnLPct = canonicalSummary.total_absolute_return_pct;
   }
 
   // 3. Aggregate Income & Fees
@@ -82,7 +67,7 @@ export function buildPerformanceSummary(
   let combinedPerformanceNet: number | null = null;
   let combinedPerformancePct: number | null = null;
 
-  if (unrealizedPnL !== null) {
+  if (unrealizedPnL !== null && isValuationComplete) {
     combinedPerformanceNet = roundCurrency(
       unrealizedPnL + totalRealizedPnL + totalIncome - totalStandaloneFees
     );

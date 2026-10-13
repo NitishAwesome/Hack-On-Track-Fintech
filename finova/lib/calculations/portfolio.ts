@@ -53,7 +53,7 @@ export function enrichHolding(holding: Holding): HoldingWithMetrics {
 
   const hasCurrentPrice =
     typeof holding.current_price === 'number' &&
-    !isNaN(holding.current_price) &&
+    Number.isFinite(holding.current_price) &&
     holding.current_price > 0;
 
   if (!hasCurrentPrice) {
@@ -136,11 +136,9 @@ export function buildPortfolioSummary(
   );
 
   const pricedHoldings = holdings.filter(
-    (h) => h.current_price !== null && typeof h.current_price === 'number' && h.current_value !== null
+    (h) => typeof h.current_price === 'number' && Number.isFinite(h.current_price) && h.current_price > 0 && typeof h.current_value === 'number' && Number.isFinite(h.current_value)
   );
-  const unquotedHoldings = holdings.filter(
-    (h) => h.current_price === null || typeof h.current_price !== 'number' || h.current_value === null
-  );
+  const unquotedHoldings = holdings.filter((h) => !pricedHoldings.includes(h));
   const staleHoldings = holdings.filter(
     (h) => h.price_status === 'STALE'
   );

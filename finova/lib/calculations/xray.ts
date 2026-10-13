@@ -763,7 +763,7 @@ export function computeUnifiedXRay(
       sec.hasValued = true;
     }
 
-    const instValue = inst.current_value ?? inst.total_invested_value;
+    const instValue = marketValuedCapital !== null ? (inst.current_value ?? 0) : inst.total_invested_value;
     if (!sec.largestHolding || instValue > (sec.largestHolding.value ?? 0)) {
       sec.largestHolding = {
         symbol: inst.symbol,
@@ -1130,10 +1130,7 @@ export function computeUnifiedXRay(
       bondUnpricedCount += 1;
     }
 
-    const issuerName =
-      b.name.includes('Government') || b.symbol.startsWith('GS') || b.symbol.includes('GSEC')
-        ? 'Government of India (Sovereign)'
-        : b.name.split(' ')[0] || 'Listed Issuer';
+    const issuerName = 'Issuer not reviewed';
 
     if (!issuerMap.has(issuerName)) {
       issuerMap.set(issuerName, { invested: 0, valued: null });
@@ -1144,9 +1141,7 @@ export function computeUnifiedXRay(
       iss.valued = (iss.valued ?? 0) + b.current_value;
     }
 
-    const isSovereign =
-      b.name.includes('Government') || b.symbol.startsWith('GS') || b.symbol.includes('GSEC');
-    const ratingTier = isSovereign ? 'Sovereign (Zero Credit Risk)' : 'AAA / High Grade Corporate';
+    const ratingTier = 'Rating not reviewed';
 
     if (!ratingMap.has(ratingTier)) {
       ratingMap.set(ratingTier, { invested: 0, valued: null });
@@ -1157,29 +1152,13 @@ export function computeUnifiedXRay(
       rtier.valued = (rtier.valued ?? 0) + b.current_value;
     }
 
-    const bVal = b.current_value ?? b.total_invested_value;
-    const matchYear = b.symbol.match(/20(\d{2})/) || b.name.match(/20(\d{2})/);
-    if (matchYear) {
-      const year = parseInt(`20${matchYear[1]}`, 10);
-      const currentYear = new Date().getFullYear();
-      const diffYears = year - currentYear;
-      if (diffYears < 3) {
-        maturityLadder.under_3_years.value += bVal;
-        maturityLadder.under_3_years.count += 1;
-      } else if (diffYears <= 7) {
-        maturityLadder.three_to_seven_years.value += bVal;
-        maturityLadder.three_to_seven_years.count += 1;
-      } else {
-        maturityLadder.over_seven_years.value += bVal;
-        maturityLadder.over_seven_years.count += 1;
-      }
-    } else {
-      maturityLadder.three_to_seven_years.value += bVal;
-      maturityLadder.three_to_seven_years.count += 1;
-    }
+    // Maturity and ratings require an issue document; symbol text is insufficient.
+    maturityLadder.unspecified.count += 1;
   }
 
   const bondTotalBase = (bondValued ?? bondInvested) || 1;
+  maturityLadder.unspecified.value = bondValued ?? bondInvested;
+  maturityLadder.unspecified.percentage = bondList.length ? 100 : 0;
   maturityLadder.under_3_years.percentage = roundPercent(
     (maturityLadder.under_3_years.value / bondTotalBase) * 100
   );
