@@ -15,6 +15,12 @@
 
 export type TimestampType = 'published' | 'indexed' | 'unavailable';
 
+/** Recent means dated within 72 hours. Undated and implausible future items stay in the archive. */
+export function isRecentArticle(article: { pubDate?: string | null }, now = Date.now()): boolean {
+  const timestamp = article.pubDate ? new Date(article.pubDate).getTime() : NaN;
+  return Number.isFinite(timestamp) && timestamp >= now - 72 * 60 * 60 * 1000 && timestamp <= now + 2 * 60 * 60 * 1000;
+}
+
 export type FreshnessBadgeType =
   | 'RECENTLY_PUBLISHED'
   | 'PUBLISHED_TODAY'

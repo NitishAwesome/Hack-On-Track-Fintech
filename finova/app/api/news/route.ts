@@ -81,7 +81,7 @@ export async function GET(request: Request) {
             portfolio_symbols_count: portfolioSymbols.length,
           },
         };
-        return NextResponse.json(response);
+        return NextResponse.json(response, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } });
       }
 
       if (fetchResult.providerStatus === 'RATE_LIMITED') {
@@ -103,7 +103,7 @@ export async function GET(request: Request) {
             portfolio_symbols_count: portfolioSymbols.length,
           },
         };
-        return NextResponse.json(response, { status: 429 });
+        return NextResponse.json(response, { status: 429, headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } });
       }
 
       const response: NewsApiResponse = {
@@ -124,7 +124,7 @@ export async function GET(request: Request) {
           portfolio_symbols_count: portfolioSymbols.length,
         },
       };
-      return NextResponse.json(response);
+      return NextResponse.json(response, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } });
     }
 
     // 4. Personalize and rank all returned real articles
@@ -243,7 +243,7 @@ export async function GET(request: Request) {
       },
     };
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } });
   } catch (err: unknown) {
     console.error('[API /api/news] Unexpected error:', err);
     return NextResponse.json(
@@ -263,7 +263,7 @@ export async function GET(request: Request) {
           portfolio_symbols_count: 0,
         },
       },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } }
     );
   }
 }
