@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node scripts/test-product-integrity.mjs",
+    "test:ledger": "node scripts/test-sql-financial-integrity-pglite.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
@@ -39,6 +41,7 @@
     "zustand": "^5.0.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",

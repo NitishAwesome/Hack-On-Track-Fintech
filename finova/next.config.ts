@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+  // Keep production verification separate from a running development server.
+  distDir: process.env.FINOVA_BUILD_DIR || '.next',
   turbopack: {
     root: path.resolve(__dirname),
   },
