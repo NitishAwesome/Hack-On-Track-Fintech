@@ -16,6 +16,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useDialogFocus } from '@/lib/hooks/useDialogFocus';
 import {
   X,
   BookOpen,
@@ -37,7 +38,7 @@ const ASSET_CLASSES_INFO = [
   {
     id: 'bonds',
     title: 'Fixed Income & Corporate Bonds',
-    icon: <Shield className="w-5 h-5 text-emerald-400" />,
+    icon: <Shield className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />,
     whatItIs:
       'Debt instruments issued by the Government of India (G-Secs), state governments (SDLs), or private corporations to borrow capital. The investor receives regular interest (coupons) and principal return at maturity.',
     whyConsider:
@@ -52,7 +53,7 @@ const ASSET_CLASSES_INFO = [
   {
     id: 'equity',
     title: 'Equities & Direct Shares',
-    icon: <TrendingUp className="w-5 h-5 text-blue-400" />,
+    icon: <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />,
     whatItIs:
       'Direct ownership shares in publicly listed companies traded on the NSE/BSE. Represents fractional ownership of real corporate businesses and entitlement to earnings and dividends.',
     whyConsider:
@@ -67,7 +68,7 @@ const ASSET_CLASSES_INFO = [
   {
     id: 'sgb',
     title: 'Gold & Sovereign Gold Bonds (SGBs)',
-    icon: <Coins className="w-5 h-5 text-amber-400" />,
+    icon: <Coins className="w-5 h-5 text-amber-700 dark:text-amber-400" />,
     whatItIs:
       'Government-backed securities denominated in grams of gold issued by the RBI. Alternative to holding physical gold, providing market gold price tracking plus a 2.5% annual coupon.',
     whyConsider:
@@ -82,7 +83,7 @@ const ASSET_CLASSES_INFO = [
   {
     id: 'reit',
     title: 'Real Estate Investment Trusts (REITs)',
-    icon: <Building className="w-5 h-5 text-pink-400" />,
+    icon: <Building className="w-5 h-5 text-pink-700 dark:text-pink-400" />,
     whatItIs:
       'SEBI-regulated investment vehicles that own, operate, and finance income-generating commercial office parks, malls, and hospitality real estate. Traded on NSE/BSE.',
     whyConsider:
@@ -97,7 +98,7 @@ const ASSET_CLASSES_INFO = [
   {
     id: 'invit',
     title: 'Infrastructure Investment Trusts (InvITs)',
-    icon: <Layers className="w-5 h-5 text-cyan-400" />,
+    icon: <Layers className="w-5 h-5 text-cyan-700 dark:text-cyan-400" />,
     whatItIs:
       'SEBI-regulated investment vehicles holding operational infrastructure assets such as toll roads, power transmission grids, gas pipelines, and telecom towers.',
     whyConsider:
@@ -112,7 +113,7 @@ const ASSET_CLASSES_INFO = [
   {
     id: 'mf',
     title: 'Mutual Funds (Equity, Debt & Hybrid)',
-    icon: <BookOpen className="w-5 h-5 text-purple-400" />,
+    icon: <BookOpen className="w-5 h-5 text-purple-700 dark:text-purple-400" />,
     whatItIs:
       'SEBI-registered pooled investment vehicles managed by professional Asset Management Companies (AMCs). Capital is diversified across dozens or hundreds of securities according to a declared mandate.',
     whyConsider:
@@ -130,22 +131,23 @@ export const AssetClassEducationModal: React.FC<AssetClassEducationModalProps> =
   isOpen,
   onClose,
 }) => {
+  const dialogRef = useDialogFocus(isOpen, onClose);
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Asset Classes Guide" tabIndex={-1} className="bg-surface dark:bg-slate-900 border border-border dark:border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/90">
+        <div className="p-5 border-b border-border dark:border-slate-800 flex items-center justify-between shrink-0 bg-surface/90 dark:bg-slate-900/90">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white tracking-tight">
+              <h3 className="text-lg font-bold text-foreground dark:text-white tracking-tight">
                 Asset Classes & Strategic Roles
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted dark:text-slate-400">
                 Educational reference on how each asset category functions in portfolio construction
               </p>
             </div>
@@ -154,49 +156,49 @@ export const AssetClassEducationModal: React.FC<AssetClassEducationModalProps> =
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+            className="p-2 rounded-lg bg-surface-raised dark:bg-slate-800 hover:bg-surface-raised dark:hover:bg-slate-700 text-muted dark:text-slate-400 hover:text-foreground dark:hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-5 text-xs divide-y divide-slate-800/80">
+        <div className="p-6 overflow-y-auto space-y-5 text-xs divide-y divide-border/80 dark:divide-slate-800/80">
           {ASSET_CLASSES_INFO.map((item, idx) => (
             <div key={item.id} className={idx > 0 ? 'pt-5' : ''}>
               <div className="flex items-start justify-between gap-3 mb-2.5">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 rounded-lg bg-slate-800 border border-slate-700">
+                  <div className="p-1.5 rounded-lg bg-surface-raised dark:bg-slate-800 border border-border dark:border-slate-700">
                     {item.icon}
                   </div>
-                  <h4 className="text-sm font-bold text-white">{item.title}</h4>
+                  <h4 className="text-sm font-bold text-foreground dark:text-white">{item.title}</h4>
                 </div>
 
                 <Link
                   href={item.learnMoreHref}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-400 hover:text-blue-300"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
                 >
                   <span>{item.learnMoreLabel}</span>
                   <ExternalLink className="w-3 h-3" />
                 </Link>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-9 text-slate-300 text-[11px] leading-relaxed">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-9 text-foreground dark:text-slate-300 text-[11px] leading-relaxed">
                 <div>
-                  <strong className="text-slate-100 block mb-0.5">What it is:</strong>
-                  <p className="text-slate-400">{item.whatItIs}</p>
+                  <strong className="text-foreground dark:text-slate-100 block mb-0.5">What it is:</strong>
+                  <p className="text-muted dark:text-slate-400">{item.whatItIs}</p>
                 </div>
                 <div>
-                  <strong className="text-slate-100 block mb-0.5">Why an investor considers it:</strong>
-                  <p className="text-slate-400">{item.whyConsider}</p>
+                  <strong className="text-foreground dark:text-slate-100 block mb-0.5">Why an investor considers it:</strong>
+                  <p className="text-muted dark:text-slate-400">{item.whyConsider}</p>
                 </div>
                 <div>
-                  <strong className="text-slate-100 block mb-0.5 text-amber-300">Main risks to watch:</strong>
-                  <p className="text-slate-400">{item.mainRisks}</p>
+                  <strong className="text-foreground dark:text-slate-100 block mb-0.5 text-amber-700 dark:text-amber-300">Main risks to watch:</strong>
+                  <p className="text-muted dark:text-slate-400">{item.mainRisks}</p>
                 </div>
                 <div>
-                  <strong className="text-slate-100 block mb-0.5">Liquidity considerations:</strong>
-                  <p className="text-slate-400">{item.liquidity}</p>
+                  <strong className="text-foreground dark:text-slate-100 block mb-0.5">Liquidity considerations:</strong>
+                  <p className="text-muted dark:text-slate-400">{item.liquidity}</p>
                 </div>
               </div>
             </div>
@@ -204,9 +206,9 @@ export const AssetClassEducationModal: React.FC<AssetClassEducationModalProps> =
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/80 shrink-0 flex items-center justify-between text-xs text-slate-400">
+        <div className="p-4 border-t border-border dark:border-slate-800 bg-background/80 dark:bg-slate-950/80 shrink-0 flex items-center justify-between text-xs text-muted dark:text-slate-400">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-blue-400 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
             <span>Asset allocation templates are educational tools, not individual investment advice.</span>
           </div>
 

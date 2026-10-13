@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { calculateGoalProgress } from '@/lib/calculations/futureLab';
+import { isGoalDate } from '@/lib/goals/goalForm';
 import type { GoalCategory, GoalPriority, GoalStatus } from '@/types/database';
 
 export const dynamic = 'force-dynamic';
@@ -126,7 +127,7 @@ export async function POST(request: Request) {
       }
 
       const numTarget = Number(target_amount);
-      if (isNaN(numTarget) || numTarget <= 0) {
+      if (!Number.isFinite(numTarget) || numTarget <= 0) {
         return NextResponse.json(
           { error: 'Target amount must be a valid positive number.' },
           { status: 400 }
@@ -134,16 +135,16 @@ export async function POST(request: Request) {
       }
 
       const numCurrent = current_amount !== undefined ? Number(current_amount) : 0;
-      if (isNaN(numCurrent) || numCurrent < 0) {
+      if (!Number.isFinite(numCurrent) || numCurrent < 0) {
         return NextResponse.json(
           { error: 'Current recorded funding cannot be negative.' },
           { status: 400 }
         );
       }
 
-      if (!target_date || isNaN(new Date(target_date).getTime())) {
+      if (!isGoalDate(target_date)) {
         return NextResponse.json(
-          { error: 'A valid future target date is required.' },
+          { error: 'A valid target date is required.' },
           { status: 400 }
         );
       }
@@ -170,7 +171,7 @@ export async function POST(request: Request) {
         category: cleanCategory,
         priority: cleanPriority,
         currency: 'INR',
-        status: (numCurrent >= numTarget ? 'COMPLETED' : 'ACTIVE') as GoalStatus,
+        status: (numCurrent >= numTarget ? 'ACHIEVED' : 'ACTIVE') as GoalStatus,
       };
 
       const { data: created, error } = await supabase

@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation';
+import { FutureLabWorkspace } from '@/components/futureLab/FutureLabWorkspace';
+
+export const metadata = { title: 'Financial Goals' };
 
 export default function GoalsPage() {
-  redirect('/future-lab?tab=goals');
+  return <FutureLabWorkspace tab="goals" />;
 }

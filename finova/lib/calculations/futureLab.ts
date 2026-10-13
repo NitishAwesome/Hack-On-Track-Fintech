@@ -180,7 +180,7 @@ export function runWhatIfSimulation(
 
   for (const inst of xray.consolidated_instruments) {
     const val = hasMarketValue
-      ? (inst.current_value ?? inst.total_invested_value)
+      ? (inst.current_value ?? 0)
       : inst.total_invested_value;
     const current = baselineClassValues.get(inst.asset_class) || 0;
     baselineClassValues.set(inst.asset_class, current + val);
@@ -269,8 +269,8 @@ export function runWhatIfSimulation(
     (assetClassAllocations.find((a) => a.assetClass === 'sgb')?.simulatedPercent || 0);
 
   // Single largest holding exposure (diluted across new denominator if additional contribution made)
-  const topInst = xray.consolidated_instruments[0];
-  const baseTopVal = topInst?.current_value ?? topInst?.total_invested_value ?? 0;
+  const topInst = [...xray.consolidated_instruments].sort((a, b) => (hasMarketValue ? (b.current_value ?? 0) - (a.current_value ?? 0) : b.total_invested_value - a.total_invested_value))[0];
+  const baseTopVal = hasMarketValue ? (topInst?.current_value ?? 0) : (topInst?.total_invested_value ?? 0);
   const baseTopPct = baselineValuationBase > 0 ? roundPercent((baseTopVal / baselineValuationBase) * 100) : 0;
   const simTopPct = totalSimulatedCapital > 0 ? roundPercent((baseTopVal / totalSimulatedCapital) * 100) : 0;
 
@@ -913,7 +913,7 @@ export function calculatePortfolioBeforeAfter(
   }
   for (const inst of xray.consolidated_instruments) {
     const val = isMarketValued
-      ? (inst.current_value ?? inst.total_invested_value)
+      ? (inst.current_value ?? 0)
       : inst.total_invested_value;
     baselineMap.set(inst.asset_class, (baselineMap.get(inst.asset_class) || 0) + val);
   }
