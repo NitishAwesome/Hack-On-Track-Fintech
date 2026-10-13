@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -17,7 +17,11 @@ import {
 import { ThemeToggle } from './ThemeToggle';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
 import { createClient } from '@/lib/supabase/client';
+import { useSession } from '@/components/providers/QueryProvider';
+import { safeReturnPath } from '@/lib/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { NavbarSearch } from './NavbarSearch';
+import { useDialogFocus } from '@/lib/hooks/useDialogFocus';
 
 interface HeaderProps {
   title?: string;
@@ -37,14 +41,35 @@ export function Header({
   onOpenMobileSidebar,
 }: HeaderProps) {
   const router = useRouter();
+  const { userId } = useSession();
   const supabase = createClient();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const desktopSearchRef = useRef<HTMLInputElement>(null);
+  const searchDialogRef = useDialogFocus(searchOpen, () => setSearchOpen(false));
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const editing = target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
+      if ((event.key === '/' && !editing && !event.ctrlKey && !event.metaKey && !event.altKey) || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k')) {
+        event.preventDefault();
+        if (desktopSearchRef.current?.getClientRects().length) desktopSearchRef.current.focus();
+        else setSearchOpen(true);
+      }
+    };
+    document.addEventListener('keydown', shortcut);
+    return () => document.removeEventListener('keydown', shortcut);
+  }, []);
+
   async function handleSignOut() {
+    if (!userId) {
+      router.push(`/login?next=${encodeURIComponent(safeReturnPath(window.location.pathname + window.location.search, '/explore'))}`);
+      return;
+    }
     await supabase.auth.signOut();
     router.push('/login');
+    router.refresh();
   }
 
   const initials = userName
@@ -122,35 +147,9 @@ export function Header({
 
         {/* Center / Right controls */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Desktop Search */}
+          {/* Shared navbar search */}
           <div className="hidden md:flex items-center w-56 lg:w-72">
-            <div
-              className="flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs border transition-colors focus-within:border-brand"
-              style={{
-                backgroundColor: 'rgb(var(--surface-raised))',
-                borderColor: 'rgb(var(--border))',
-              }}
-            >
-              <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'rgb(var(--muted))' }} />
-              <input
-                type="text"
-                placeholder="Search holdings, symbols..."
-                className="bg-transparent flex-1 focus:outline-none placeholder:text-muted/60"
-                style={{ color: 'rgb(var(--foreground))' }}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <span
-                className="hidden lg:inline-block text-[10px] font-mono px-1 rounded border opacity-60"
-                style={{
-                  backgroundColor: 'rgb(var(--surface))',
-                  borderColor: 'rgb(var(--border))',
-                  color: 'rgb(var(--muted))',
-                }}
-              >
-                /
-              </span>
-            </div>
+            <NavbarSearch inputRef={desktopSearchRef} />
           </div>
 
           {/* Mobile Search Button */}
@@ -270,7 +269,7 @@ export function Header({
                         className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-loss hover:bg-loss-bg/30 transition-colors text-left"
                       >
                         <LogOut className="w-3.5 h-3.5" />
-                        <span>Sign out</span>
+                        <span>{userId ? 'Sign out' : 'Sign in'}</span>
                       </button>
                     </div>
                   </motion.div>
@@ -289,26 +288,17 @@ export function Header({
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
+            ref={searchDialogRef} role="dialog" aria-modal="true" aria-label="Search FINOVA" tabIndex={-1}
             className="fixed top-0 left-0 right-0 z-50 p-3 border-b flex items-center gap-2"
             style={{
               backgroundColor: 'rgb(var(--surface))',
               borderColor: 'rgb(var(--border))',
             }}
           >
-            <Search className="w-4 h-4 flex-shrink-0" style={{ color: 'rgb(var(--muted))' }} />
-            <input
-              type="text"
-              placeholder="Search holdings, symbols..."
-              autoFocus
-              className="flex-1 bg-transparent text-sm focus:outline-none"
-              style={{ color: 'rgb(var(--foreground))' }}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <NavbarSearch autoFocus onNavigate={() => setSearchOpen(false)} />
             <button
               onClick={() => {
                 setSearchOpen(false);
-                setSearchQuery('');
               }}
               className="p-1 rounded text-muted hover:text-foreground"
               aria-label="Close search"

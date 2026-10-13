@@ -27,10 +27,12 @@ import {
   Activity,
   BookOpen,
   Bell,
+  Bookmark,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
 import { createClient } from '@/lib/supabase/client';
+import { useSession } from '@/components/providers/QueryProvider';
 
 interface SubNavItem {
   href: string;
@@ -84,6 +86,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Discover',
     items: [
       { href: '/explore', label: 'Investment Explorer', icon: Compass },
+      { href: '/watchlist', label: 'Watchlist', icon: Bookmark },
       {
         href: '/explore/alternatives',
         label: 'Alternative Assets',
@@ -131,11 +134,17 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { userId } = useSession();
 
   async function handleSignOut() {
+    if (!userId) {
+      router.push(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      return;
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push('/login');
+    router.refresh();
   }
 
   function isActive(href: string) {
@@ -221,6 +230,7 @@ export function Sidebar({
                   <div key={href} className="space-y-0.5">
                     <Link
                       href={comingSoon ? '#' : href}
+                      aria-current={active ? 'page' : undefined}
                       onClick={comingSoon ? (e) => e.preventDefault() : onClose}
                       title={collapsed ? label : undefined}
                       className={cn(
@@ -394,8 +404,8 @@ export function Sidebar({
               type="button"
               onClick={handleSignOut}
               className="p-1.5 rounded-md hover:bg-surface-raised transition-colors text-muted hover:text-loss"
-              title="Sign out"
-              aria-label="Sign out"
+              title={userId ? 'Sign out' : 'Sign in'}
+              aria-label={userId ? 'Sign out' : 'Sign in'}
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
