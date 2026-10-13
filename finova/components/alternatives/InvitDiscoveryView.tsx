@@ -1,4 +1,5 @@
 'use client';
+import { formatResearchNumber, compareResearchNumbers } from '@/lib/research/format';
 
 // ============================================================
 // FINOVA — InvIT Discovery View (Prompt 19)
@@ -27,12 +28,12 @@ import {
 import { VERIFIED_INDIAN_INVITS, type InvitItem } from '@/lib/data/invitData';
 import { InvitDetailModal } from './InvitDetailModal';
 import { AlternativeCompareModal, type CompareItem } from './AlternativeCompareModal';
-import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
+import { useHeldSymbols } from '@/lib/hooks/useHeldSymbols';
 
 export function InvitDiscoveryView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-  const [sortBy, setSortBy] = useState<'yield' | 'mcap' | 'years' | 'name'>('yield');
+  const [sortBy, setSortBy] = useState<'yield' | 'mcap' | 'years' | 'name'>('name');
   const [selectedInvit, setSelectedInvit] = useState<InvitItem | null>(null);
   const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
@@ -40,23 +41,7 @@ export function InvitDiscoveryView() {
   // Example Cash Flow Simulator state
   const [simCapital, setSimCapital] = useState<number>(100000);
 
-  const heldSymbols = useMemo(() => {
-    try {
-      const holdings = PortfolioStorage.getHoldings();
-      const instruments = PortfolioStorage.getInstruments();
-      const instMap = new Map(instruments.map((i) => [i.id, i.symbol.toUpperCase()]));
-      const held = new Set<string>();
-      for (const h of holdings) {
-        const sym = instMap.get(h.instrument_id);
-        if (sym) {
-          held.add(sym.replace(/\.(NS|BO|BSE|NSE)$/i, ''));
-        }
-      }
-      return held;
-    } catch {
-      return new Set<string>();
-    }
-  }, []);
+  const heldSymbols = useHeldSymbols();
 
   // Filtered & Sorted InvITs
   const filteredInvits = useMemo(() => {
@@ -71,9 +56,9 @@ export function InvitDiscoveryView() {
 
       return matchesSearch && matchesCat;
     }).sort((a, b) => {
-      if (sortBy === 'yield') return b.trailingYieldPct - a.trailingYieldPct;
-      if (sortBy === 'mcap') return b.marketCapCr - a.marketCapCr;
-      if (sortBy === 'years') return b.averageRemainingConcessionYears - a.averageRemainingConcessionYears;
+      if (sortBy === 'yield') return compareResearchNumbers(a.trailingYieldPct, b.trailingYieldPct) || a.name.localeCompare(b.name);
+      if (sortBy === 'mcap') return compareResearchNumbers(a.marketCapCr, b.marketCapCr) || a.name.localeCompare(b.name);
+      if (sortBy === 'years') return compareResearchNumbers(a.averageRemainingConcessionYears, b.averageRemainingConcessionYears) || a.name.localeCompare(b.name);
       return a.name.localeCompare(b.name);
     });
   }, [searchQuery, selectedCategory, sortBy]);
@@ -103,7 +88,7 @@ export function InvitDiscoveryView() {
     <div className="space-y-8">
       {/* ─── Breadcrumb Navigation ──── */}
       <div className="flex items-center gap-2 text-xs text-muted">
-        <Link href="/explore/alternatives" className="hover:text-cyan-400 transition-colors">
+        <Link href="/explore/alternatives" className="hover:text-cyan-700 dark:hover:text-cyan-400 transition-colors">
           Alternative Investments Hub
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
@@ -114,7 +99,7 @@ export function InvitDiscoveryView() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <span className="p-2 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/20">
               <Zap className="w-6 h-6" />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
@@ -142,7 +127,7 @@ export function InvitDiscoveryView() {
       <div className="p-5 sm:p-6 rounded-2xl bg-surface border border-border space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HelpCircle className="w-4 h-4 text-cyan-400" />
+            <HelpCircle className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
             <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
               InvIT Fundamentals in 60 Seconds
             </h2>
@@ -151,8 +136,8 @@ export function InvitDiscoveryView() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 rounded-xl bg-slate-800/30 border border-border space-y-1.5">
-            <div className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+          <div className="p-4 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1.5">
+            <div className="text-xs font-bold text-cyan-700 dark:text-cyan-300 flex items-center gap-1.5">
               <Zap className="w-3.5 h-3.5" />
               <span>What is an InvIT?</span>
             </div>
@@ -162,10 +147,10 @@ export function InvitDiscoveryView() {
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-800/30 border border-border space-y-1.5">
-            <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+          <div className="p-4 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1.5">
+            <div className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
               <Coins className="w-3.5 h-3.5" />
-              <span>High Cash Flow Yields (10–12%)</span>
+              <span>Variable cash distributions</span>
             </div>
             <p className="text-xs text-muted leading-relaxed">
               InvITs distribute 90% of NDCF quarterly. Because yields often include repayment of capital as
@@ -173,8 +158,8 @@ export function InvitDiscoveryView() {
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-800/30 border border-border space-y-1.5">
-            <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+          <div className="p-4 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1.5">
+            <div className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>Concession Amortization</span>
             </div>
@@ -186,15 +171,15 @@ export function InvitDiscoveryView() {
         </div>
 
         {/* Illustrative Calculator */}
-        <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60 space-y-3">
+        <div className="p-4 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border/60 dark:border-slate-700/60 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Calculator className="w-4 h-4 text-cyan-400" />
+              <Calculator className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
               <h3 className="text-xs font-bold text-foreground">
                 Illustrative InvIT Distribution Estimator
               </h3>
             </div>
-            <span className="text-[10px] text-amber-400 font-semibold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
               Illustrative Calculation — Subject to Traffic & Regulatory Tariffs
             </span>
           </div>
@@ -217,11 +202,11 @@ export function InvitDiscoveryView() {
             </div>
 
             <div className="p-3 rounded-lg bg-surface border border-border text-center">
-              <span className="text-[10px] text-muted">At Avg ~11.5% Trailing Yield</span>
-              <div className="text-sm font-bold font-mono text-cyan-400">
+              <span className="text-[10px] text-muted">Hypothetical illustration · assumes 11.5%</span>
+              <div className="text-sm font-bold font-mono text-cyan-700 dark:text-cyan-400">
                 ~₹{Math.round(simCapital * 0.115).toLocaleString('en-IN')} / yr
               </div>
-              <span className="text-[10px] text-slate-500">~₹{Math.round((simCapital * 0.115) / 4).toLocaleString('en-IN')} / quarter</span>
+              <span className="text-[10px] text-muted dark:text-slate-500">~₹{Math.round((simCapital * 0.115) / 4).toLocaleString('en-IN')} / quarter</span>
             </div>
 
             <p className="text-[11px] text-muted leading-relaxed">
@@ -242,14 +227,14 @@ export function InvitDiscoveryView() {
               placeholder="Search by name, symbol, sponsor (e.g. PowerGrid, IRB)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground placeholder:text-muted dark:placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
             />
           </div>
 
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-cyan-500"
+            className="px-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-cyan-500"
           >
             <option value="ALL">All Sectors</option>
             <option value="Power Transmission">Power Transmission</option>
@@ -263,7 +248,7 @@ export function InvitDiscoveryView() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'yield' | 'mcap' | 'years' | 'name')}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-cyan-500"
+            className="px-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-cyan-500"
           >
             <option value="yield">Trailing Yield %</option>
             <option value="mcap">Market Capitalization</option>
@@ -295,12 +280,12 @@ export function InvitDiscoveryView() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-cyan-400">{invit.symbol}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-muted">
+                      <span className="text-xs font-mono font-bold text-cyan-700 dark:text-cyan-400">{invit.symbol}</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-surface-raised dark:bg-slate-800 text-muted">
                         {invit.infraCategory}
                       </span>
                       {isHeld && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
                           In Portfolio
                         </span>
                       )}
@@ -311,45 +296,45 @@ export function InvitDiscoveryView() {
 
                   <div className="text-right">
                     <div className="text-base font-bold font-mono text-foreground">
-                      ₹{invit.unitPrice.toFixed(2)}
+                      ₹{formatResearchNumber(invit.unitPrice, 2)}
                     </div>
                     <div
                       className={`text-xs font-mono font-semibold ${
-                        invit.dayChange >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                        (invit.dayChange !== null && invit.dayChange >= 0) ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
                       }`}
                     >
-                      {invit.dayChange >= 0 ? '+' : ''}
-                      {invit.dayChange.toFixed(2)} ({invit.dayChangePct.toFixed(2)}%)
+                      {(invit.dayChange !== null && invit.dayChange >= 0) ? '+' : ''}
+                      {formatResearchNumber(invit.dayChange, 2)} ({formatResearchNumber(invit.dayChangePct, 2)}%)
                     </div>
                   </div>
                 </div>
 
                 {/* Key Stats */}
-                <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-slate-800/30 border border-border text-center">
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border text-center">
                   <div>
                     <span className="text-[10px] text-muted">Trailing Yield</span>
-                    <div className="text-xs font-bold font-mono text-cyan-400 mt-0.5">
-                      {invit.trailingYieldPct.toFixed(2)}%
+                    <div className="text-xs font-bold font-mono text-cyan-700 dark:text-cyan-400 mt-0.5">
+                      {formatResearchNumber(invit.trailingYieldPct, 2)}%
                     </div>
-                    <span className="text-[9px] text-slate-500">₹{invit.trailingAnnualDpu.toFixed(1)}/yr DPU</span>
+                    <span className="text-[9px] text-muted dark:text-slate-500">₹{formatResearchNumber(invit.trailingAnnualDpu, 1)}/yr DPU</span>
                   </div>
 
                   <div>
                     <span className="text-[10px] text-muted">Concession Left</span>
                     <div className="text-xs font-bold font-mono text-foreground mt-0.5">
-                      {invit.averageRemainingConcessionYears.toFixed(1)} yrs
+                      {formatResearchNumber(invit.averageRemainingConcessionYears, 1)} yrs
                     </div>
-                    <span className="text-[9px] text-slate-500">
+                    <span className="text-[9px] text-muted dark:text-slate-500">
                       {invit.isConcessionFinite ? 'Finite Toll' : 'Availability'}
                     </span>
                   </div>
 
                   <div>
                     <span className="text-[10px] text-muted">Credit Rating</span>
-                    <div className="text-xs font-bold font-mono text-emerald-400 mt-0.5">
+                    <div className="text-xs font-bold font-mono text-emerald-700 dark:text-emerald-400 mt-0.5">
                       {invit.creditRating}
                     </div>
-                    <span className="text-[9px] text-slate-500">Debt: {invit.netDebtToGavPct.toFixed(1)}%</span>
+                    <span className="text-[9px] text-muted dark:text-slate-500">Debt: {formatResearchNumber(invit.netDebtToGavPct, 1)}%</span>
                   </div>
                 </div>
 
@@ -366,14 +351,14 @@ export function InvitDiscoveryView() {
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-colors ${
                     isSelectedForCompare
                       ? 'bg-cyan-500 text-white font-semibold'
-                      : 'text-muted hover:text-foreground hover:bg-slate-800'
+                      : 'text-muted hover:text-foreground hover:bg-surface-raised dark:hover:bg-slate-800'
                   }`}
                 >
                   <Scale className="w-3.5 h-3.5" />
                   <span>{isSelectedForCompare ? 'Selected for Compare' : 'Compare'}</span>
                 </button>
 
-                <div className="text-cyan-400 hover:text-cyan-300 font-semibold inline-flex items-center gap-1">
+                <div className="text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 font-semibold inline-flex items-center gap-1">
                   <span>Detailed Research</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </div>
@@ -386,37 +371,37 @@ export function InvitDiscoveryView() {
       {/* ─── SECTION 4: CHECKLIST ──── */}
       <div className="p-5 rounded-2xl bg-surface border border-border space-y-3">
         <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-          <Shield className="w-4 h-4 text-cyan-400" />
+          <Shield className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
           <span>InvIT Investor Checklist: Understand Before Investing</span>
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-muted">
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Distinguish Availability vs Toll Roads:</strong> Transmission grids earn fixed tariffs if
               lines are energized; toll roads depend on traffic volume and GDP freight growth.
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Concession Expiry is Real:</strong> When a highway concession expires, toll rights revert to
               NHAI. The trust must acquire replacement assets to maintain cash flow.
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Credit Rating & Leverage:</strong> Check rating (e.g. CRISIL AAA) and verify Net Debt is well
               below the statutory 70% GAV threshold.
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Liquidity Considerations:</strong> Secondary market trading volume in InvITs can be thinner
               than large-cap equities. Use limit orders when buying or selling.

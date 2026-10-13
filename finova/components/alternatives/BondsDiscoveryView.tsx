@@ -25,7 +25,7 @@ import {
 import { VERIFIED_INDIAN_BONDS, type BondItem } from '@/lib/data/bondData';
 import { BondDetailModal } from './BondDetailModal';
 import { AlternativeCompareModal, type CompareItem } from './AlternativeCompareModal';
-import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
+import { useHeldSymbols } from '@/lib/hooks/useHeldSymbols';
 
 export function BondsDiscoveryView() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,23 +40,7 @@ export function BondsDiscoveryView() {
   // Example Cash Flow Simulator state
   const [simCapital, setSimCapital] = useState<number>(100000);
 
-  const heldSymbols = useMemo(() => {
-    try {
-      const holdings = PortfolioStorage.getHoldings();
-      const instruments = PortfolioStorage.getInstruments();
-      const instMap = new Map(instruments.map((i) => [i.id, i.symbol.toUpperCase()]));
-      const held = new Set<string>();
-      for (const h of holdings) {
-        const sym = instMap.get(h.instrument_id);
-        if (sym) {
-          held.add(sym.replace(/\.(NS|BO|BSE|NSE)$/i, ''));
-        }
-      }
-      return held;
-    } catch {
-      return new Set<string>();
-    }
-  }, []);
+  const heldSymbols = useHeldSymbols();
 
   // Filtered & Sorted Bonds
   const filteredBonds = useMemo(() => {
@@ -161,13 +145,13 @@ export function BondsDiscoveryView() {
               Truth in Fixed Income: Four Distinct Return Dimensions
             </h2>
           </div>
-          <span className="text-[10px] text-amber-400 font-semibold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+          <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
             Never Assume Coupon = Your Return
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="p-3.5 rounded-xl bg-slate-800/30 border border-border space-y-1">
+          <div className="p-3.5 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1">
             <div className="text-xs font-bold text-indigo-300">1. Coupon Rate</div>
             <p className="text-[11px] text-muted leading-relaxed">
               The contractual percentage paid on <strong>Face Value</strong> (e.g. ₹100 or ₹1,000). Fixed by the
@@ -175,23 +159,23 @@ export function BondsDiscoveryView() {
             </p>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-800/30 border border-border space-y-1">
+          <div className="p-3.5 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1">
             <div className="text-xs font-bold text-foreground">2. Current Yield</div>
             <p className="text-[11px] text-muted leading-relaxed">
               (Annual Coupon / Current Market Price) × 100. Accounts for whether you bought above or below par.
             </p>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-800/30 border border-border space-y-1">
-            <div className="text-xs font-bold text-emerald-400">3. Yield to Maturity (YTM)</div>
+          <div className="p-3.5 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1">
+            <div className="text-xs font-bold text-emerald-700 dark:text-emerald-400">3. Yield to Maturity (YTM)</div>
             <p className="text-[11px] text-muted leading-relaxed">
               The true internal rate of return (IRR) if held until maturity. Only calculable when an active market
               trade price exists.
             </p>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-800/30 border border-border space-y-1">
-            <div className="text-xs font-bold text-amber-400">4. Actual Total Return</div>
+          <div className="p-3.5 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1">
+            <div className="text-xs font-bold text-amber-700 dark:text-amber-400">4. Actual Total Return</div>
             <p className="text-[11px] text-muted leading-relaxed">
               Depends on purchase price, coupon reinvestment rates, holding duration, slab taxes, and credit default risk.
             </p>
@@ -199,7 +183,7 @@ export function BondsDiscoveryView() {
         </div>
 
         {/* Interactive Cash Flow Estimator */}
-        <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60 space-y-3">
+        <div className="p-4 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border/60 dark:border-slate-700/60 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Calculator className="w-4 h-4 text-indigo-400" />
@@ -228,16 +212,15 @@ export function BondsDiscoveryView() {
             </div>
 
             <div className="p-3 rounded-lg bg-surface border border-border text-center">
-              <span className="text-[10px] text-muted">At ~7.40% Contractual Coupon</span>
+              <span className="text-[10px] text-muted">Hypothetical illustration · assumes 7.40%</span>
               <div className="text-sm font-bold font-mono text-indigo-400">
                 ₹{Math.round(simCapital * 0.074).toLocaleString('en-IN')} / year
               </div>
-              <span className="text-[10px] text-slate-500">+ 100% Principal Repayment at Maturity</span>
+              <span className="text-[10px] text-muted dark:text-slate-500">+ 100% Principal Repayment at Maturity</span>
             </div>
 
             <p className="text-[11px] text-muted leading-relaxed">
-              Subject to credit default risk and tax deduction. Sovereign G-Secs carry zero INR default risk,
-              while corporate NCDs carry issuer risk.
+              This illustration is not a reviewed bond offer. Actual coupon terms, repayment and risks depend on the issuer and issue documents. No specific issues are currently reviewed.
             </p>
           </div>
         </div>
@@ -254,7 +237,7 @@ export function BondsDiscoveryView() {
               placeholder="Search by issuer, ISIN, symbol (e.g. REC, G-Sec)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground placeholder:text-muted dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
             />
           </div>
 
@@ -262,7 +245,7 @@ export function BondsDiscoveryView() {
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-indigo-500"
+            className="px-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-indigo-500"
           >
             <option value="ALL">All Categories</option>
             <option value="Sovereign (G-Sec)">Sovereign (G-Sec)</option>
@@ -274,7 +257,7 @@ export function BondsDiscoveryView() {
           <select
             value={selectedRating}
             onChange={(e) => setSelectedRating(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-indigo-500"
+            className="px-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-indigo-500"
           >
             <option value="ALL">All Ratings</option>
             <option value="Sovereign">Sovereign</option>
@@ -286,7 +269,7 @@ export function BondsDiscoveryView() {
           <select
             value={selectedMaturity}
             onChange={(e) => setSelectedMaturity(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-indigo-500"
+            className="px-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-indigo-500"
           >
             <option value="ALL">All Tenors</option>
             <option value="SHORT">&lt; 3 Years (Low Duration)</option>
@@ -301,7 +284,7 @@ export function BondsDiscoveryView() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'coupon' | 'ytm' | 'maturity' | 'name')}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-indigo-500"
+            className="px-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-indigo-500"
           >
             <option value="coupon">Contractual Coupon Rate</option>
             <option value="ytm">Yield to Maturity (YTM)</option>
@@ -312,6 +295,7 @@ export function BondsDiscoveryView() {
       </div>
 
       {/* ─── SECTION 3: LISTED BOND CARDS ──── */}
+      {filteredBonds.length === 0 && <p className="text-xs text-muted" role="status">No reviewed bond issues available. Review current issue documents through <a href="https://www.rbiretaildirect.org.in/" target="_blank" rel="noopener noreferrer" className="underline">RBI Retail Direct</a> or the relevant exchange before researching prices or yields.</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredBonds.map((bond) => {
           const isHeld = heldSymbols.has(bond.symbol.toUpperCase());
@@ -334,11 +318,11 @@ export function BondsDiscoveryView() {
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono font-bold text-indigo-400">{bond.symbol}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-muted">
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-surface-raised dark:bg-slate-800 text-muted">
                         {bond.bondCategory}
                       </span>
                       {isHeld && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
                           In Portfolio
                         </span>
                       )}
@@ -355,24 +339,24 @@ export function BondsDiscoveryView() {
                       {bond.isPriceAvailable && bond.lastTradedPrice !== null ? (
                         `₹${bond.lastTradedPrice.toFixed(2)}`
                       ) : (
-                        <span className="text-amber-400 text-[10px]">Price Unquoted</span>
+                        <span className="text-amber-700 dark:text-amber-400 text-[10px]">Price Unquoted</span>
                       )}
                     </div>
                   </div>
                 </div>
 
                 {/* Key Stats */}
-                <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-slate-800/30 border border-border text-center">
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border text-center">
                   <div>
                     <span className="text-[10px] text-muted">YTM (IRR)</span>
                     <div className="text-xs font-bold font-mono mt-0.5">
                       {bond.ytmPct !== null ? (
-                        <span className="text-emerald-400">{bond.ytmPct.toFixed(2)}%</span>
+                        <span className="text-emerald-700 dark:text-emerald-400">{bond.ytmPct.toFixed(2)}%</span>
                       ) : (
-                        <span className="text-slate-500 text-[10px]">N/A (Illiquid)</span>
+                        <span className="text-muted dark:text-slate-500 text-[10px]">N/A (Illiquid)</span>
                       )}
                     </div>
-                    <span className="text-[9px] text-slate-500">
+                    <span className="text-[9px] text-muted dark:text-slate-500">
                       {bond.ytmPct !== null ? 'Holding to maturity' : 'Trade price required'}
                     </span>
                   </div>
@@ -382,7 +366,7 @@ export function BondsDiscoveryView() {
                     <div className="text-xs font-bold font-mono text-foreground mt-0.5">
                       {bond.creditRating}
                     </div>
-                    <span className="text-[9px] text-slate-500">{bond.ratingAgency}</span>
+                    <span className="text-[9px] text-muted dark:text-slate-500">{bond.ratingAgency}</span>
                   </div>
 
                   <div>
@@ -390,7 +374,7 @@ export function BondsDiscoveryView() {
                     <div className="text-xs font-bold font-mono text-foreground mt-0.5">
                       {bond.residualMaturityYears.toFixed(1)} yrs
                     </div>
-                    <span className="text-[9px] text-slate-500">{bond.maturityDate}</span>
+                    <span className="text-[9px] text-muted dark:text-slate-500">{bond.maturityDate}</span>
                   </div>
                 </div>
 
@@ -409,8 +393,8 @@ export function BondsDiscoveryView() {
                   onClick={(e) => toggleCompare(bond.symbol, e)}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-colors ${
                     isSelectedForCompare
-                      ? 'bg-indigo-500 text-white font-semibold'
-                      : 'text-muted hover:text-foreground hover:bg-slate-800'
+                      ? 'bg-indigo-500 text-foreground dark:text-white font-semibold'
+                      : 'text-muted hover:text-foreground hover:bg-surface-raised dark:hover:bg-slate-800'
                   }`}
                 >
                   <Scale className="w-3.5 h-3.5" />
@@ -435,32 +419,32 @@ export function BondsDiscoveryView() {
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-muted">
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Credit Ratings Are Opinion, Not Guarantees:</strong> Ratings (CRISIL, ICRA) reflect an agency
               opinion on credit risk. Downgrades happen; sovereign debt is the only default-free INR asset.
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Duration & Interest Rate Inverse:</strong> When RBI hikes interest rates, existing long-term
               bonds drop in market price. Holding to maturity eliminates capital loss if the issuer does not default.
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Senior Secured vs Tier-II Subordinated:</strong> Senior secured NCDs hold collateral assets.
               Tier-II bank bonds absorb loss in banking crisis resolution scenarios before senior depositors.
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Secondary Liquidity Reality:</strong> Corporate bonds trade infrequently compared to stocks.
               If you need liquidity prior to maturity, check secondary trading status or plan to hold to maturity.

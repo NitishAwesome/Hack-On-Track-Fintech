@@ -30,7 +30,7 @@ import type { VerifiedIpoItem, IpoCategory, IpoDiscoveryResponse } from '@/lib/m
 import { getVerifiedIpoSchedule } from '@/lib/market/ipoData';
 
 export function IpoDiscoverySection() {
-  const [activeCategory, setActiveCategory] = useState<IpoCategory>('upcoming');
+  const [activeCategory, setActiveCategory] = useState<IpoCategory>('listed');
   const [ipoData, setIpoData] = useState<IpoDiscoveryResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -80,22 +80,22 @@ export function IpoDiscoverySection() {
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-emerald-400" />
-              IPO Discovery &amp; Primary Market Intelligence
+              <BookOpen className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
+              IPO Discovery &amp; Listing Archive
             </h3>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Verified Filings
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+              Reviewed Archive
             </span>
           </div>
           <p className="text-xs text-muted mt-0.5">
-            Discover verified Initial Public Offerings across Indian primary markets (NSE &amp; BSE Mainboard and SME)
+            A small archive of documented listings. Current and upcoming coverage is unavailable.
           </p>
         </div>
 
         {/* Source Attribution Badge */}
         <div className="flex items-center gap-1.5 text-[11px] text-muted bg-surface-raised px-3 py-1.5 rounded-xl border border-border">
-          <Clock className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Verified against NSE/BSE announcements</span>
+          <Clock className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+          <span>NSE notices · reviewed {ipoData?.as_of || '2026-10-13'}</span>
         </div>
       </div>
 
@@ -119,7 +119,7 @@ export function IpoDiscoverySection() {
           onClick={() => setActiveCategory('upcoming')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
             activeCategory === 'upcoming'
-              ? 'bg-surface-raised text-emerald-400 border border-border shadow-sm'
+              ? 'bg-surface-raised text-emerald-700 dark:text-emerald-400 border border-border shadow-sm'
               : 'text-muted hover:text-foreground'
           }`}
         >
@@ -132,7 +132,7 @@ export function IpoDiscoverySection() {
           onClick={() => setActiveCategory('closed')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
             activeCategory === 'closed'
-              ? 'bg-surface-raised text-amber-400 border border-border shadow-sm'
+              ? 'bg-surface-raised text-amber-700 dark:text-amber-400 border border-border shadow-sm'
               : 'text-muted hover:text-foreground'
           }`}
         >
@@ -145,12 +145,12 @@ export function IpoDiscoverySection() {
           onClick={() => setActiveCategory('listed')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
             activeCategory === 'listed'
-              ? 'bg-surface-raised text-blue-400 border border-border shadow-sm'
+              ? 'bg-surface-raised text-blue-600 dark:text-blue-400 border border-border shadow-sm'
               : 'text-muted hover:text-foreground'
           }`}
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Recently Listed ({ipoData?.categories.listed.length || 0})</span>
+          <span>Listing Archive ({ipoData?.categories.listed.length || 0})</span>
         </button>
       </div>
 
@@ -188,12 +188,12 @@ export function IpoDiscoverySection() {
                 <span
                   className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                     item.status === 'OPEN'
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
                       : item.status === 'UPCOMING'
-                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
                       : item.status === 'CLOSED'
-                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                      : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                      : 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20'
                   }`}
                 >
                   {item.status_label}
@@ -204,24 +204,22 @@ export function IpoDiscoverySection() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 rounded-lg bg-surface-raised/60 border border-border/50 text-xs">
                 <div>
                   <span className="text-[10px] text-muted block">Price Band</span>
-                  <span className="font-bold text-foreground font-mono">{item.price_band}</span>
+                  <span className="font-bold text-foreground font-mono">{item.price_band ?? 'Unavailable'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-muted block">Lot Size</span>
-                  <span className="font-bold text-foreground font-mono">{item.lot_size} Shares</span>
+                  <span className="font-bold text-foreground font-mono">{item.lot_size === null ? 'Unavailable' : `${item.lot_size} Shares`}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-muted block">Issue Size</span>
-                  <span className="font-bold text-foreground font-mono">₹{item.issue_size_cr.toLocaleString('en-IN')} Cr</span>
+                  <span className="font-bold text-foreground font-mono">{item.issue_size_cr === null ? 'Unavailable' : `₹${item.issue_size_cr.toLocaleString('en-IN')} Cr`}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-muted block">
-                    {item.status === 'LISTED' ? 'Listing Gain' : 'Listing Date'}
+                    Listing Date
                   </span>
                   <span className="font-bold text-foreground font-mono">
-                    {item.status === 'LISTED' && item.listing_gain_pct !== undefined
-                      ? `+${item.listing_gain_pct.toFixed(1)}%`
-                      : item.listing_date || 'TBD'}
+                    {item.listing_date || 'Unavailable'}
                   </span>
                 </div>
               </div>
@@ -229,16 +227,16 @@ export function IpoDiscoverySection() {
               {/* Timestamps, Source & Verification Links */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] pt-1 border-t border-border/40">
                 <div className="text-muted truncate">
-                  <span>Bidding: {item.open_date} to {item.close_date}</span>
+                  <span>{item.open_date && item.close_date ? `Bidding: ${item.open_date} to ${item.close_date}` : 'Bidding terms not reviewed'}</span>
                   <span className="mx-1">•</span>
-                  <span>Registrar: {item.registrar}</span>
+                  <span>{item.source} · Reviewed {item.verified_at}</span>
                 </div>
 
                 <a
                   href={item.official_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-semibold text-emerald-400 hover:text-emerald-300 transition shrink-0"
+                  className="inline-flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition shrink-0"
                 >
                   <span>Official Filings Link</span>
                   <ArrowUpRight className="w-3.5 h-3.5" />
@@ -250,23 +248,23 @@ export function IpoDiscoverySection() {
       ) : (
         /* Transparent Empty State when No Offerings are Open (e.g. inter-schedule lull) */
         <div className="p-8 rounded-xl bg-surface/50 border border-border/50 text-center space-y-3">
-          <Calendar className="w-8 h-8 text-emerald-400 mx-auto opacity-70" />
+          <Calendar className="w-8 h-8 text-emerald-700 dark:text-emerald-400 mx-auto opacity-70" />
           <div>
             <h4 className="text-sm font-bold text-foreground">
-              No Public Issues Currently Open for Bidding
+              No reviewed records available in this category
             </h4>
             <p className="text-xs text-muted max-w-md mx-auto mt-1 leading-relaxed">
-              There are no active retail subscription windows open on the NSE or BSE today. Public offer schedules operate on specific bidding days. Explore upcoming IPOs or inspect official exchange registers below.
+              This archive does not provide a reviewed current issue schedule. Check the official exchange notices for current issues; an empty category does not mean no IPOs exist.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <button
               type="button"
-              onClick={() => setActiveCategory('upcoming')}
+              onClick={() => setActiveCategory('listed')}
               className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition"
             >
-              View Upcoming IPOs
+              View Listing Archive
             </button>
             <a
               href="https://www.nseindia.com/market-data/all-upcoming-issues-ipo"
@@ -284,53 +282,53 @@ export function IpoDiscoverySection() {
       {/* ─── Mandatory Educational Framework & Due Diligence Guide ─── */}
       <div className="pt-2 border-t border-border/40 space-y-4">
         <h4 className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
-          <Scale className="w-3.5 h-3.5 text-emerald-400" />
+          <Scale className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
           Essential Guide to Indian Initial Public Offerings
         </h4>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 rounded-xl bg-surface/60 border border-border/50 space-y-2">
             <h5 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
               ASBA &amp; UPI Mandatory Process
             </h5>
             <p className="text-xs text-foreground/90 leading-relaxed">
-              In India, retail investor IPO applications must be routed via <strong className="text-foreground">ASBA</strong> (Application Supported by Blocked Amount) using a UPI mandate (up to ₹5,00,000). Money is never deducted upfront from your savings account; it is only lien-blocked until the Basis of Allotment is finalized by the Registrar.
+              Read the issue prospectus and your bank or broker’s ASBA/UPI instructions before applying. FINOVA provides research and does not accept applications or place orders.
             </p>
           </div>
 
           <div className="p-4 rounded-xl bg-surface/60 border border-border/50 space-y-2">
             <h5 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
               Price Bands &amp; Cut-Off Bidding
             </h5>
             <p className="text-xs text-foreground/90 leading-relaxed">
-              Book-built issues specify a 20% price band (e.g., ₹450 to ₹500). Retail individual investors (RII) are permitted to select the <strong className="text-foreground">Cut-off Price</strong>, which automatically matches the final issue price determined by institutional book building, maximizing the probability of allotment.
+              Check the issue’s price band, lot size and investor-category rules in its prospectus. Cut-off bidding does not guarantee allotment. These issue terms are unavailable unless reviewed with a direct source.
             </p>
           </div>
 
           <div className="p-4 rounded-xl bg-surface/60 border border-border/50 space-y-2">
             <h5 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
               Investor Category Quotas (SEBI)
             </h5>
             <p className="text-xs text-foreground/90 leading-relaxed">
-              Mainboard IPOs mandate structured minimum reservations under SEBI ICDR guidelines:
+              Investor-category allocations depend on the issue and applicable rules. Review the prospectus for:
             </p>
             <ul className="text-[11px] text-muted space-y-1 list-disc list-inside">
-              <li><strong className="text-foreground">QIB (Qualified Institutional):</strong> Up to 50% of the net issue.</li>
-              <li><strong className="text-foreground">NII (High Net Worth Non-Institutional):</strong> Minimum 15%.</li>
-              <li><strong className="text-foreground">RII (Retail Individuals):</strong> Minimum 35% of the net offer.</li>
+              <li><strong className="text-foreground">QIB:</strong> Qualified institutional investor allocation.</li>
+              <li><strong className="text-foreground">NII:</strong> Non-institutional investor allocation.</li>
+              <li><strong className="text-foreground">RII:</strong> Retail individual investor allocation.</li>
             </ul>
           </div>
 
           <div className="p-4 rounded-xl bg-surface/60 border border-border/50 space-y-2">
             <h5 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
               Allotment Lottery &amp; Listing Day
             </h5>
             <p className="text-xs text-foreground/90 leading-relaxed">
-              When the retail portion is oversubscribed, SEBI rules mandate a computer-generated randomized lottery ensuring that at least one minimum lot is allotted to as many distinct retail applicants as mathematically possible. Unallotted blocked funds are unblocked within 24 hours of registrar finalization.
+              Check the registrar’s official basis of allotment and the exchange listing notice. An expected date alone does not prove a listing occurred. FINOVA marks a listing only when reviewed listing evidence is available.
             </p>
           </div>
         </div>
@@ -339,7 +337,7 @@ export function IpoDiscoverySection() {
       {/* RHP Due Diligence Checklist */}
       <div className="p-4 rounded-xl bg-surface/50 border border-border/40 space-y-3">
         <h4 className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
-          <FileText className="w-3.5 h-3.5 text-emerald-400" />
+          <FileText className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
           Investor Due Diligence: What to Check in the RHP (Red Herring Prospectus)
         </h4>
 
@@ -374,7 +372,7 @@ export function IpoDiscoverySection() {
             href="https://www.sebi.gov.in/filings/public-issues.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-emerald-400 flex items-center gap-1 transition"
+            className="hover:text-emerald-700 dark:hover:text-emerald-400 flex items-center gap-1 transition"
           >
             SEBI Public Filings <ExternalLink className="w-3 h-3" />
           </a>
@@ -382,7 +380,7 @@ export function IpoDiscoverySection() {
             href="https://www.nseindia.com/market-data/all-upcoming-issues-ipo"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-emerald-400 flex items-center gap-1 transition"
+            className="hover:text-emerald-700 dark:hover:text-emerald-400 flex items-center gap-1 transition"
           >
             NSE Official IPO Portal <ExternalLink className="w-3 h-3" />
           </a>
@@ -390,7 +388,7 @@ export function IpoDiscoverySection() {
             href="https://www.bseindia.com/publicissue.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-emerald-400 flex items-center gap-1 transition"
+            className="hover:text-emerald-700 dark:hover:text-emerald-400 flex items-center gap-1 transition"
           >
             BSE Primary Market <ExternalLink className="w-3 h-3" />
           </a>

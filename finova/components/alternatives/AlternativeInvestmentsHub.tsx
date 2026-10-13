@@ -35,30 +35,30 @@ export function AlternativeInvestmentsHub() {
       category: 'REITs (Real Estate Investment Trusts)',
       link: '/reit',
       icon: Building2,
-      badge: '5.5% – 7.2% Distribution Yield',
+      badge: 'Current yield unavailable',
       headline: 'Quarterly Commercial Real Estate Cash Distributions',
       reasoning:
-        'Ideal if you seek periodic cash distributions backed by Grade-A office tech parks and retail malls. Under SEBI regulations, 90% of Net Distributable Cash Flows are paid out quarterly, giving you rental yield without property maintenance hassles.',
+        'Research how commercial-property trusts generate distributions from rental cash flows. Distribution timing and amounts depend on each trust and its published reports.',
       keyRisks: 'Sensitive to rising benchmark interest rates and office tenant vacancy.',
     },
     infra: {
       category: 'InvITs (Infrastructure Investment Trusts)',
       link: '/invit',
       icon: Zap,
-      badge: '10.3% – 12.2% Distribution Yield',
-      headline: 'High-Yield Concession Cash Flows from Roads & Power Grids',
+      badge: 'Current yield unavailable',
+      headline: 'Infrastructure Cash Flows from Roads & Power Grids',
       reasoning:
-        'Suited for higher cash flow yield from national essential infrastructure (toll highways, interstate power transmission lines). Generates regular payouts from toll collections and availability tariffs.',
+        'Research trusts holding infrastructure such as toll highways and power transmission lines. Distributions depend on operating cash flows, debt and the trust’s reported terms.',
       keyRisks: 'Finite concession periods amortize asset values over time; traffic volume fluctuations.',
     },
     safety: {
       category: 'Bonds & Sovereign Debt',
       link: '/bonds',
       icon: Link2,
-      badge: '7.0% – 7.9% Contractual Coupon',
+      badge: 'Reviewed issue terms unavailable',
       headline: 'Contractual Capital Repayment & Fixed Coupon Interest',
       reasoning:
-        'Optimal if capital preservation and contractual certainty are your primary objectives. Sovereign G-Secs carry zero default risk in INR, while AAA PSU bonds offer predictable fixed interest schedules.',
+        'Learn how bond coupons, repayment terms, credit risk and market-price sensitivity differ. Specific issuer ratings and issue terms need direct, dated source documents.',
       keyRisks: 'Bond prices drop when interest rates rise; credit risk on corporate issuers.',
     },
     growth: {
@@ -68,7 +68,7 @@ export function AlternativeInvestmentsHub() {
       badge: 'Multi-Asset Hedging',
       headline: 'Cushion Equity Drawdowns with Non-Correlated Assets',
       reasoning:
-        'Rather than choosing just one, academic portfolio theory proves that adding 10–20% non-equity alternatives moderates overall drawdown volatility while retaining equity upside.',
+        'Explore hypothetical allocations in Future Lab. Diversification effects depend on the chosen assets and their correlations; drawdown protection is not guaranteed.',
       keyRisks: 'Opportunity cost during hyper-growth equity bull runs.',
     },
   };
@@ -98,24 +98,24 @@ export function AlternativeInvestmentsHub() {
         {/* Quick Stats Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 mt-6 border-t border-border">
           <div className="p-3 rounded-xl bg-surface-raised border border-border">
-            <div className="text-[11px] text-muted font-medium uppercase tracking-wider">Listed Indian REITs</div>
+            <div className="text-[11px] text-muted font-medium uppercase tracking-wider">Reviewed REIT identities</div>
             <div className="text-lg font-bold text-foreground mt-0.5">{VERIFIED_INDIAN_REITS.length} SEBI Trusts</div>
-            <div className="text-[11px] text-emerald-400 mt-0.5">5.6% – 7.2% Yield</div>
+            <div className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">Yield unavailable</div>
           </div>
           <div className="p-3 rounded-xl bg-surface-raised border border-border">
-            <div className="text-[11px] text-muted font-medium uppercase tracking-wider">Listed Indian InvITs</div>
+            <div className="text-[11px] text-muted font-medium uppercase tracking-wider">Reviewed InvIT identities</div>
             <div className="text-lg font-bold text-foreground mt-0.5">{VERIFIED_INDIAN_INVITS.length} Infra Trusts</div>
-            <div className="text-[11px] text-emerald-400 mt-0.5">10.3% – 12.2% Yield</div>
+            <div className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">Yield unavailable</div>
           </div>
           <div className="p-3 rounded-xl bg-surface-raised border border-border">
             <div className="text-[11px] text-muted font-medium uppercase tracking-wider">Tracked Bonds</div>
             <div className="text-lg font-bold text-foreground mt-0.5">{VERIFIED_INDIAN_BONDS.length} Listed Debt</div>
-            <div className="text-[11px] text-blue-400 mt-0.5">Sovereign &amp; AAA PSU</div>
+            <div className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">No reviewed specific issues</div>
           </div>
           <div className="p-3 rounded-xl bg-surface-raised border border-border">
-            <div className="text-[11px] text-muted font-medium uppercase tracking-wider">Regulatory Payout</div>
-            <div className="text-lg font-bold text-foreground mt-0.5">&ge; 90% NDCF</div>
-            <div className="text-[11px] text-muted mt-0.5">SEBI Mandate</div>
+            <div className="text-[11px] text-muted font-medium uppercase tracking-wider">Payout Terms</div>
+            <div className="text-lg font-bold text-foreground mt-0.5">Review reports</div>
+            <div className="text-[11px] text-muted mt-0.5">Amounts and timing vary</div>
           </div>
         </div>
       </div>
@@ -126,7 +126,7 @@ export function AlternativeInvestmentsHub() {
           <div>
             <h2 className="text-lg font-bold text-foreground">Select an Alternative Asset Class to Explore</h2>
             <p className="text-xs text-muted mt-0.5">
-              Each asset class provides its own verified discovery screener, deep-dive detail view, cash flow timelines, and risk factors.
+              Explore the reviewed identities and educational material. Unreviewed prices, yields, ratings and financial metrics remain unavailable.
             </p>
           </div>
         </div>
@@ -141,15 +141,15 @@ export function AlternativeInvestmentsHub() {
 
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700 dark:text-amber-400 group-hover:scale-105 transition-transform">
                   <Building2 className="w-6 h-6" />
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
                   {VERIFIED_INDIAN_REITS.length} Listed Trusts
                 </span>
               </div>
 
-              <h3 className="text-lg font-bold text-foreground group-hover:text-amber-300 transition-colors">
+              <h3 className="text-lg font-bold text-foreground group-hover:text-amber-700 dark:group-hover:text-amber-300 transition-colors">
                 REITs — Real Estate Investment Trusts
               </h3>
               <p className="text-xs text-muted mt-2 leading-relaxed">
@@ -159,7 +159,7 @@ export function AlternativeInvestmentsHub() {
               <div className="mt-4 pt-4 border-t border-border space-y-2 text-xs">
                 <div className="flex items-center justify-between text-muted">
                   <span className="text-muted">Typical Income:</span>
-                  <span className="font-semibold text-emerald-400">Quarterly NDCF Distributions</span>
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-400">Quarterly NDCF Distributions</span>
                 </div>
                 <div className="flex items-center justify-between text-muted">
                   <span className="text-muted">Underlying Asset:</span>
@@ -167,12 +167,12 @@ export function AlternativeInvestmentsHub() {
                 </div>
                 <div className="flex items-center justify-between text-muted">
                   <span className="text-muted">Key Tracked Trusts:</span>
-                  <span className="font-semibold text-foreground">Embassy, Mindspace, Nexus</span>
+                  <span className="font-semibold text-foreground">Embassy, Mindspace</span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs font-semibold text-amber-400 group-hover:translate-x-1 transition-transform">
+            <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs font-semibold text-amber-700 dark:text-amber-400 group-hover:translate-x-1 transition-transform">
               <span>Explore Listed REITs</span>
               <ArrowRight className="w-4 h-4" />
             </div>
@@ -187,15 +187,15 @@ export function AlternativeInvestmentsHub() {
 
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-700 dark:text-emerald-400 group-hover:scale-105 transition-transform">
                   <Zap className="w-6 h-6" />
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
                   {VERIFIED_INDIAN_INVITS.length} Infra Trusts
                 </span>
               </div>
 
-              <h3 className="text-lg font-bold text-foreground group-hover:text-emerald-300 transition-colors">
+              <h3 className="text-lg font-bold text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
                 InvITs — Infrastructure Investment Trusts
               </h3>
               <p className="text-xs text-muted mt-2 leading-relaxed">
@@ -205,7 +205,7 @@ export function AlternativeInvestmentsHub() {
               <div className="mt-4 pt-4 border-t border-border space-y-2 text-xs">
                 <div className="flex items-center justify-between text-muted">
                   <span className="text-muted">Typical Income:</span>
-                  <span className="font-semibold text-emerald-400">10% – 12% Cash Distributions</span>
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-400">Variable cash distributions</span>
                 </div>
                 <div className="flex items-center justify-between text-muted">
                   <span className="text-muted">Underlying Asset:</span>
@@ -213,12 +213,12 @@ export function AlternativeInvestmentsHub() {
                 </div>
                 <div className="flex items-center justify-between text-muted">
                   <span className="text-muted">Key Tracked Trusts:</span>
-                  <span className="font-semibold text-foreground">POWERGRID, IRB, NHIT</span>
+                  <span className="font-semibold text-foreground">POWERGRID, IRB</span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs font-semibold text-emerald-400 group-hover:translate-x-1 transition-transform">
+            <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs font-semibold text-emerald-700 dark:text-emerald-400 group-hover:translate-x-1 transition-transform">
               <span>Explore Listed InvITs</span>
               <ArrowRight className="w-4 h-4" />
             </div>
@@ -233,15 +233,15 @@ export function AlternativeInvestmentsHub() {
 
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-105 transition-transform">
                   <Link2 className="w-6 h-6" />
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-300 border border-blue-500/20">
                   {VERIFIED_INDIAN_BONDS.length} Screener Issues
                 </span>
               </div>
 
-              <h3 className="text-lg font-bold text-foreground group-hover:text-blue-300 transition-colors">
+              <h3 className="text-lg font-bold text-foreground group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
                 Bonds &amp; Listed Fixed Income
               </h3>
               <p className="text-xs text-muted mt-2 leading-relaxed">
@@ -251,20 +251,20 @@ export function AlternativeInvestmentsHub() {
               <div className="mt-4 pt-4 border-t border-border space-y-2 text-xs">
                 <div className="flex items-center justify-between text-muted">
                   <span className="text-muted">Typical Income:</span>
-                  <span className="font-semibold text-blue-400">Contractual Coupon / Interest</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">Contractual Coupon / Interest</span>
                 </div>
                 <div className="flex items-center justify-between text-muted">
                   <span className="text-muted">Credit Ratings:</span>
-                  <span className="font-semibold text-foreground">Sovereign, CRISIL/ICRA AAA</span>
+                  <span className="font-semibold text-foreground">Issue-specific · review source</span>
                 </div>
                 <div className="flex items-center justify-between text-muted">
                   <span className="text-muted">Key Tracked Issues:</span>
-                  <span className="font-semibold text-foreground">7.18% GS 2033, REC, NHAI</span>
+                  <span className="font-semibold text-foreground">No reviewed specific issues</span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs font-semibold text-blue-400 group-hover:translate-x-1 transition-transform">
+            <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:translate-x-1 transition-transform">
               <span>Open Bond Screener</span>
               <ArrowRight className="w-4 h-4" />
             </div>
@@ -285,15 +285,15 @@ export function AlternativeInvestmentsHub() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-border bg-slate-800/40 text-muted">
+              <tr className="border-b border-border bg-surface-raised/40 dark:bg-slate-800/40 text-muted">
                 <th className="py-3 px-3 font-semibold">Core Factor</th>
                 <th className="py-3 px-3 font-semibold text-muted">Direct Equities</th>
-                <th className="py-3 px-3 font-semibold text-amber-300">REITs (Real Estate)</th>
-                <th className="py-3 px-3 font-semibold text-emerald-300">InvITs (Infra)</th>
-                <th className="py-3 px-3 font-semibold text-blue-300">Bonds (Fixed Income)</th>
+                <th className="py-3 px-3 font-semibold text-amber-700 dark:text-amber-300">REITs (Real Estate)</th>
+                <th className="py-3 px-3 font-semibold text-emerald-700 dark:text-emerald-300">InvITs (Infra)</th>
+                <th className="py-3 px-3 font-semibold text-blue-600 dark:text-blue-300">Bonds (Fixed Income)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-muted">
+            <tbody className="divide-y divide-border/60 dark:divide-slate-800/60 text-muted">
               <tr className="hover:bg-surface-raised">
                 <td className="py-3 px-3 font-medium text-foreground">Main Exposure</td>
                 <td className="py-3 px-3 text-muted">Company Equity Shares</td>
@@ -303,16 +303,16 @@ export function AlternativeInvestmentsHub() {
               </tr>
               <tr className="hover:bg-surface-raised">
                 <td className="py-3 px-3 font-medium text-foreground">Typical Income</td>
-                <td className="py-3 px-3 text-muted">Discretionary Dividends (1–2%)</td>
-                <td className="py-3 px-3 text-emerald-400">&ge; 90% NDCF Mandate (5.5–7%)</td>
-                <td className="py-3 px-3 text-emerald-400">&ge; 90% NDCF Mandate (10–12%)</td>
-                <td className="py-3 px-3 text-blue-400">Contractual Fixed Coupon (7–8%)</td>
+                <td className="py-3 px-3 text-muted">Discretionary dividends</td>
+                <td className="py-3 px-3 text-emerald-700 dark:text-emerald-400">Variable distributions · yield unavailable</td>
+                <td className="py-3 px-3 text-emerald-700 dark:text-emerald-400">Variable distributions · yield unavailable</td>
+                <td className="py-3 px-3 text-blue-600 dark:text-blue-400">Issue-specific coupon terms</td>
               </tr>
               <tr className="hover:bg-surface-raised">
                 <td className="py-3 px-3 font-medium text-foreground">Market-Price Risk</td>
-                <td className="py-3 px-3 text-rose-400">High (Beta, Economic Cycles)</td>
-                <td className="py-3 px-3 text-amber-300">Yes (Trades on NSE; Rate sensitive)</td>
-                <td className="py-3 px-3 text-amber-300">Yes (Trades on NSE; Rate sensitive)</td>
+                <td className="py-3 px-3 text-rose-700 dark:text-rose-400">High (Beta, Economic Cycles)</td>
+                <td className="py-3 px-3 text-amber-700 dark:text-amber-300">Yes (Trades on NSE; Rate sensitive)</td>
+                <td className="py-3 px-3 text-amber-700 dark:text-amber-300">Yes (Trades on NSE; Rate sensitive)</td>
                 <td className="py-3 px-3 text-muted">Duration Sensitivity (Prices fall if rates rise)</td>
               </tr>
               <tr className="hover:bg-surface-raised">
@@ -320,21 +320,21 @@ export function AlternativeInvestmentsHub() {
                 <td className="py-3 px-3 text-muted">Last claim on corporate assets</td>
                 <td className="py-3 px-3">Tenant Default / SPV Loan Coverage</td>
                 <td className="py-3 px-3">Counterparty Discom / Toll Traffic</td>
-                <td className="py-3 px-3 text-blue-300">Direct Issuer Credit (AAA / Sovereign)</td>
+                <td className="py-3 px-3 text-blue-600 dark:text-blue-300">Direct Issuer Credit (AAA / Sovereign)</td>
               </tr>
               <tr className="hover:bg-surface-raised">
                 <td className="py-3 px-3 font-medium text-foreground">Secondary Liquidity</td>
-                <td className="py-3 px-3 text-emerald-400">High (Instant order execution)</td>
+                <td className="py-3 px-3 text-emerald-700 dark:text-emerald-400">High (Instant order execution)</td>
                 <td className="py-3 px-3">Moderate (1-unit trading lots on NSE)</td>
                 <td className="py-3 px-3">Moderate (1-unit trading lots on NSE)</td>
-                <td className="py-3 px-3 text-rose-400">Can vary significantly (Many illiquid tranches)</td>
+                <td className="py-3 px-3 text-rose-700 dark:text-rose-400">Can vary significantly (Many illiquid tranches)</td>
               </tr>
               <tr className="hover:bg-surface-raised">
                 <td className="py-3 px-3 font-medium text-foreground">Capital Guarantee</td>
-                <td className="py-3 px-3 text-rose-400">Strictly NO guarantee</td>
-                <td className="py-3 px-3 text-rose-400">Strictly NO guarantee</td>
-                <td className="py-3 px-3 text-rose-400">Strictly NO guarantee (Amortizes)</td>
-                <td className="py-3 px-3 text-amber-300">Contractual at Maturity (Subject to issuer solvency)</td>
+                <td className="py-3 px-3 text-rose-700 dark:text-rose-400">Strictly NO guarantee</td>
+                <td className="py-3 px-3 text-rose-700 dark:text-rose-400">Strictly NO guarantee</td>
+                <td className="py-3 px-3 text-rose-700 dark:text-rose-400">Strictly NO guarantee (Amortizes)</td>
+                <td className="py-3 px-3 text-amber-700 dark:text-amber-300">Contractual at Maturity (Subject to issuer solvency)</td>
               </tr>
             </tbody>
           </table>
@@ -366,7 +366,7 @@ export function AlternativeInvestmentsHub() {
               className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all text-center ${
                 selectedGoal === tab.id
                   ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm'
-                  : 'bg-slate-800/40 border-border text-muted hover:text-foreground hover:bg-surface-raised'
+                  : 'bg-surface-raised/40 dark:bg-slate-800/40 border-border text-muted hover:text-foreground hover:bg-surface-raised'
               }`}
             >
               {tab.label}
@@ -382,13 +382,13 @@ export function AlternativeInvestmentsHub() {
                 <RecIcon className="w-4 h-4" />
               </span>
               <span className="text-xs font-bold text-indigo-300">{currentRec.category}</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
                 {currentRec.badge}
               </span>
             </div>
             <h3 className="text-sm font-bold text-foreground">{currentRec.headline}</h3>
             <p className="text-xs text-muted leading-relaxed">{currentRec.reasoning}</p>
-            <div className="pt-1 text-[11px] text-amber-400 flex items-center gap-1.5">
+            <div className="pt-1 text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
               <AlertTriangle className="w-3 h-3 shrink-0" />
               <span><strong>Key Consideration:</strong> {currentRec.keyRisks}</span>
             </div>

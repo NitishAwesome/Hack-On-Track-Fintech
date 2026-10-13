@@ -1,4 +1,5 @@
 'use client';
+import { formatResearchNumber, compareResearchNumbers } from '@/lib/research/format';
 
 // ============================================================
 // FINOVA — REIT Discovery View (Prompt 19)
@@ -27,12 +28,12 @@ import {
 import { VERIFIED_INDIAN_REITS, type ReitItem } from '@/lib/data/reitData';
 import { ReitDetailModal } from './ReitDetailModal';
 import { AlternativeCompareModal, type CompareItem } from './AlternativeCompareModal';
-import { PortfolioStorage } from '@/lib/storage/portfolioStorage';
+import { useHeldSymbols } from '@/lib/hooks/useHeldSymbols';
 
 export function ReitDiscoveryView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPropertyType, setSelectedPropertyType] = useState<string>('ALL');
-  const [sortBy, setSortBy] = useState<'yield' | 'mcap' | 'occupancy' | 'name'>('yield');
+  const [sortBy, setSortBy] = useState<'yield' | 'mcap' | 'occupancy' | 'name'>('name');
   const [selectedReit, setSelectedReit] = useState<ReitItem | null>(null);
   const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
@@ -40,23 +41,7 @@ export function ReitDiscoveryView() {
   // Example Cash Flow Simulator state
   const [simCapital, setSimCapital] = useState<number>(100000);
 
-  const heldSymbols = useMemo(() => {
-    try {
-      const holdings = PortfolioStorage.getHoldings();
-      const instruments = PortfolioStorage.getInstruments();
-      const instMap = new Map(instruments.map((i) => [i.id, i.symbol.toUpperCase()]));
-      const held = new Set<string>();
-      for (const h of holdings) {
-        const sym = instMap.get(h.instrument_id);
-        if (sym) {
-          held.add(sym.replace(/\.(NS|BO|BSE|NSE)$/i, ''));
-        }
-      }
-      return held;
-    } catch {
-      return new Set<string>();
-    }
-  }, []);
+  const heldSymbols = useHeldSymbols();
 
   // Filtered & Sorted REITs
   const filteredReits = useMemo(() => {
@@ -71,9 +56,9 @@ export function ReitDiscoveryView() {
 
       return matchesSearch && matchesType;
     }).sort((a, b) => {
-      if (sortBy === 'yield') return b.trailingYieldPct - a.trailingYieldPct;
-      if (sortBy === 'mcap') return b.marketCapCr - a.marketCapCr;
-      if (sortBy === 'occupancy') return b.occupancyPct - a.occupancyPct;
+      if (sortBy === 'yield') return compareResearchNumbers(a.trailingYieldPct, b.trailingYieldPct) || a.name.localeCompare(b.name);
+      if (sortBy === 'mcap') return compareResearchNumbers(a.marketCapCr, b.marketCapCr) || a.name.localeCompare(b.name);
+      if (sortBy === 'occupancy') return compareResearchNumbers(a.occupancyPct, b.occupancyPct) || a.name.localeCompare(b.name);
       return a.name.localeCompare(b.name);
     });
   }, [searchQuery, selectedPropertyType, sortBy]);
@@ -103,7 +88,7 @@ export function ReitDiscoveryView() {
     <div className="space-y-8">
       {/* ─── Breadcrumb Navigation ──── */}
       <div className="flex items-center gap-2 text-xs text-muted">
-        <Link href="/explore/alternatives" className="hover:text-pink-400 transition-colors">
+        <Link href="/explore/alternatives" className="hover:text-pink-700 dark:hover:text-pink-400 transition-colors">
           Alternative Investments Hub
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
@@ -114,7 +99,7 @@ export function ReitDiscoveryView() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/20">
+            <span className="p-2 rounded-xl bg-pink-500/10 text-pink-700 dark:text-pink-400 border border-pink-500/20">
               <Building2 className="w-6 h-6" />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
@@ -142,7 +127,7 @@ export function ReitDiscoveryView() {
       <div className="p-5 sm:p-6 rounded-2xl bg-surface border border-border space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <HelpCircle className="w-4 h-4 text-pink-400" />
+            <HelpCircle className="w-4 h-4 text-pink-700 dark:text-pink-400" />
             <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
               REIT Fundamentals in 60 Seconds
             </h2>
@@ -152,8 +137,8 @@ export function ReitDiscoveryView() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* What is it */}
-          <div className="p-4 rounded-xl bg-slate-800/30 border border-border space-y-1.5">
-            <div className="text-xs font-bold text-pink-300 flex items-center gap-1.5">
+          <div className="p-4 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1.5">
+            <div className="text-xs font-bold text-pink-700 dark:text-pink-300 flex items-center gap-1.5">
               <Building2 className="w-3.5 h-3.5" />
               <span>What is a REIT?</span>
             </div>
@@ -164,8 +149,8 @@ export function ReitDiscoveryView() {
           </div>
 
           {/* How do I earn */}
-          <div className="p-4 rounded-xl bg-slate-800/30 border border-border space-y-1.5">
-            <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+          <div className="p-4 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1.5">
+            <div className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
               <Coins className="w-3.5 h-3.5" />
               <span>How Do You Earn?</span>
             </div>
@@ -176,8 +161,8 @@ export function ReitDiscoveryView() {
           </div>
 
           {/* Main risks */}
-          <div className="p-4 rounded-xl bg-slate-800/30 border border-border space-y-1.5">
-            <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+          <div className="p-4 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border space-y-1.5">
+            <div className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>Main Risks to Watch</span>
             </div>
@@ -189,15 +174,15 @@ export function ReitDiscoveryView() {
         </div>
 
         {/* Interactive Cash Flow Simulator (Clearly Labeled Illustrative) */}
-        <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60 space-y-3">
+        <div className="p-4 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border/60 dark:border-slate-700/60 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Calculator className="w-4 h-4 text-pink-400" />
+              <Calculator className="w-4 h-4 text-pink-700 dark:text-pink-400" />
               <h3 className="text-xs font-bold text-foreground">
                 Illustrative Cash Distribution Simulator
               </h3>
             </div>
-            <span className="text-[10px] text-amber-400 font-semibold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
               Illustrative Educational Example — Not a Return Guarantee
             </span>
           </div>
@@ -220,11 +205,11 @@ export function ReitDiscoveryView() {
             </div>
 
             <div className="p-3 rounded-lg bg-surface border border-border text-center">
-              <span className="text-[10px] text-muted">At Avg ~6.2% Trailing Yield</span>
-              <div className="text-sm font-bold font-mono text-emerald-400">
+              <span className="text-[10px] text-muted">Hypothetical illustration · assumes 6.2%</span>
+              <div className="text-sm font-bold font-mono text-emerald-700 dark:text-emerald-400">
                 ~₹{Math.round(simCapital * 0.062).toLocaleString('en-IN')} / yr
               </div>
-              <span className="text-[10px] text-slate-500">~₹{Math.round((simCapital * 0.062) / 4).toLocaleString('en-IN')} / quarter</span>
+              <span className="text-[10px] text-muted dark:text-slate-500">~₹{Math.round((simCapital * 0.062) / 4).toLocaleString('en-IN')} / quarter</span>
             </div>
 
             <p className="text-[11px] text-muted leading-relaxed">
@@ -246,7 +231,7 @@ export function ReitDiscoveryView() {
               placeholder="Search by name, symbol, city (e.g. Embassy, Bengaluru)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground placeholder:text-slate-500 focus:outline-none focus:border-pink-500"
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground placeholder:text-muted dark:placeholder:text-slate-500 focus:outline-none focus:border-pink-500"
             />
           </div>
 
@@ -254,7 +239,7 @@ export function ReitDiscoveryView() {
           <select
             value={selectedPropertyType}
             onChange={(e) => setSelectedPropertyType(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-pink-500"
+            className="px-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-pink-500"
           >
             <option value="ALL">All Properties</option>
             <option value="Office">Office Campuses</option>
@@ -269,7 +254,7 @@ export function ReitDiscoveryView() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'yield' | 'mcap' | 'occupancy' | 'name')}
-            className="px-3 py-2 rounded-xl bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-pink-500"
+            className="px-3 py-2 rounded-xl bg-surface-raised/40 dark:bg-slate-800/40 border border-border text-xs text-foreground focus:outline-none focus:border-pink-500"
           >
             <option value="yield">Trailing Distribution Yield</option>
             <option value="mcap">Market Capitalization</option>
@@ -302,12 +287,12 @@ export function ReitDiscoveryView() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-pink-400">{reit.symbol}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-muted">
+                      <span className="text-xs font-mono font-bold text-pink-700 dark:text-pink-400">{reit.symbol}</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-surface-raised dark:bg-slate-800 text-muted">
                         {reit.propertyType}
                       </span>
                       {isHeld && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
                           In Portfolio
                         </span>
                       )}
@@ -318,43 +303,43 @@ export function ReitDiscoveryView() {
 
                   <div className="text-right">
                     <div className="text-base font-bold font-mono text-foreground">
-                      ₹{reit.unitPrice.toFixed(2)}
+                      ₹{formatResearchNumber(reit.unitPrice, 2)}
                     </div>
                     <div
                       className={`text-xs font-mono font-semibold ${
-                        reit.dayChange >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                        (reit.dayChange !== null && reit.dayChange >= 0) ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
                       }`}
                     >
-                      {reit.dayChange >= 0 ? '+' : ''}
-                      {reit.dayChange.toFixed(2)} ({reit.dayChangePct.toFixed(2)}%)
+                      {(reit.dayChange !== null && reit.dayChange >= 0) ? '+' : ''}
+                      {formatResearchNumber(reit.dayChange, 2)} ({formatResearchNumber(reit.dayChangePct, 2)}%)
                     </div>
                   </div>
                 </div>
 
                 {/* Key Stats Grid */}
-                <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-slate-800/30 border border-border text-center">
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-surface-raised/30 dark:bg-slate-800/30 border border-border text-center">
                   <div>
                     <span className="text-[10px] text-muted">Trailing Yield</span>
-                    <div className="text-xs font-bold font-mono text-emerald-400 mt-0.5">
-                      {reit.trailingYieldPct.toFixed(2)}%
+                    <div className="text-xs font-bold font-mono text-emerald-700 dark:text-emerald-400 mt-0.5">
+                      {formatResearchNumber(reit.trailingYieldPct, 2)}%
                     </div>
-                    <span className="text-[9px] text-slate-500">₹{reit.trailingAnnualDpu.toFixed(1)}/yr DPU</span>
+                    <span className="text-[9px] text-muted dark:text-slate-500">₹{formatResearchNumber(reit.trailingAnnualDpu, 1)}/yr DPU</span>
                   </div>
 
                   <div>
                     <span className="text-[10px] text-muted">Occupancy</span>
                     <div className="text-xs font-bold font-mono text-foreground mt-0.5">
-                      {reit.occupancyPct.toFixed(1)}%
+                      {formatResearchNumber(reit.occupancyPct, 1)}%
                     </div>
-                    <span className="text-[9px] text-slate-500">{reit.waleYears.toFixed(1)}y WALE</span>
+                    <span className="text-[9px] text-muted dark:text-slate-500">{formatResearchNumber(reit.waleYears, 1)}y WALE</span>
                   </div>
 
                   <div>
                     <span className="text-[10px] text-muted">Net Debt / GAV</span>
                     <div className="text-xs font-bold font-mono text-foreground mt-0.5">
-                      {reit.netDebtToGavPct.toFixed(1)}%
+                      {formatResearchNumber(reit.netDebtToGavPct, 1)}%
                     </div>
-                    <span className="text-[9px] text-slate-500">SEBI cap 49%</span>
+                    <span className="text-[9px] text-muted dark:text-slate-500">SEBI cap 49%</span>
                   </div>
                 </div>
 
@@ -371,14 +356,14 @@ export function ReitDiscoveryView() {
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-colors ${
                     isSelectedForCompare
                       ? 'bg-pink-500 text-white font-semibold'
-                      : 'text-muted hover:text-foreground hover:bg-slate-800'
+                      : 'text-muted hover:text-foreground hover:bg-surface-raised dark:hover:bg-slate-800'
                   }`}
                 >
                   <Scale className="w-3.5 h-3.5" />
                   <span>{isSelectedForCompare ? 'Selected for Compare' : 'Compare'}</span>
                 </button>
 
-                <div className="text-pink-400 hover:text-pink-300 font-semibold inline-flex items-center gap-1">
+                <div className="text-pink-700 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 font-semibold inline-flex items-center gap-1">
                   <span>Detailed Research</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </div>
@@ -391,40 +376,38 @@ export function ReitDiscoveryView() {
       {/* ─── SECTION 4: UNDERSTAND BEFORE INVESTING CHECKLIST ──── */}
       <div className="p-5 rounded-2xl bg-surface border border-border space-y-3">
         <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-          <Shield className="w-4 h-4 text-pink-400" />
+          <Shield className="w-4 h-4 text-pink-700 dark:text-pink-400" />
           <span>REIT Investor Checklist: Understand Before Investing</span>
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-muted">
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Yield is not guaranteed interest:</strong> Distributions fluctuate with tenant vacancies,
               operating expenses, and new property acquisitions.
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong>Check Tax Split on DPU:</strong> Distributions arrive split into Interest (taxed at slab),
               Dividends (mostly exempt), and Capital Repayment.
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
-              <strong>Monitor 10Y G-Sec Spreads:</strong> When government bond yields rise above 7.2%, REIT unit
-              prices often correct until distribution yields match the risk premium.
+              <strong>Monitor interest rates:</strong> Compare sourced distributions with prevailing bond yields. No current yield or spread has been reviewed here.
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-800/20 border border-border flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-xl bg-surface-raised/20 dark:bg-slate-800/20 border border-border flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
-              <strong>Track Tenant Concentration:</strong> Large MNC IT/BFSI tenants account for 30–50% of gross
-              rentals. Lease expiries (WALE) must be renewed.
+              <strong>Track Tenant Concentration:</strong> Read the trust’s latest tenant exposure and lease-expiry disclosures. These metrics are unavailable until reviewed.
             </div>
           </div>
         </div>

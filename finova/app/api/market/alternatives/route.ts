@@ -15,7 +15,7 @@ export async function GET(request: Request) {
       const price = marketPrice.price;
       const dayChange = marketPrice.day_change ?? r.dayChange;
       const dayChangePct = marketPrice.day_change_pct ?? r.dayChangePct;
-      const yieldPct = Math.round((r.trailingAnnualDpu / price) * 10000) / 100;
+      const yieldPct = r.trailingAnnualDpu === null ? null : Math.round((r.trailingAnnualDpu / price) * 10000) / 100;
       return {
         ...r,
         unitPrice: price,
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       const price = marketPrice.price;
       const dayChange = marketPrice.day_change ?? i.dayChange;
       const dayChangePct = marketPrice.day_change_pct ?? i.dayChangePct;
-      const yieldPct = Math.round((i.trailingAnnualDpu / price) * 10000) / 100;
+      const yieldPct = i.trailingAnnualDpu === null ? null : Math.round((i.trailingAnnualDpu / price) * 10000) / 100;
       return {
         ...i,
         unitPrice: price,
