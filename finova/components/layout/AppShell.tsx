@@ -6,6 +6,8 @@ import { Header } from './Header';
 import { MarketStrip } from '@/components/shared/MarketStrip';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { usePathname } from 'next/navigation';
+import { PAGE_TITLES } from '@/lib/navigation';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -28,6 +30,8 @@ export function AppShell({
 }: AppShellProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const pathname = usePathname();
+  const pageTitle = title ?? PAGE_TITLES[pathname.split('/')[1]] ?? 'FINOVA';
 
   return (
     <div
@@ -90,7 +94,7 @@ export function AppShell({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header
-          title={title}
+          title={pageTitle}
           breadcrumbs={breadcrumbs}
           userEmail={userEmail}
           userName={userName}

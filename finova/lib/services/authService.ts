@@ -3,6 +3,7 @@
 // ============================================================
 
 import { createClient } from '@/lib/supabase/client';
+import { safeReturnPath } from '@/lib/navigation';
 import {
   CURRENT_AGREEMENT_VERSIONS,
   type AgreementType,
@@ -33,10 +34,7 @@ export class AuthService {
     const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
     // Sanitize next to prevent open redirects
-    const safeNext =
-      next && next.startsWith('/') && !next.startsWith('//')
-        ? next
-        : '/dashboard';
+    const safeNext = safeReturnPath(next, '/dashboard');
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { EXPANDED_NSE_STOCKS } from '@/lib/market/stockCatalog';
+import { INDEX_IDENTITIES, normalizeResearchSymbol } from '@/lib/research/catalog';
 import { DedicatedStockDetailClient } from './DedicatedStockDetailClient';
 
 interface PageProps {
@@ -9,7 +11,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { symbol } = await params;
-  const decoded = decodeURIComponent(symbol).toUpperCase().trim();
+  const decoded = normalizeResearchSymbol(symbol);
   const catalogMatch = EXPANDED_NSE_STOCKS.find((s) => s.symbol.toUpperCase() === decoded);
 
   const title = catalogMatch
@@ -18,7 +20,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   return {
     title,
-    description: `Comprehensive equity research, interactive historical charts (1D to MAX), price ranges, fundamentals, verified company profile, and news for ${decoded}.`,
+    description: `Historical price charts, available market statistics, sourced company reports and news for ${decoded}.`,
   };
 }
 
@@ -28,7 +30,7 @@ export default async function StockDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const decodedSymbol = decodeURIComponent(symbol).toUpperCase().trim();
+  const decodedSymbol = normalizeResearchSymbol(symbol);
 
   // Basic security validation: allow alphanumeric, caret for indices, dot, hyphen
   if (!/^[A-Z0-9^.\-_&]{1,20}$/i.test(decodedSymbol)) {
@@ -38,15 +40,18 @@ export default async function StockDetailPage({ params }: PageProps) {
   const catalogMatch = EXPANDED_NSE_STOCKS.find(
     (s) => s.symbol.toUpperCase() === decodedSymbol
   );
+  const index = INDEX_IDENTITIES[decodedSymbol];
+  const additional = { GOLDBEES: 'Nippon India ETF Gold BeES', SILVERBEES: 'Nippon India Silver ETF', EMBASSY: 'Embassy Office Parks REIT' } as Record<string, string>;
+  if (!catalogMatch && !index && !additional[decodedSymbol]) notFound();
 
   const initialStock = {
     symbol: decodedSymbol,
-    name: catalogMatch?.name || decodedSymbol,
-    exchange: decodedSymbol.startsWith('^') ? 'INDEX' : 'NSE',
+    name: catalogMatch?.name || index?.name || additional[decodedSymbol],
+    exchange: index ? 'INDEX' : 'NSE',
     isin: catalogMatch?.isin || '',
     sector: catalogMatch?.sector || '',
     industry: catalogMatch?.industry || '',
   };
 
-  return <DedicatedStockDetailClient initialStock={initialStock} />;
+  return <Suspense fallback={<div className="page-container">Loading research…</div>}><DedicatedStockDetailClient initialStock={initialStock} /></Suspense>;
 }

@@ -351,7 +351,7 @@ export default function LearnPage() {
                 </div>
                 <Link
                   href={card.explorerHref}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-95 self-start sm:self-auto flex-shrink-0"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-foreground dark:text-white shadow-sm transition-opacity hover:opacity-95 self-start sm:self-auto flex-shrink-0"
                   style={{ backgroundColor: card.color }}
                 >
                   <span>Launch {card.title} Explorer</span>

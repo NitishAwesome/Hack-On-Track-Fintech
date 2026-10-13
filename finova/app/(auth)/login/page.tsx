@@ -17,11 +17,12 @@ import {
 } from 'lucide-react';
 import { FinovaLogo } from '@/components/shared/FinovaLogo';
 import { AuthService } from '@/lib/services/authService';
+import { safeReturnPath } from '@/lib/navigation';
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextTarget = searchParams.get('next') || '/dashboard';
+  const nextTarget = safeReturnPath(searchParams.get('next'), '/dashboard');
   const urlError = searchParams.get('error');
 
   const [email, setEmail] = useState('');
@@ -30,7 +31,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [error, setError] = useState<string | null>(urlError ? decodeURIComponent(urlError) : null);
+  const [error, setError] = useState<string | null>(urlError || null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   async function handleLogin(e: React.FormEvent) {
@@ -61,10 +62,7 @@ export default function LoginPage() {
       setSuccessMsg('Signed in successfully! Redirecting…');
 
       // Validate redirect destination to avoid open redirects
-      const safeDestination =
-        nextTarget && nextTarget.startsWith('/') && !nextTarget.startsWith('//')
-          ? nextTarget
-          : '/dashboard';
+      const safeDestination = safeReturnPath(nextTarget, '/dashboard');
 
       setTimeout(() => {
         router.push(safeDestination);

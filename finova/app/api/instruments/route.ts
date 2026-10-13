@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from '@/lib/supabase/config';
 import type { AssetCategory, InvestmentInstrumentRow } from '@/types/database';
 
 export const dynamic = 'force-dynamic';
+const respond = (body: unknown) => NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } });
 
 // GET /api/instruments?q=...&category=...&limit=... — search instrument catalog
 export async function GET(request: Request) {
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   const limitParam = parseInt(searchParams.get('limit') || '40', 10);
   const limit = Math.min(isNaN(limitParam) || limitParam <= 0 ? 40 : limitParam, 100);
 
-  const localInstruments = PortfolioStorage.getInstruments(q, category);
+  const localInstruments = PortfolioStorage.getInstruments(q, category).filter((instrument) => !instrument.is_custom);
 
   if (isSupabaseConfigured()) {
     try {
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
         }
 
         const merged = Array.from(instrumentMap.values()).slice(0, limit);
-        return NextResponse.json({
+        return respond({
           instruments: merged,
           storageMode: 'cloud',
           totalFound: merged.length,
@@ -69,7 +70,7 @@ export async function GET(request: Request) {
 
   // Explicit local development mode or resilient fallback
   const results = localInstruments.slice(0, limit);
-  return NextResponse.json({
+  return respond({
     instruments: results,
     storageMode: 'local',
     totalFound: results.length,

@@ -12,13 +12,8 @@ export default async function DashboardLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isSupabaseConfigured =
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('placeholder') &&
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('your_');
-
   // Enforce server-side authentication check for protected dashboard routes
-  if (!user && isSupabaseConfigured) {
+  if (!user) {
     redirect('/login');
   }
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { CURRENT_AGREEMENT_VERSIONS } from '@/types/auth';
+import { safeReturnPath } from '@/lib/navigation';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,8 +14,7 @@ export async function GET(request: Request) {
   const next = url.searchParams.get('next') ?? '/dashboard';
 
   // Ensure redirect target is safe (relative path, no open redirects)
-  const safeNext =
-    next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+  const safeNext = safeReturnPath(next, '/dashboard');
 
   const supabase = await createClient();
 

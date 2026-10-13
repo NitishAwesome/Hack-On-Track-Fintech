@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { InvestmentExplorerHub } from '@/components/explorer/InvestmentExplorerHub';
 import { Compass } from 'lucide-react';
+import { EXPANDED_NSE_STOCKS } from '@/lib/market/stockCatalog';
+import { SECTORS, INDEX_IDENTITIES } from '@/lib/research/catalog';
 
 export const metadata: Metadata = {
   title: 'Investment Explorer — FINOVA',
@@ -51,9 +53,9 @@ export default function ExplorePage() {
           </div>
           <div className="flex flex-wrap gap-3 shrink-0">
             {[
-              { label: 'Indices', value: '3+' },
-              { label: 'Sectors', value: '11' },
-              { label: 'Instruments', value: '500+' },
+              { label: 'Indices', value: String(Object.keys(INDEX_IDENTITIES).length) },
+              { label: 'Sectors', value: String(SECTORS.length) },
+              { label: 'Equities', value: String(EXPANDED_NSE_STOCKS.length) },
             ].map(({ label, value }) => (
               <div
                 key={label}

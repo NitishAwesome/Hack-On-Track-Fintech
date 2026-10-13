@@ -24,7 +24,7 @@ import {
 import { NewsCard } from '@/components/news/NewsCard';
 import { NewsExplanationModal } from '@/components/news/NewsExplanationModal';
 import type { PersonalizedNewsArticle, NewsApiResponse } from '@/types/news';
-import { resolveArticleTemporalInfo } from '@/lib/news/temporalUtils';
+import { isRecentArticle, resolveArticleTemporalInfo } from '@/lib/news/temporalUtils';
 
 function NewsSkeletonCard({ isFeatured }: { isFeatured?: boolean }) {
   if (isFeatured) {
@@ -243,13 +243,13 @@ function NewsAndMarketContent() {
 
   // Section A: Recent Financial News (Marketaux & GDELT)
   const recentArticles = useMemo(
-    () => filteredArticles.filter((a) => a.source_provider === 'marketaux' || a.source_provider === 'gdelt'),
+    () => filteredArticles.filter((a) => isRecentArticle(a)),
     [filteredArticles]
   );
 
   // Section B: Delayed News & Market Context (NewsData.io Free)
   const delayedArticles = useMemo(
-    () => filteredArticles.filter((a) => a.source_provider === 'newsdata'),
+    () => filteredArticles.filter((a) => !isRecentArticle(a)),
     [filteredArticles]
   );
 
@@ -377,7 +377,7 @@ function NewsAndMarketContent() {
               Financial News Provider Notice
             </p>
             <p style={{ color: 'rgb(var(--muted))' }}>
-              {providerMessage || 'Live Indian financial headlines require MARKETAUX_API_KEY or NEWSDATA_API_KEY in your server environment.'}
+              {providerMessage || 'News is temporarily unavailable from the configured providers. Please retry later.'}
             </p>
           </div>
         </div>
@@ -395,7 +395,7 @@ function NewsAndMarketContent() {
         >
           <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-500 mt-0.5" />
           <div className="space-y-0.5">
-            <p className="font-semibold text-amber-400">
+            <p className="font-semibold text-amber-700 dark:text-amber-400">
               Provider Rate Limit Notice
             </p>
             <p className="text-[11px]" style={{ color: 'rgb(var(--muted))' }}>
@@ -521,7 +521,7 @@ function NewsAndMarketContent() {
           }}
         >
           <Clock className="w-3.5 h-3.5" />
-          <span>Recent News (Marketaux & GDELT)</span>
+          <span>Recent News (within 72 hours)</span>
           <span
             className="px-1.5 py-0.2 rounded-full text-[10px]"
             style={{
@@ -543,7 +543,7 @@ function NewsAndMarketContent() {
           }}
         >
           <Newspaper className="w-3.5 h-3.5" />
-          <span>Market & Industry News (NewsData.io)</span>
+          <span>Archive & Undated</span>
           <span
             className="px-1.5 py-0.2 rounded-full text-[10px]"
             style={{
@@ -660,11 +660,11 @@ function NewsAndMarketContent() {
                         color: 'rgb(var(--brand-400))',
                       }}
                     >
-                      {recentArticles.length} stories · Marketaux & GDELT
+                      {recentArticles.length} stories · Published or indexed within 72 hours
                     </span>
                   </h2>
                   <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
-                    Verified publication and indexing timestamps from Marketaux and GDELT 2.0.
+                    Publication dates are used when available; otherwise the provider’s indexing date is shown.
                   </p>
                 </div>
               </div>
@@ -697,7 +697,7 @@ function NewsAndMarketContent() {
                     color: 'rgb(var(--muted))',
                   }}
                 >
-                  <p>No recent articles from Marketaux or GDELT match this filter or are currently active.</p>
+                  <p>No articles dated within 72 hours match this filter.</p>
                   {delayedArticles.length > 0 && (
                     <p className="mt-1 font-medium text-brand">
                       Broader market reports are available below in Market & Industry Reporting.
@@ -726,7 +726,7 @@ function NewsAndMarketContent() {
                         color: 'rgb(var(--foreground))',
                       }}
                     >
-                      {delayedArticles.length} stories · NewsData.io
+                      {delayedArticles.length} stories · Older than 72 hours or without a reliable date
                     </span>
                   </h2>
                   <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--muted))' }}>
@@ -836,7 +836,7 @@ function NewsAndMarketContent() {
                 setSelectedCategory('all');
                 setSourceView('all');
               }}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm mt-2 transition-all hover:opacity-95 cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-foreground dark:text-white shadow-sm mt-2 transition-all hover:opacity-95 cursor-pointer"
               style={{
                 background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))',
               }}

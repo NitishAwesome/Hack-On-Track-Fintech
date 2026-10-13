@@ -4,6 +4,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { safeReturnPath } from '@/lib/navigation';
 
 // Public routes that unauthenticated visitors can always access
 const PUBLIC_PREFIXES = [
@@ -21,9 +22,14 @@ const PUBLIC_PREFIXES = [
   '/api/market',
   '/api/instruments',
   '/api/news',
-  '/api/ai',
+  '/api/research',
   '/learn',
   '/explore',
+  '/news',
+  '/reit',
+  '/invit',
+  '/bonds',
+  '/ipo',
   '/demo',
   '/icon.svg',
   '/favicon.ico',
@@ -43,10 +49,14 @@ export async function proxy(request: NextRequest) {
   const anonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const { pathname, search } = request.nextUrl;
+  const isPublic = pathname === '/' || PUBLIC_PREFIXES.some((prefix) => prefix !== '/' && (pathname === prefix || pathname.startsWith(prefix + '/')));
 
   // If Supabase credentials are not configured in local environment, allow preview mode
   if (!url || !anonKey || url.includes('placeholder') || url.includes('your_')) {
-    return supabaseResponse;
+    if (isPublic) return supabaseResponse;
+    if (pathname.startsWith('/api/')) return NextResponse.json({ error: 'Authentication required.' }, { status: 401, headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } });
+    return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(pathname + search)}`, request.url));
   }
 
   const supabase = createServerClient(
@@ -74,45 +84,42 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname, search } = request.nextUrl;
-
-  const isExactRoot = pathname === '/';
-  const isPublic = isExactRoot || PUBLIC_PREFIXES.some((prefix) =>
-    prefix === '/' ? false : pathname.startsWith(prefix)
-  );
   const isAuthOnly = AUTH_ONLY_PATHS.some((path) => pathname === path || pathname.startsWith(path + '/'));
+  const redirectWithSession = (target: URL) => {
+    const response = NextResponse.redirect(target);
+    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    response.headers.set('Cache-Control', 'private, no-store');
+    response.headers.set('Vary', 'Cookie');
+    return response;
+  };
+  if (!isPublic) {
+    supabaseResponse.headers.set('Cache-Control', 'private, no-store');
+    supabaseResponse.headers.set('Vary', 'Cookie');
+  }
 
   // 1. Unauthenticated users attempting to access protected routes
   if (!user && !isPublic) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json(
         { error: 'Authentication required. Please sign in.' },
-        { status: 401 }
+        { status: 401, headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } }
       );
     }
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/login';
+    redirectUrl.search = '';
     // Preserve intended destination safely
     const fullTarget = pathname + (search || '');
     if (fullTarget && fullTarget.startsWith('/') && !fullTarget.startsWith('//')) {
       redirectUrl.searchParams.set('next', fullTarget);
     }
-    return NextResponse.redirect(redirectUrl);
+    return redirectWithSession(redirectUrl);
   }
 
   // 2. Authenticated users attempting to access login or register
   if (user && isAuthOnly) {
     const nextParam = request.nextUrl.searchParams.get('next');
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.searchParams.delete('next');
-
-    // Validate next redirect to prevent open-redirect vulnerabilities
-    if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')) {
-      redirectUrl.pathname = nextParam;
-    } else {
-      redirectUrl.pathname = '/dashboard';
-    }
-    return NextResponse.redirect(redirectUrl);
+    return redirectWithSession(new URL(safeReturnPath(nextParam, '/dashboard'), request.url));
   }
 
   return supabaseResponse;
