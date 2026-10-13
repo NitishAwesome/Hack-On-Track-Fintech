@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
@@ -11,13 +11,14 @@ interface ModalProps {
   description?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 const sizeMap = {
   sm: 'max-w-sm',
   md: 'max-w-md',
   lg: 'max-w-2xl',
+  xl: 'max-w-6xl',
 };
 
 /**
@@ -33,21 +34,36 @@ export function Modal({
   size = 'md',
 }: ModalProps) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    const focusable = () => Array.from(contentRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]') || []).filter((element) => element.getClientRects().length > 0);
+    const focusFrame = requestAnimationFrame(() => (focusable()[0] || contentRef.current)?.focus());
 
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Tab') {
+        const elements = focusable(), first = elements[0], last = elements.at(-1);
+        if (!first) { e.preventDefault(); contentRef.current?.focus(); }
+        else if (e.shiftKey && (document.activeElement === first || !contentRef.current?.contains(document.activeElement))) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && (document.activeElement === last || !contentRef.current?.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+      }
     }
     document.addEventListener('keydown', handleKey);
     document.body.style.overflow = 'hidden';
 
     return () => {
       document.removeEventListener('keydown', handleKey);
-      document.body.style.overflow = '';
+      cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return (
     <AnimatePresence>
@@ -75,6 +91,10 @@ export function Modal({
           >
             <div
               ref={contentRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              tabIndex={-1}
               className={`w-full ${sizeMap[size]} rounded-xl shadow-2xl pointer-events-auto overflow-hidden`}
               style={{
                 backgroundColor: 'rgb(var(--surface))',
@@ -87,7 +107,7 @@ export function Modal({
                 style={{ borderColor: 'rgb(var(--border))' }}
               >
                 <div className="space-y-0.5">
-                  <h2 className="text-base font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
+                  <h2 id={titleId} className="text-base font-semibold" style={{ color: 'rgb(var(--foreground))' }}>
                     {title}
                   </h2>
                   {description && (
