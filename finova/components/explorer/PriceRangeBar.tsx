@@ -4,7 +4,7 @@ import React from 'react';
 import { Info } from 'lucide-react';
 
 interface PriceRangeBarProps {
-  currentPrice: number;
+  currentPrice: number | null;
   currency?: string;
   dayLow?: number | null;
   dayHigh?: number | null;
@@ -20,10 +20,10 @@ export function PriceRangeBar({
   fiftyTwoWeekLow,
   fiftyTwoWeekHigh,
 }: PriceRangeBarProps) {
-  const currencySymbol = currency === 'USD' ? '$' : '₹';
+  const currencySymbol = currency === 'POINTS' ? '' : currency === 'USD' ? '$' : '₹';
 
-  const calculatePosition = (low?: number | null, high?: number | null, current?: number) => {
-    if (typeof low !== 'number' || typeof high !== 'number' || typeof current !== 'number') {
+  const calculatePosition = (low?: number | null, high?: number | null, current?: number | null) => {
+    if (typeof low !== 'number' || typeof high !== 'number' || typeof current !== 'number' || !Number.isFinite(low) || !Number.isFinite(high) || !Number.isFinite(current) || high < low) {
       return null;
     }
     if (high === low) {
@@ -37,7 +37,7 @@ export function PriceRangeBar({
   const yearPosition = calculatePosition(fiftyTwoWeekLow, fiftyTwoWeekHigh, currentPrice);
 
   const formatPrice = (val?: number | null) => {
-    if (typeof val !== 'number' || isNaN(val)) return '—';
+    if (typeof val !== 'number' || !Number.isFinite(val)) return '—';
     return `${currencySymbol}${val.toLocaleString('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -49,7 +49,7 @@ export function PriceRangeBar({
       <div className="flex items-center justify-between border-b border-border/40 pb-3">
         <h4 className="text-sm font-bold text-foreground tracking-tight">Price Performance Ranges</h4>
         <div className="flex items-center gap-1 text-[11px] text-muted">
-          <Info className="w-3.5 h-3.5 text-zinc-400" />
+          <Info className="w-3.5 h-3.5 text-muted dark:text-zinc-400" />
           <span>Intraday & 52-Week Boundaries</span>
         </div>
       </div>
@@ -58,9 +58,9 @@ export function PriceRangeBar({
         {/* Day Range Bar */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-muted">Today&apos;s Range</span>
+            <span className="font-semibold text-muted">Latest Session Range</span>
             {dayPosition !== null && (
-              <span className="text-[11px] font-medium text-emerald-400">
+              <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                 {dayPosition}% of daily range
               </span>
             )}
@@ -68,7 +68,7 @@ export function PriceRangeBar({
 
           {/* Visual Track */}
           <div className="relative pt-2 pb-1">
-            <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden relative">
+            <div className="h-2 w-full bg-surface-raised dark:bg-zinc-800 rounded-full overflow-hidden relative">
               <div
                 className="h-full bg-gradient-to-r from-rose-500/60 via-amber-500/60 to-emerald-500/80 rounded-full"
                 style={{ width: '100%' }}
@@ -80,7 +80,7 @@ export function PriceRangeBar({
                 style={{ left: `${dayPosition}%` }}
               >
                 <div className="w-3 h-3 bg-white rounded-full shadow-md ring-2 ring-emerald-500" />
-                <span className="text-[9px] font-bold text-white mt-0.5">▲</span>
+                <span className="text-[9px] font-bold text-foreground dark:text-white mt-0.5">▲</span>
               </div>
             )}
           </div>
@@ -102,7 +102,7 @@ export function PriceRangeBar({
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-muted">52-Week Range</span>
             {yearPosition !== null && (
-              <span className="text-[11px] font-medium text-emerald-400">
+              <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                 {yearPosition}% of annual range
               </span>
             )}
@@ -110,7 +110,7 @@ export function PriceRangeBar({
 
           {/* Visual Track */}
           <div className="relative pt-2 pb-1">
-            <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden relative">
+            <div className="h-2 w-full bg-surface-raised dark:bg-zinc-800 rounded-full overflow-hidden relative">
               <div
                 className="h-full bg-gradient-to-r from-rose-500/60 via-amber-500/60 to-emerald-500/80 rounded-full"
                 style={{ width: '100%' }}
@@ -122,7 +122,7 @@ export function PriceRangeBar({
                 style={{ left: `${yearPosition}%` }}
               >
                 <div className="w-3 h-3 bg-white rounded-full shadow-md ring-2 ring-emerald-500" />
-                <span className="text-[9px] font-bold text-white mt-0.5">▲</span>
+                <span className="text-[9px] font-bold text-foreground dark:text-white mt-0.5">▲</span>
               </div>
             )}
           </div>

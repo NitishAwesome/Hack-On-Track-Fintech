@@ -1,4 +1,5 @@
 'use client';
+import { useDisplayMetric } from '@/lib/hooks/useDisplayMetric';
 
 // ============================================================
 // FINOVA — Browse Supported Stocks Component
@@ -13,8 +14,9 @@
 // - Explicit coverage scope disclosure (No fake 2,000+ stock claims)
 // ============================================================
 
-import React, { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { SECTORS as CATALOG_SECTORS, sectorName } from '@/lib/research/catalog';
 import {
   EXPANDED_NSE_STOCKS,
 } from '@/lib/market/stockCatalog';
@@ -34,28 +36,24 @@ interface BrowseStocksSectionProps {
   onSelectStock?: (symbol: string) => void;
 }
 
-const SECTORS = [
-  'All',
-  'Information Technology',
-  'Financial Services',
-  'Energy',
-  'Automobile',
-  'Healthcare',
-  'Fast Moving Consumer Goods',
-  'Metals & Mining',
-  'Power',
-  'Capital Goods',
-  'Consumer Durables',
-  'Chemicals',
-  'Real Estate',
-  'Telecommunication',
-] as const;
+const SECTORS = ['All', ...CATALOG_SECTORS];
 
 export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps) {
+  const displayMetric = useDisplayMetric();
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSector, setSelectedSector] = useState<string>('All');
-  const [page, setPage] = useState(1);
+  const params = useSearchParams();
+  const searchQuery = params.get('search') || '';
+  const selectedSector = SECTORS.includes(params.get('sector') || '') ? params.get('sector')! : 'All';
+  const page = Math.max(1, Number.parseInt(params.get('page') || '1') || 1);
+  const changeFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(params.toString());
+    if (value) next.set(key, value); else next.delete(key);
+    if (key !== 'page') next.delete('page');
+    router.push(`/explore?${next}`, { scroll: false });
+  };
+  const setSearchQuery = (value: string) => changeFilter('search', value);
+  const setSelectedSector = (value: string) => changeFilter('sector', value);
+  const setPage = (value: number | ((page: number) => number)) => changeFilter('page', String(typeof value === 'number' ? value : value(page)));
   const pageSize = 15;
 
   // Filter catalog instruments based on search and sector
@@ -70,7 +68,7 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
         stock.industry.toLowerCase().includes(q);
 
       const matchesSector =
-        selectedSector === 'All' || stock.sector === selectedSector;
+        selectedSector === 'All' || sectorName(stock.sector) === selectedSector;
 
       return matchesSearch && matchesSector;
     });
@@ -118,12 +116,12 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
             <h3 className="text-lg font-bold text-foreground tracking-tight">
               Browse Supported Stocks
             </h3>
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
               {EXPANDED_NSE_STOCKS.length} Verified Equities
             </span>
           </div>
           <p className="text-xs text-muted mt-1">
-            Explore verified Indian equities across benchmark sectors. Dynamic quotes update automatically from verified feeds.
+            Explore supported Indian equities across catalog sectors. Available provider quotes follow your refresh preference.
           </p>
         </div>
 
@@ -152,7 +150,7 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
       <div className="flex items-start gap-2 p-3 rounded-xl bg-surface-raised border border-border text-xs text-muted">
         <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
         <span>
-          <strong className="text-foreground">Catalog Coverage Notice:</strong> Displaying {filteredStocks.length} supported NSE stocks from FINOVA’s verified equity catalog. Real-time quotes are dynamically retrieved from verified market feeds. Non-covered small-cap or illiquid securities are excluded to maintain verified quote integrity.
+          <strong className="text-foreground">Catalog Coverage Notice:</strong> Displaying {filteredStocks.length} supported NSE stocks from the FINOVA catalog. Quotes are the latest available from Yahoo Finance and may be delayed or unavailable. This directory does not cover the entire exchange.
         </span>
       </div>
 
@@ -165,7 +163,6 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              setPage(1);
             }}
             placeholder="Search by company name, symbol (e.g. RELIANCE, TCS), or sector..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface border border-border text-foreground text-xs sm:text-sm placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand transition"
@@ -181,11 +178,10 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
               type="button"
               onClick={() => {
                 setSelectedSector(sec);
-                setPage(1);
               }}
               className={`px-3 py-1 rounded-lg font-medium whitespace-nowrap transition ${
                 selectedSector === sec
-                  ? 'bg-brand text-white shadow-sm'
+                  ? 'bg-brand text-foreground dark:text-white shadow-sm'
                   : 'bg-surface text-muted hover:text-foreground border border-border hover:bg-surface-raised'
               }`}
             >
@@ -272,21 +268,20 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
                           )}
                           <span>
                             {isPositive ? '+' : ''}
-                            {change.toFixed(2)} ({isPositive ? '+' : ''}
-                            {changePct.toFixed(2)}%)
+                            {displayMetric === 'absolute' ? `₹${change.toFixed(2)}` : `${changePct.toFixed(2)}%`}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-muted text-[11px]">Updating…</span>
+                        <span className="text-muted text-[11px]">Unavailable</span>
                       )}
                     </td>
 
                     {/* View Details Action */}
                     <td className="py-3 px-4 text-center">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-surface-raised text-muted group-hover:bg-brand/10 group-hover:text-brand group-hover:border-brand/20 border border-border transition">
+                      <button type="button" aria-label={`View ${stock.name}`} onClick={(event) => { event.stopPropagation(); handleStockClick(stock.symbol); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-surface-raised text-muted group-hover:bg-brand/10 group-hover:text-brand group-hover:border-brand/20 border border-border transition">
                         View
                         <ChevronRight className="w-3 h-3" />
-                      </span>
+                      </button>
                     </td>
                   </tr>
                 );

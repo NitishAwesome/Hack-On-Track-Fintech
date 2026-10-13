@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
+import { Modal } from '@/components/shared/Modal';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -8,9 +9,11 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  BarChart,
+  Bar,
 } from 'recharts';
 import type { HistoricalChartResponse, HistoricalChartPoint, ChartRange } from '@/lib/services/marketData';
-import { TrendingUp, TrendingDown, Clock, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, ShieldCheck, RefreshCw, AlertCircle, Maximize2 } from 'lucide-react';
 
 interface InteractiveStockChartProps {
   symbol: string;
@@ -76,7 +79,7 @@ function CustomTooltip({ active, payload, currencySymbol = '₹', firstPrice }: 
       </div>
       <div
         className={`flex items-center gap-1 font-semibold mt-0.5 ${
-          isPointPositive ? 'text-emerald-400' : 'text-rose-400'
+          isPointPositive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
         }`}
       >
         <span>
@@ -88,7 +91,7 @@ function CustomTooltip({ active, payload, currencySymbol = '₹', firstPrice }: 
           ({isPointPositive ? '+' : ''}
           {diffPct.toFixed(2)}%)
         </span>
-        <span className="text-zinc-500 font-normal">from period start</span>
+        <span className="text-muted dark:text-zinc-500 font-normal">from period start</span>
       </div>
     </div>
   );
@@ -102,6 +105,8 @@ export function InteractiveStockChart({
   onRangeChange,
 }: InteractiveStockChartProps) {
   const [range, setRange] = useState<ChartRange>(defaultRange);
+  const [expanded, setExpanded] = useState(false);
+  const chartId = useId().replace(/:/g, '');
   const [chartData, setChartData] = useState<HistoricalChartResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -174,10 +179,10 @@ export function InteractiveStockChart({
   const periodReturn = chartData?.periodChange ?? 0;
   const isPositive = periodReturn >= 0;
   const strokeColor = periodReturn === 0 ? '#9ca3af' : isPositive ? '#10b981' : '#f43f5e';
-  const gradientId = `chartGradient_${symbol.replace(/[^a-zA-Z0-9]/g, '')}_${range}`;
+  const gradientId = `chartGradient_${chartId}_${range}`;
 
   // Currency symbol
-  const currencySymbol = chartData?.currency === 'USD' ? '$' : '₹';
+  const currencySymbol = exchange === 'INDEX' ? '' : chartData?.currency === 'USD' ? '$' : '₹';
 
   // Format date for XAxis
   const formatXAxis = (isoDate: string) => {
@@ -224,7 +229,7 @@ export function InteractiveStockChart({
             <h3 className="text-xl font-bold text-foreground tracking-tight">
               {symbol}
             </h3>
-            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
+            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-surface-raised dark:bg-zinc-800 text-foreground dark:text-zinc-300 border border-border dark:border-zinc-700">
               {exchange}
             </span>
             {companyName && (
@@ -243,9 +248,9 @@ export function InteractiveStockChart({
                   maximumFractionDigits: 2,
                 })}
               </span>
-              <div
+              {chartData.periodChange !== null && chartData.periodChangePercent !== null ? <div
                 className={`text-xs font-semibold flex items-center gap-1 ${
-                  isPositive ? 'text-emerald-400' : 'text-rose-400'
+                  isPositive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
                 }`}
               >
                 {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
@@ -259,7 +264,7 @@ export function InteractiveStockChart({
                   {chartData.periodChangePercent?.toFixed(2)}%)
                 </span>
                 <span className="text-muted font-normal">({range})</span>
-              </div>
+              </div> : <span className="text-xs text-muted">Period movement unavailable</span>}
             </div>
           )}
         </div>
@@ -287,10 +292,17 @@ export function InteractiveStockChart({
           })}
           <button
             type="button"
+            onClick={() => setExpanded(true)}
+            title="Expand price chart"
+            className="p-1.5 text-muted hover:text-foreground rounded-md"
+            aria-label="Expand price chart"
+          ><Maximize2 className="w-3 h-3" /></button>
+          <button
+            type="button"
             onClick={handleManualRefresh}
             disabled={loading}
             title="Refresh historical series"
-            className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-zinc-800 transition disabled:opacity-50"
+            className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-surface-raised dark:hover:bg-zinc-800 transition disabled:opacity-50"
             aria-label="Refresh price chart"
           >
             <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
@@ -311,12 +323,12 @@ export function InteractiveStockChart({
 
         {error && !loading && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/90 rounded-xl p-4 text-center">
-            <AlertCircle className="w-6 h-6 text-amber-400 mb-2" />
+            <AlertCircle className="w-6 h-6 text-amber-700 dark:text-amber-400 mb-2" />
             <div className="text-sm font-semibold text-foreground">Chart Unavailable</div>
             <div className="text-xs text-muted max-w-sm mt-1">{error}</div>
             <button
               onClick={handleManualRefresh}
-              className="mt-3 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-foreground border border-zinc-700 transition"
+              className="mt-3 px-3 py-1.5 rounded-lg text-xs font-semibold bg-surface-raised dark:bg-zinc-800 hover:bg-surface-raised dark:hover:bg-zinc-700 text-foreground border border-border dark:border-zinc-700 transition"
             >
               Retry
             </button>
@@ -364,7 +376,7 @@ export function InteractiveStockChart({
                 strokeWidth={2}
                 fillOpacity={1}
                 fill={`url(#${gradientId})`}
-                isAnimationActive={true}
+                isAnimationActive={false}
                 animationDuration={600}
               />
             </AreaChart>
@@ -380,18 +392,23 @@ export function InteractiveStockChart({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-[11px] text-muted pt-2 border-t border-border/40 gap-1.5">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
             {chartData?.source || 'Yahoo Finance / yfinance'}
           </span>
           <span className="flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            {range === '1D' ? 'Intraday Feed (~15m delayed)' : 'EOD Historical Series'}
+            {chartData?.quoteTimestamp ? `Quote ${new Date(chartData.quoteTimestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : 'Quote time unavailable'}
           </span>
         </div>
-        <div className="text-zinc-500">
+        <div className="text-muted dark:text-zinc-500">
           Showing {chartData?.points.length || 0} points · Range: {range} · Interval: {chartData?.interval || '—'}
         </div>
       </div>
+      {chartData?.points.some((point) => typeof point.volume === 'number' && Number.isFinite(point.volume) && point.volume >= 0) && <div><p className="text-[11px] text-muted">Provider-reported volume</p><ResponsiveContainer width="100%" height={64}><BarChart data={chartData.points}><XAxis dataKey="date" hide /><Tooltip contentStyle={{ background: 'rgb(var(--surface))', color: 'rgb(var(--foreground))', borderColor: 'rgb(var(--border))' }} labelFormatter={formatXAxis} /><Bar dataKey="volume" fill="rgb(var(--muted))" isAnimationActive={false} /></BarChart></ResponsiveContainer></div>}
+      <p className="text-[11px] text-muted">{chartData?.priceBasis || 'Provider price basis unavailable.'} · Selected-period price movement excludes distributions. Retrieved {chartData?.retrievedAt ? new Date(chartData.retrievedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST' : '—'}.</p>
+      <Modal open={expanded} onClose={() => setExpanded(false)} title={`${symbol} · ${range} price chart`} size="xl">
+        <div className="h-[60vh] w-full" role="img" aria-label={`${symbol} historical price chart for ${range}. ${chartData?.points.length || 0} observations.`}><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData?.points || []}><XAxis dataKey="date" tickFormatter={formatXAxis} tick={{ fill: 'rgb(var(--muted))', fontSize: 11 }} /><YAxis domain={yDomain} tick={{ fill: 'rgb(var(--muted))', fontSize: 11 }} /><Tooltip content={<CustomTooltip currencySymbol={currencySymbol} firstPrice={chartData?.points[0]?.close} />} /><Area dataKey="close" stroke={strokeColor} fill={strokeColor} fillOpacity={0.1} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>
+      </Modal>
     </div>
   );
 }

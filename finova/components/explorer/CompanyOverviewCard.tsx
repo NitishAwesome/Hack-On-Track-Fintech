@@ -74,14 +74,14 @@ export function CompanyOverviewCard({
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-border/40 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-surface-raised dark:bg-zinc-800 text-foreground dark:text-zinc-300 border border-border dark:border-zinc-700">
               {exchange}
             </span>
-            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
+            <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
               {symbol}
             </span>
             {isin && (
-              <span className="text-[11px] text-zinc-500 font-mono hidden md:inline-flex items-center gap-1">
+              <span className="text-[11px] text-muted dark:text-zinc-500 font-mono hidden md:inline-flex items-center gap-1">
                 <Hash className="w-3 h-3" />
                 {isin}
               </span>
@@ -105,7 +105,7 @@ export function CompanyOverviewCard({
             {typeof dayChange === 'number' && (
               <div
                 className={`text-xs font-bold mt-0.5 flex items-center sm:justify-end gap-1 ${
-                  dayChange >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  dayChange >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
                 }`}
               >
                 <span>{dayChange >= 0 ? '+' : ''}{formatPrice(dayChange)}</span>
@@ -120,7 +120,7 @@ export function CompanyOverviewCard({
       {/* Fundamentals & Trading Metrics Grid */}
       <div>
         <h4 className="text-xs font-bold uppercase tracking-wider text-muted mb-3 flex items-center gap-1.5">
-          <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
+          <BarChart3 className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
           Key Market Statistics
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -186,7 +186,7 @@ export function CompanyOverviewCard({
       <div className="space-y-3 pt-2 border-t border-border/40">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+            <Building2 className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
             About the Company
           </h4>
           {profile?.officialWebsite && (
@@ -194,7 +194,7 @@ export function CompanyOverviewCard({
               href={profile.officialWebsite}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition"
+              className="text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-1 font-medium transition"
             >
               <Globe className="w-3.5 h-3.5" />
               Official Website
@@ -205,21 +205,21 @@ export function CompanyOverviewCard({
 
         {profile ? (
           <div className="space-y-3">
-            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-foreground dark:text-zinc-300 leading-relaxed">
               {profile.description}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
               {profile.headquarters && (
                 <div className="flex items-center gap-2 text-muted">
-                  <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  <span>Headquarters: <strong className="text-zinc-200">{profile.headquarters}</strong></span>
+                  <MapPin className="w-3.5 h-3.5 text-muted dark:text-zinc-400 shrink-0" />
+                  <span>Headquarters: <strong className="text-foreground dark:text-zinc-200">{profile.headquarters}</strong></span>
                 </div>
               )}
               {profile.foundedYear && (
                 <div className="flex items-center gap-2 text-muted">
-                  <Calendar className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  <span>Incorporated: <strong className="text-zinc-200">{profile.foundedYear}</strong></span>
+                  <Calendar className="w-3.5 h-3.5 text-muted dark:text-zinc-400 shrink-0" />
+                  <span>Incorporated: <strong className="text-foreground dark:text-zinc-200">{profile.foundedYear}</strong></span>
                 </div>
               )}
             </div>
@@ -231,7 +231,7 @@ export function CompanyOverviewCard({
                   {profile.keySegments.map((seg) => (
                     <span
                       key={seg}
-                      className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/60"
+                      className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-surface-raised dark:bg-zinc-800 text-foreground dark:text-zinc-300 border border-border/60 dark:border-zinc-700/60"
                     >
                       {seg}
                     </span>

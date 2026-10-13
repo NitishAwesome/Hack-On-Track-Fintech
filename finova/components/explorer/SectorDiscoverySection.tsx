@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { EXPANDED_NSE_STOCKS } from '@/lib/market/stockCatalog';
+import { SECTORS as CATALOG_SECTORS, sectorName } from '@/lib/research/catalog';
 import {
   Cpu,
   Landmark,
@@ -28,7 +30,7 @@ interface SectorConfig {
   matchSectors: string[];
 }
 
-const SECTORS: SectorConfig[] = [
+const SECTOR_ICONS: SectorConfig[] = [
   { id: 'it', name: 'Information Technology', icon: Cpu, matchSectors: ['Information Technology'] },
   { id: 'financials', name: 'Financial Services & Banking', icon: Landmark, matchSectors: ['Financial Services'] },
   { id: 'energy', name: 'Energy, Oil & Gas', icon: Zap, matchSectors: ['Energy'] },
@@ -40,16 +42,26 @@ const SECTORS: SectorConfig[] = [
   { id: 'power', name: 'Power & Utilities', icon: Zap, matchSectors: ['Power'] },
   { id: 'telecom', name: 'Telecommunications', icon: Radio, matchSectors: ['Telecommunication'] },
 ];
+const SECTORS: SectorConfig[] = CATALOG_SECTORS.map((name) => ({ id: name, name, matchSectors: [name], icon: SECTOR_ICONS.find((sector) => sector.matchSectors.includes(name))?.icon || Layers }));
 
 export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySectionProps) {
-  const [selectedSectorId, setSelectedSectorId] = useState<string>('it');
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const selectedSectorId = CATALOG_SECTORS.includes(params.get('sector') || '') ? params.get('sector')! : 'Information Technology';
+  const setSelectedSectorId = (value: string) => {
+    const next = new URLSearchParams(params.toString());
+    next.set('sector', value);
+    next.delete('page');
+    router.push(`${pathname}?${next}`, { scroll: false });
+  };
   const [searchFilter, setSearchFilter] = useState<string>('');
 
   const currentSector = SECTORS.find((s) => s.id === selectedSectorId) || SECTORS[0];
 
   const sectorStocks = useMemo(() => {
     return EXPANDED_NSE_STOCKS.filter((stock) =>
-      currentSector.matchSectors.includes(stock.sector)
+      currentSector.matchSectors.includes(sectorName(stock.sector))
     );
   }, [currentSector]);
 
@@ -69,7 +81,7 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
       {/* Title */}
       <div>
         <h3 className="text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
-          <Layers className="w-5 h-5 text-emerald-400" />
+          <Layers className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
           Sector-Wise Market Discovery
         </h3>
         <p className="text-xs text-muted mt-0.5">
@@ -82,7 +94,7 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
         {SECTORS.map((sec) => {
           const Icon = sec.icon;
           const isSelected = sec.id === selectedSectorId;
-          const count = EXPANDED_NSE_STOCKS.filter((s) => sec.matchSectors.includes(s.sector)).length;
+          const count = EXPANDED_NSE_STOCKS.filter((s) => sec.matchSectors.includes(sectorName(s.sector))).length;
 
           return (
             <button

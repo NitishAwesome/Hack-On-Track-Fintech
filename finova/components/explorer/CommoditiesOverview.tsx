@@ -81,7 +81,7 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/40 pb-4">
         <div>
           <h3 className="text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
-            <Coins className="w-5 h-5 text-amber-400" />
+            <Coins className="w-5 h-5 text-amber-700 dark:text-amber-400" />
             Gold & Silver Market Benchmarks
           </h3>
           <p className="text-xs text-muted mt-0.5">
@@ -220,13 +220,13 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
                             </span>
                           </div>
                           <span className="text-[11px] text-muted block mt-0.5">
-                            Quoted Unit: <strong className="text-zinc-300">{item.quotedUnit}</strong>
+                            Quoted Unit: <strong className="text-foreground dark:text-zinc-300">{item.quotedUnit}</strong>
                           </span>
                         </div>
 
                         <div
                           className={`p-1.5 rounded-lg ${
-                            isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                            isPositive ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
                           }`}
                         >
                           {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
@@ -240,7 +240,7 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
                         {typeof item.dayChangePercent === 'number' && (
                           <div
                             className={`text-xs font-bold flex items-center gap-1 ${
-                              isPositive ? 'text-emerald-400' : 'text-rose-400'
+                              isPositive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
                             }`}
                           >
                             <span>{isPositive ? '+' : ''}{item.dayChange?.toFixed(2)}</span>
@@ -251,14 +251,14 @@ export function CommoditiesOverview({ onSelectInstrument }: CommoditiesOverviewP
                     </div>
 
                     <div className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[11px]">
-                      <span className="text-[10px] text-zinc-500">
+                      <span className="text-[10px] text-muted dark:text-zinc-500">
                         {item.disclaimer}
                       </span>
                       {onSelectInstrument && (
                         <button
                           type="button"
                           onClick={() => onSelectInstrument(item.providerTicker, item.name)}
-                          className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 shrink-0 ml-2"
+                          className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-0.5 shrink-0 ml-2"
                         >
                           Inspect Chart <ChevronRight className="w-3 h-3" />
                         </button>

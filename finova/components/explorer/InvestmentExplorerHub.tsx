@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 import { MarketIndexCards } from './MarketIndexCards';
@@ -48,29 +48,32 @@ export function InvestmentExplorerHub() {
   // Backwards-compatibility: If a user enters /explore?symbol=RELIANCE, forward them to /explore/stocks/RELIANCE
   useEffect(() => {
     if (initialSymbolParam && initialSymbolParam.trim().length > 0) {
-      router.replace(`/explore/stocks/${encodeURIComponent(initialSymbolParam.trim().toUpperCase())}`);
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('symbol');
+      const from = `/explore${params.size ? `?${params}` : ''}`;
+      router.replace(`/explore/stocks/${encodeURIComponent(initialSymbolParam.trim().toUpperCase())}?from=${encodeURIComponent(from)}`);
     }
-  }, [initialSymbolParam, router]);
+  }, [initialSymbolParam, router, searchParams]);
 
   const parseInitialTab = (): ExplorerTab => {
     if (!tabParam) return 'all';
-    if (tabParam === 'stocks') return 'all';
+    if (tabParam === 'stocks') return 'browse';
     if (['all', 'movers', 'browse', 'sectors', 'commodities', 'alts', 'ipo'].includes(tabParam)) {
       return tabParam as ExplorerTab;
     }
     return 'all';
   };
 
-  const [activeTab, setActiveTab] = useState<ExplorerTab>(parseInitialTab());
+  const activeTab = parseInitialTab();
 
   // Navigate to dedicated stock research page
   const navigateToStock = (symbol: string) => {
     if (!symbol) return;
-    router.push(`/explore/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}`);
+    const from = `/explore${searchParams.size ? `?${searchParams}` : ''}`;
+    router.push(`/explore/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}?from=${encodeURIComponent(from)}`);
   };
 
   const handleTabChange = (tab: ExplorerTab) => {
-    setActiveTab(tab);
     const params = new URLSearchParams(window.location.search);
     if (tab === 'all') {
       params.delete('tab');
@@ -78,7 +81,7 @@ export function InvestmentExplorerHub() {
       params.set('tab', tab);
     }
     const query = params.toString();
-    router.replace(`/explore${query ? `?${query}` : ''}`, { scroll: false });
+    router.push(`/explore${query ? `?${query}` : ''}`, { scroll: false });
   };
 
   return (
@@ -97,7 +100,7 @@ export function InvestmentExplorerHub() {
         <div className="flex items-center justify-center gap-1.5 flex-wrap pt-1">
           <span className="text-[11px] font-semibold text-muted flex items-center gap-1 mr-1">
             <Sparkles className="w-3 h-3 text-brand" />
-            Trending:
+            Quick searches:
           </span>
           {QUICK_SEARCH_CHIPS.map((chip) => (
             <button

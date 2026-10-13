@@ -22,7 +22,7 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
       <div className="flex items-center justify-between border-b border-border/40 pb-3">
         <h4 className="text-sm font-bold text-foreground tracking-tight flex items-center gap-2">
           <span>FINOVA Intelligence Suite</span>
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
             Cross-Feature Connected
           </span>
         </h4>
@@ -32,22 +32,22 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {/* Link 1: Investment X-Ray */}
         <Link
-          href="/analysis"
+          href={`/analysis?symbol=${encodeURIComponent(symbol)}`}
           className="p-3.5 rounded-xl bg-surface-raised hover:bg-surface border border-border hover:border-brand/40 transition group flex flex-col justify-between"
         >
           <div>
-            <div className="flex items-center justify-between text-muted group-hover:text-emerald-400 transition">
-              <PieChart className="w-4 h-4 text-emerald-400" />
+            <div className="flex items-center justify-between text-muted group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition">
+              <PieChart className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
               <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
-            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-emerald-400 transition">
+            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition">
               Investment X-Ray
             </h5>
             <p className="text-[11px] text-muted mt-1 leading-snug">
               Inspect existing portfolio exposure, concentration caps, and asset class weights.
             </p>
           </div>
-          <div className="mt-3 text-[10px] font-semibold text-emerald-400 flex items-center gap-0.5">
+          <div className="mt-3 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5">
             <span>View My Exposure</span>
             <ChevronRight className="w-3 h-3" />
           </div>
@@ -67,7 +67,7 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
               Risk Radar
             </h5>
             <p className="text-[11px] text-muted mt-1 leading-snug">
-              Evaluate portfolio concentration risk, beta sensitivity, and stress scenarios.
+              Review portfolio-wide concentration observations and heuristic stress scenarios.
             </p>
           </div>
           <div className="mt-3 text-[10px] font-semibold text-amber-500 flex items-center gap-0.5">
@@ -90,7 +90,7 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
               Future Lab
             </h5>
             <p className="text-[11px] text-muted mt-1 leading-snug">
-              Simulate hypothetical capital allocation strategies before committing funds.
+              Simulate portfolio-wide capital allocation strategies using recorded holdings.
             </p>
           </div>
           <div className="mt-3 text-[10px] font-semibold text-cyan-500 flex items-center gap-0.5">
@@ -101,7 +101,7 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
 
         {/* Link 4: FINOVA Intelligence */}
         <Link
-          href={`/insights?q=${encodeURIComponent(symbol)}`}
+          href={`/insights?symbol=${encodeURIComponent(symbol)}&question=${encodeURIComponent(`What should I research about ${symbol}, including its business and risks?`)}`}
           className="p-3.5 rounded-xl bg-surface-raised hover:bg-surface border border-border hover:border-rose-500/40 transition group flex flex-col justify-between"
         >
           <div>
@@ -128,18 +128,18 @@ export function StockCrossFeatureLinks({ symbol }: StockCrossFeatureLinksProps) 
           className="p-3.5 rounded-xl bg-surface-raised hover:bg-surface border border-border hover:border-violet-500/40 transition group flex flex-col justify-between"
         >
           <div>
-            <div className="flex items-center justify-between text-muted group-hover:text-violet-400 transition">
-              <Newspaper className="w-4 h-4 text-violet-400" />
+            <div className="flex items-center justify-between text-muted group-hover:text-violet-700 dark:group-hover:text-violet-400 transition">
+              <Newspaper className="w-4 h-4 text-violet-700 dark:text-violet-400" />
               <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
-            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-violet-400 transition">
+            <h5 className="font-bold text-xs text-foreground mt-2 group-hover:text-violet-700 dark:group-hover:text-violet-400 transition">
               News & Market
             </h5>
             <p className="text-[11px] text-muted mt-1 leading-snug">
               Read verified macroeconomic, RBI policy, and sector headlines across connected feeds.
             </p>
           </div>
-          <div className="mt-3 text-[10px] font-semibold text-violet-400 flex items-center gap-0.5">
+          <div className="mt-3 text-[10px] font-semibold text-violet-700 dark:text-violet-400 flex items-center gap-0.5">
             <span>Related News</span>
             <ChevronRight className="w-3 h-3" />
           </div>

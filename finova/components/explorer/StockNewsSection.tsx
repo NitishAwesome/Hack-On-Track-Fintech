@@ -183,21 +183,21 @@ export function StockNewsSection({
     const p = (provider || '').toLowerCase();
     if (p.includes('marketaux')) {
       return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
           Marketaux
         </span>
       );
     }
     if (p.includes('gdelt')) {
       return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
           GDELT 2.0
         </span>
       );
     }
     if (p.includes('newsdata')) {
       return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
           NewsData.io
         </span>
       );
@@ -218,7 +218,7 @@ export function StockNewsSection({
       );
     }
     return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
         Verified Feed
       </span>
     );
@@ -229,7 +229,7 @@ export function StockNewsSection({
       {/* Title */}
       <div className="flex items-center justify-between border-b border-border/40 pb-3">
         <div className="flex items-center gap-2">
-          <Newspaper className="w-5 h-5 text-emerald-400" />
+          <Newspaper className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
           <h3 className="text-base font-bold text-foreground tracking-tight">
             Relevant News & Coverage
           </h3>
@@ -261,7 +261,7 @@ export function StockNewsSection({
 
       {error && !loading && (
         <div className="p-4 rounded-xl bg-surface/50 border border-border/40 text-xs text-muted flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+          <AlertCircle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
           <span>{error}. Displaying verified empty state.</span>
         </div>
       )}
@@ -294,7 +294,7 @@ export function StockNewsSection({
                       href={article.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm font-semibold text-foreground hover:text-emerald-400 transition leading-snug line-clamp-2 inline-flex items-baseline gap-1"
+                      className="text-sm font-semibold text-foreground hover:text-emerald-700 dark:hover:text-emerald-400 transition leading-snug line-clamp-2 inline-flex items-baseline gap-1"
                     >
                       <span>{article.title}</span>
                       <ExternalLink className="w-3.5 h-3.5 text-muted shrink-0 inline translate-y-0.5" />
@@ -326,7 +326,7 @@ export function StockNewsSection({
                   <button
                     type="button"
                     onClick={(e) => handleExplainArticle(article, e)}
-                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition shadow-sm"
+                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 transition shadow-sm"
                     title="Explain story with FINOVA AI"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
@@ -343,7 +343,7 @@ export function StockNewsSection({
                 {isAiExpanded && (
                   <div className="pt-2 border-t border-border/40 mt-2 space-y-2">
                     <div className="flex items-center justify-between text-[11px]">
-                      <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                      <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
                         <Bot className="w-3.5 h-3.5" />
                         <span>FINOVA Intelligence (Gemini AI)</span>
                       </div>

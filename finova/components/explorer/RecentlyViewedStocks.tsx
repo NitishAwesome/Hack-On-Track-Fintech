@@ -1,4 +1,5 @@
 'use client';
+import { useDisplayMetric } from '@/lib/hooks/useDisplayMetric';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -25,6 +26,7 @@ interface RecentlyViewedStocksProps {
 }
 
 export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProps) {
+  const displayMetric = useDisplayMetric();
   const router = useRouter();
   const [recentItems, setRecentItems] = useState<RecentlyViewedItem[]>([]);
   const [mounted, setMounted] = useState<boolean>(false);
@@ -78,7 +80,7 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <History className="w-4 h-4 text-emerald-400" />
+          <History className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
           <h2 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
             Recently Viewed
           </h2>
@@ -98,7 +100,7 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
             <button
               onClick={handleClear}
               type="button"
-              className="text-[11px] text-muted hover:text-rose-400 flex items-center gap-1 transition px-2 py-0.5 rounded hover:bg-surface-raised"
+              className="text-[11px] text-muted hover:text-rose-700 dark:hover:text-rose-400 flex items-center gap-1 transition px-2 py-0.5 rounded hover:bg-surface-raised"
               title="Clear browsing history"
             >
               <Trash2 className="w-3 h-3" />
@@ -111,12 +113,12 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
       {recentItems.length === 0 ? (
         <div className="p-4 rounded-xl border border-dashed border-border/80 bg-card/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-muted">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-emerald-400/70 shrink-0" />
+            <Sparkles className="w-4 h-4 text-emerald-700/70 dark:text-emerald-400/70 shrink-0" />
             <span>
               Stocks you open will appear here for 1-click access. Explore market movers below or use the search bar above.
             </span>
           </div>
-          <div className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">
+          <div className="text-[11px] text-muted dark:text-zinc-500 font-medium whitespace-nowrap">
             Saved locally in browser
           </div>
         </div>
@@ -164,7 +166,7 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
                         )}
                         <span>
                           {isPositive ? '+' : ''}
-                          {changePct.toFixed(2)}%
+                          {displayMetric === 'absolute' && typeof q?.day_change === 'number' ? `₹${q.day_change.toFixed(2)}` : `${changePct.toFixed(2)}%`}
                         </span>
                       </div>
                     ) : null}
