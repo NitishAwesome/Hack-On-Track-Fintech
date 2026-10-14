@@ -1,124 +1,91 @@
 'use client';
-
-import React from 'react';
 import Link from 'next/link';
 import {
-  PlusCircle,
-  Building2,
-  Receipt,
   BarChart3,
+  Shield,
   FlaskConical,
   Compass,
+  Target,
+  Bookmark,
   ChevronRight,
   Zap,
 } from 'lucide-react';
-
+import { PageSection, type PageAccent } from '@/components/shared/PageSection';
+const LINKS = [
+  {
+    title: 'Investment X-Ray',
+    description: 'Understand allocation and concentration',
+    href: '/analysis',
+    icon: BarChart3,
+    tone: 'blue',
+  },
+  {
+    title: 'Risk Radar',
+    description: 'Review portfolio observations and evidence',
+    href: '/risk',
+    icon: Shield,
+    tone: 'violet',
+  },
+  {
+    title: 'Future Lab',
+    description: 'Explore hypothetical allocation strategies',
+    href: '/future-lab',
+    icon: FlaskConical,
+    tone: 'amber',
+  },
+  {
+    title: 'Investment Explorer',
+    description: 'Discover companies, sectors and research',
+    href: '/explore',
+    icon: Compass,
+    tone: 'teal',
+  },
+  {
+    title: 'Financial Goals',
+    description: 'Plan funding and a monthly savings pace',
+    href: '/goals',
+    icon: Target,
+    tone: 'violet',
+  },
+  {
+    title: 'Watchlist',
+    description: 'Return to the companies you follow',
+    href: '/watchlist',
+    icon: Bookmark,
+    tone: 'blue',
+  },
+] as const;
 export function QuickLinksCard() {
-  const links = [
-    {
-      title: 'Add Investment',
-      subtitle: 'Record stock, REIT or bond',
-      href: '/holdings',
-      icon: PlusCircle,
-      iconColor: 'text-brand',
-      iconBg: 'bg-brand/10 border-brand/20',
-      hoverBorder: 'hover:border-brand/40',
-    },
-    {
-      title: 'Add Broker',
-      subtitle: 'Connect Zerodha, Groww',
-      href: '/brokers',
-      icon: Building2,
-      iconColor: 'text-sky-700 dark:text-sky-400',
-      iconBg: 'bg-sky-500/10 border-sky-500/20',
-      hoverBorder: 'hover:border-sky-500/40',
-    },
-    {
-      title: 'Record Transaction',
-      subtitle: 'Buy, sell or dividend cashflow',
-      href: '/transactions',
-      icon: Receipt,
-      iconColor: 'text-emerald-700 dark:text-emerald-400',
-      iconBg: 'bg-emerald-500/10 border-emerald-500/20',
-      hoverBorder: 'hover:border-emerald-500/40',
-    },
-    {
-      title: 'Investment X-Ray',
-      subtitle: 'Multi-broker portfolio breakdown',
-      href: '/analysis',
-      icon: BarChart3,
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      iconBg: 'bg-blue-500/10 border-blue-500/20',
-      hoverBorder: 'hover:border-blue-500/40',
-    },
-    {
-      title: 'Future Lab',
-      subtitle: 'Scenario & stress modeling',
-      href: '/future-lab',
-      icon: FlaskConical,
-      iconColor: 'text-amber-700 dark:text-amber-400',
-      iconBg: 'bg-amber-500/10 border-amber-500/20',
-      hoverBorder: 'hover:border-amber-500/40',
-    },
-    {
-      title: 'Investment Explorer',
-      subtitle: 'Discover verified assets & sectors',
-      href: '/explore',
-      icon: Compass,
-      iconColor: 'text-purple-700 dark:text-purple-400',
-      iconBg: 'bg-purple-500/10 border-purple-500/20',
-      hoverBorder: 'hover:border-purple-500/40',
-    },
-  ];
-
   return (
-    <div
-      className="h-full p-5 sm:p-6 rounded-2xl border flex flex-col justify-between transition-all duration-200 bg-surface shadow-xs"
-      style={{
-        borderColor: 'rgb(var(--border))',
-      }}
+    <PageSection
+      title="Quick links"
+      description="Keep exploring with the right tool for your next question."
+      icon={Zap}
+      accent="cyan"
+      className="h-full"
     >
-      <div>
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-3.5">
-          <Zap className="w-4 h-4 text-brand" />
-          <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
-            Quick Actions
-          </h2>
-        </div>
-
-        {/* 2 or 3 Column Grid of Compact Action Links */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {links.map((link) => {
-            const Icon = link.icon;
-            return (
-              <Link
-                key={link.title}
-                href={link.href}
-                className={`p-2.5 rounded-xl border border-border/70 ${link.hoverBorder} bg-surface-raised/40 hover:bg-surface-raised transition-all flex items-center justify-between group shadow-xs hover-card`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    className={`w-7 h-7 rounded-lg border ${link.iconBg} ${link.iconColor} flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-foreground group-hover:text-brand transition-colors truncate">
-                      {link.title}
-                    </p>
-                    <p className="text-[10px] text-muted truncate mt-0.5">
-                      {link.subtitle}
-                    </p>
-                  </div>
-                </div>
-
-                <ChevronRight className="w-3.5 h-3.5 text-muted group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0 ml-1.5" />
-              </Link>
-            );
-          })}
-        </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {LINKS.map(({ title, description, href, icon: Icon, tone }) => (
+          <Link
+            key={href}
+            href={href}
+            data-tone={tone as PageAccent}
+            className="finova-tile flex items-center gap-3 p-4 group"
+          >
+            <span className="finova-accent-icon shrink-0">
+              <Icon size={21} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-foreground group-hover:text-brand">{title}</p>
+              <p className="text-[11px] text-muted mt-1 leading-relaxed">{description}</p>
+            </div>
+            <ChevronRight
+              size={16}
+              className="text-muted shrink-0 group-hover:text-brand transition-transform group-hover:translate-x-0.5"
+            />
+          </Link>
+        ))}
       </div>
-    </div>
+    </PageSection>
   );
 }

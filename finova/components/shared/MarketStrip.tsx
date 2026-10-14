@@ -11,6 +11,7 @@ import { useSharedMarketIndices } from '@/lib/market/sharedMarketStore';
 interface MarketStripProps {
   className?: string;
   showDisclosure?: boolean;
+  statusLayout?: 'inline' | 'stacked';
 }
 
 interface ExpectedIndexConfig {
@@ -25,7 +26,7 @@ const EXPECTED_INDICES: ExpectedIndexConfig[] = [
   { symbol: 'BANKNIFTY', displayName: 'Bank Nifty', fallbackExchange: 'NSE' },
 ];
 
-export function MarketStrip({ className }: MarketStripProps) {
+export function MarketStrip({ className, statusLayout = 'inline' }: MarketStripProps) {
   const {
     data,
     loading,
@@ -37,6 +38,7 @@ export function MarketStrip({ className }: MarketStripProps) {
 
   const isMarketOpen = marketStatus === 'OPEN';
   const isPreOpen = marketStatus === 'PRE_OPEN';
+  const cardWidth = statusLayout === 'stacked' ? 'min-w-[250px] sm:min-w-[270px]' : 'min-w-[240px] sm:min-w-[300px]';
 
   // Format timestamp concisely based on actual data
   const formattedTime = data?.lastUpdated
@@ -47,6 +49,8 @@ export function MarketStrip({ className }: MarketStripProps) {
         hour12: true,
       })
     : null;
+  const quoteTimes = (data?.indices ?? []).map(index => Date.parse(index.timestamp)).filter(Number.isFinite);
+  const latestQuote = quoteTimes.length ? new Date(Math.max(...quoteTimes)) : null;
 
   return (
     <div
@@ -62,7 +66,7 @@ export function MarketStrip({ className }: MarketStripProps) {
       }}
     >
       <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-2.5">
-        <div className="flex items-center justify-between gap-3 sm:gap-4">
+        <div className={cn('flex justify-between gap-3 sm:gap-4', statusLayout === 'stacked' ? 'flex-col xl:flex-row xl:items-center' : 'items-center')}>
           {/* Main Horizontal Market Items Container */}
           <div className="flex-1 min-w-0">
             {/* 1. Loading Skeleton (exact same height to prevent layout shift) */}
@@ -75,7 +79,7 @@ export function MarketStrip({ className }: MarketStripProps) {
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
-                    className="flex-1 min-w-[240px] sm:min-w-[300px] px-3.5 sm:px-4 py-2 rounded-xl border border-border bg-surface-raised/50 animate-pulse flex items-center justify-between"
+                    className={cn('flex-1 px-3.5 sm:px-4 py-2 rounded-xl border border-border bg-surface-raised/50 animate-pulse flex items-center justify-between', cardWidth)}
                   >
                     <div className="space-y-1.5">
                       <div className="h-2.5 w-14 bg-muted/20 rounded" />
@@ -103,7 +107,7 @@ export function MarketStrip({ className }: MarketStripProps) {
                     return (
                       <div
                         key={cfg.symbol}
-                        className="flex-1 min-w-[240px] sm:min-w-[300px] px-3.5 sm:px-4 py-2 rounded-xl border transition-colors flex items-center justify-between gap-2.5 flex-shrink-0"
+                        className={cn('flex-1 px-3.5 sm:px-4 py-2 rounded-xl border transition-colors flex items-center justify-between gap-2.5 flex-shrink-0', cardWidth)}
                         style={{
                           backgroundColor: 'rgb(var(--surface-raised) / 0.35)',
                           borderColor: 'rgb(var(--border))',
@@ -139,7 +143,7 @@ export function MarketStrip({ className }: MarketStripProps) {
                     <div
                       key={idx.symbol}
                       title={`${idx.source} · Quote ${new Date(idx.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`}
-                      className="flex-1 min-w-[240px] sm:min-w-[300px] px-3.5 sm:px-4 py-2 rounded-xl border transition-all hover:border-brand/40 group flex items-center justify-between gap-3 flex-shrink-0 bg-surface shadow-xs"
+                      className={cn('flex-1 px-3.5 sm:px-4 py-2 rounded-xl border transition-all hover:border-brand/40 group flex items-center justify-between gap-3 flex-shrink-0 bg-surface shadow-xs', cardWidth)}
                       style={{
                         borderColor: 'rgb(var(--border))',
                       }}
@@ -249,13 +253,14 @@ export function MarketStrip({ className }: MarketStripProps) {
           </div>
 
           {/* Right Status Meta & Refresh Control (Desktop & Tablet) */}
-          <div className="hidden md:flex items-center gap-3 pl-3 flex-shrink-0 text-[11px] text-muted border-l border-border/80">
+          <div className={cn('flex-shrink-0 text-[11px] text-muted', statusLayout === 'stacked' ? 'flex items-start gap-3 xl:pl-3 xl:border-l border-border/80' : 'hidden md:flex items-center gap-3 pl-3 border-l border-border/80')}>
+            <div className={statusLayout === 'stacked' ? 'space-y-1.5' : 'contents'}>
             {/* Non-animated subtle dot & status text */}
             <div className="flex items-center gap-1.5">
               <span
                 className={cn(
                   'w-1.5 h-1.5 rounded-full',
-                  isMarketOpen ? 'bg-emerald-500' : isPreOpen ? 'bg-amber-500' : 'bg-muted'
+                  isMarketOpen ? 'bg-emerald-500' : isPreOpen ? 'bg-amber-500' : statusLayout === 'stacked' ? 'bg-amber-500' : 'bg-muted'
                 )}
               />
               <span className="font-medium text-foreground/80">
@@ -267,14 +272,15 @@ export function MarketStrip({ className }: MarketStripProps) {
               </span>
             </div>
 
+            {statusLayout === 'stacked' && latestQuote && <p className="leading-relaxed pl-3"><span className="block">Latest quote {latestQuote.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true })}</span><span className="block">{latestQuote.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' })}</span></p>}
+
             {/* Accurate Timestamp & wording */}
             {formattedTime && (
               <span className="text-[10px] opacity-75">
                 {`Retrieved ${formattedTime} · *Calendar estimate`}
               </span>
             )}
-
-
+            </div>
             {/* Compact Refresh Button */}
             <button
               type="button"

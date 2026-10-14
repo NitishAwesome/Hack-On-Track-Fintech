@@ -1,184 +1,110 @@
 'use client';
-
-import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, Clock } from 'lucide-react';
+import { ArrowUpRight, Clock } from 'lucide-react';
 import type { InvestmentTransactionRow } from '@/types/database';
 import { formatCurrency, formatStockPrice } from '@/lib/utils';
-import { CompanyLogo } from '@/components/shared/CompanyLogo';
-
-interface RecentActivitySectionProps {
-  transactions: InvestmentTransactionRow[];
-  isLoading?: boolean;
-  error?: string | null;
-  onRetry?: () => void;
-}
+import { finiteValue } from '@/lib/dashboard/presentation';
+import { PageSection, SectionFeedback } from '@/components/shared/PageSection';
 
 export function RecentActivitySection({
   transactions,
   isLoading,
   error,
   onRetry,
-}: RecentActivitySectionProps) {
-  if (isLoading) {
-    return (
-      <div
-        className="p-5 sm:p-6 rounded-2xl border flex flex-col justify-between h-[360px] animate-pulse bg-surface"
-        style={{ borderColor: 'rgb(var(--border))' }}
-      >
-        <div className="h-4 w-32 bg-muted/20 rounded" />
-        <div className="space-y-3">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-10 bg-muted/20 rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        className="p-5 sm:p-6 rounded-2xl border flex flex-col items-center justify-center text-center space-y-3 bg-surface"
-        style={{ borderColor: 'rgb(var(--border))' }}
-      >
-        <p className="text-xs font-semibold text-rose-500">{error}</p>
-        {onRetry && (
-          <button
-            onClick={onRetry}
-            className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-surface-raised transition-colors"
-          >
-            Retry
-          </button>
-        )}
-      </div>
-    );
-  }
-
+}: {
+  transactions: InvestmentTransactionRow[];
+  isLoading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+}) {
+  const rows = [...transactions]
+    .sort((a, b) => (b.transaction_date || '').localeCompare(a.transaction_date || ''))
+    .slice(0, 5);
   return (
-    <div
-      className="h-full p-5 sm:p-6 rounded-2xl border flex flex-col transition-all duration-200 bg-surface shadow-xs"
-      style={{
-        borderColor: 'rgb(var(--border))',
-      }}
+    <PageSection
+      title="Recent recorded activity"
+      description="Your latest transaction records, kept separate from market movements."
+      icon={Clock}
+      accent="blue"
+      className="h-full"
+      action={
+        <Link href="/transactions" className="finova-link">
+          View all
+          <ArrowUpRight size={14} />
+        </Link>
+      }
     >
-      <div>
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-brand" />
-            <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
-              Recent Activity
-            </h2>
-          </div>
-          <Link
-            href="/transactions"
-            className="text-xs font-semibold text-brand hover:underline flex items-center gap-1 group"
-          >
-            <span>View All</span>
-            <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-          </Link>
-        </div>
-
-        {/* Content Table */}
-        {transactions.length === 0 ? (
-          <div className="py-12 text-center text-xs text-muted flex flex-col items-center justify-center space-y-2">
-            <Clock className="w-8 h-8 opacity-40 text-muted" />
-            <p className="font-semibold text-foreground">No recent transaction records</p>
-            <p className="text-[11px] text-muted max-w-sm">
-              Your trade executions and corporate actions will appear here once recorded.
+      <SectionFeedback loading={isLoading} error={error} retry={onRetry}>
+        {!rows.length ? (
+          <div className="finova-empty">
+            <p className="text-sm font-semibold">No transaction records yet</p>
+            <p className="text-xs text-muted mt-2">
+              Recorded purchases, sales and income will appear here.
             </p>
-            <div className="flex items-center gap-2 pt-2">
-              <Link
-                href="/transactions"
-                className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-surface-raised transition-colors"
-              >
-                Record Trade
-              </Link>
-            </div>
+            <Link className="finova-link mt-2" href="/transactions?action=add">
+              Record a transaction
+              <ArrowUpRight size={14} />
+            </Link>
           </div>
         ) : (
-          <div className="overflow-x-auto no-scrollbar">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto">
+            <table className="finova-holdings-table">
               <thead>
-                <tr className="border-b border-border text-muted font-semibold">
-                  <th className="pb-2.5 font-medium">Date</th>
-                  <th className="pb-2.5 font-medium">Type</th>
-                  <th className="pb-2.5 font-medium">Asset</th>
-                  <th className="pb-2.5 font-medium text-right">Quantity</th>
-                  <th className="pb-2.5 font-medium text-right">Price</th>
-                  <th className="pb-2.5 font-medium text-right">Amount</th>
+                <tr>
+                  <th>Date / Asset</th>
+                  <th>Type</th>
+                  <th className="text-right">Quantity</th>
+                  <th className="text-right">Price</th>
+                  <th className="text-right">Recorded amount</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/60">
-                {transactions.slice(0, 5).map((tx) => {
-                  const typeUpper = (tx.transaction_type || 'BUY').toUpperCase();
-                  const isBuy = typeUpper === 'BUY';
-                  const isSell = typeUpper === 'SELL';
-                  const dateStr = tx.transaction_date
-                    ? new Date(tx.transaction_date).toLocaleDateString('en-IN', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })
-                    : '—';
-
+              <tbody>
+                {rows.map((transaction) => {
+                  const extended = transaction as InvestmentTransactionRow & {
+                    symbol?: string;
+                    instrument?: { symbol?: string; instrument_name?: string };
+                  };
+                  const symbol =
+                    extended.symbol || extended.instrument?.symbol || 'Recorded instrument';
+                  const date =
+                    transaction.transaction_date &&
+                    Number.isFinite(Date.parse(transaction.transaction_date))
+                      ? new Date(
+                          `${transaction.transaction_date.slice(0, 10)}T12:00:00`,
+                        ).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                      : 'Date unavailable';
+                  const amount = finiteValue(transaction.net_amount)
+                    ? transaction.net_amount
+                    : finiteValue(transaction.gross_amount)
+                      ? transaction.gross_amount
+                      : null;
                   return (
-                    <tr
-                      key={tx.id}
-                      className="hover:bg-surface-raised/60 transition-colors group"
-                    >
-                      {/* Date */}
-                      <td className="py-2.5 text-muted font-mono whitespace-nowrap">
-                        {dateStr}
+                    <tr key={transaction.id}>
+                      <td>
+                        <p className="text-xs font-semibold text-foreground">{symbol}</p>
+                        <p className="text-[10px] text-muted mt-1 whitespace-nowrap">{date}</p>
                       </td>
-
-                      {/* Type Badge */}
-                      <td className="py-2.5 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-0.5 rounded-md font-bold text-[10px] tracking-wide uppercase ${
-                            isBuy
-                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                              : isSell
-                              ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-                              : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
-                          }`}
-                        >
-                          {typeUpper}
+                      <td>
+                        <span className="px-2 py-1 rounded-md text-[10px] font-semibold text-foreground bg-surface-raised">
+                          {transaction.transaction_type || 'Unspecified'}
                         </span>
                       </td>
-
-                      {/* Asset with Logo */}
-                      <td className="py-2.5 pr-2">
-                        {(() => {
-                          const txAny = tx as unknown as { symbol?: string; price?: number; instrument?: { symbol?: string } };
-                          const symbol = txAny.symbol || txAny.instrument?.symbol || 'EQUITY';
-                          return (
-                            <div className="flex items-center gap-2">
-                              <CompanyLogo symbol={symbol} size="xs" />
-                              <div className="min-w-0">
-                                <span className="font-bold text-foreground truncate block max-w-[130px]">
-                                  {symbol}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                      <td className="text-right tabular-nums">
+                        {finiteValue(transaction.quantity)
+                          ? transaction.quantity.toLocaleString('en-IN')
+                          : '—'}
                       </td>
-
-                      {/* Quantity */}
-                      <td className="py-2.5 text-right font-financial font-semibold text-foreground tabular-nums">
-                        {tx.quantity}
+                      <td className="text-right tabular-nums whitespace-nowrap">
+                        {finiteValue(transaction.unit_price)
+                          ? formatStockPrice(transaction.unit_price)
+                          : '—'}
                       </td>
-
-                      {/* Price */}
-                      <td className="py-2.5 text-right font-financial text-muted tabular-nums">
-                        {formatStockPrice(tx.unit_price ?? (tx as unknown as { price?: number }).price ?? 0)}
-                      </td>
-
-                      {/* Amount */}
-                      <td className="py-2.5 text-right font-financial font-bold text-foreground tabular-nums">
-                        {formatCurrency(tx.net_amount ?? (tx.quantity * (tx.unit_price ?? (tx as unknown as { price?: number }).price ?? 0)))}
+                      <td className="text-right font-semibold tabular-nums whitespace-nowrap">
+                        {amount === null ? 'Unavailable' : formatCurrency(amount)}
                       </td>
                     </tr>
                   );
@@ -187,7 +113,7 @@ export function RecentActivitySection({
             </table>
           </div>
         )}
-      </div>
-    </div>
+      </SectionFeedback>
+    </PageSection>
   );
 }

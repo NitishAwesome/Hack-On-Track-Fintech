@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -61,6 +62,15 @@ const TRANSACTION_TYPES: { id: TransactionType | 'ALL'; label: string }[] = [
 ];
 
 export default function TransactionsPage() {
+  return <Suspense fallback={<SkeletonTable />}><TransactionsEntry /></Suspense>;
+}
+
+function TransactionsEntry() {
+  const action = useSearchParams().get('action');
+  return <TransactionsWorkspace key={action || 'list'} initialAction={action} />;
+}
+
+function TransactionsWorkspace({ initialAction }: { initialAction: string | null }) {
   const queryClient = useQueryClient();
 
   // State
@@ -70,7 +80,7 @@ export default function TransactionsPage() {
   const [dateFilter, setDateFilter] = useState<'ALL' | '30D' | '90D' | 'YTD'>('ALL');
 
   // Modals
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(initialAction === 'add');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);

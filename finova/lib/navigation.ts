@@ -7,6 +7,14 @@ export function safeReturnPath(value: string | null | undefined, fallback = '/ex
   } catch { return fallback; }
 }
 
+/** Research can return to its known discovery or personal entry points. */
+export function researchReturnDestination(value: string | null | undefined): string {
+  const destination = safeReturnPath(value);
+  const pathname = new URL(destination, 'https://finova.local').pathname;
+  return ['/explore', '/investments', '/holdings', '/dashboard', '/watchlist'].includes(pathname)
+    ? destination : '/explore';
+}
+
 export const PAGE_TITLES: Record<string, string> = {
   dashboard: 'Dashboard', investments: 'My Investments', holdings: 'My Investments', brokers: 'Broker Accounts',
   transactions: 'Transactions', performance: 'Performance', analysis: 'Investment X-Ray', allocation: 'Allocation',

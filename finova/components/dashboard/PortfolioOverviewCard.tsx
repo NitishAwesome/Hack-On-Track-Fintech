@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { PieChart as RechartsPie, Pie, Cell, Tooltip } from 'recharts';
+import { PieChart as RechartsPie, Pie, Cell } from 'recharts';
 import { formatCurrency } from '@/lib/utils';
 import type { AssetAllocation, HoldingWithMetrics } from '@/types/portfolio';
 import type { BrokerAccountRow } from '@/types/database';
@@ -261,6 +261,8 @@ function DualWaveLineGraph({ items, activeIndex, onHoverIndex }: DualWaveLineGra
                 type="button"
                 onMouseEnter={() => onHoverIndex(idx)}
                 onMouseLeave={() => onHoverIndex(null)}
+                onFocus={() => onHoverIndex(idx)}
+                onBlur={() => onHoverIndex(null)}
                 className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all flex items-center gap-1 border cursor-pointer ${
                   isActive
                     ? 'bg-surface-raised border-border text-foreground shadow-2xs'
@@ -337,6 +339,7 @@ export function PortfolioOverviewCard({
   const smartDefault = assetData.length <= 1 && sectorData.length > 1 ? 'sector' : 'asset';
   const [activeTab, setActiveTab] = useState<'asset' | 'sector' | 'broker'>(smartDefault);
   const currentData = activeTab === 'asset' ? assetData : activeTab === 'sector' ? sectorData : brokerData;
+  const hoveredData = activeIndex === null ? null : currentData[activeIndex];
   const topSector = sectorData[0];
 
   if (isLoading) {
@@ -423,23 +426,6 @@ export function PortfolioOverviewCard({
                     />
                   ))}
                 </Pie>
-                <Tooltip
-                  cursor={false}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload as typeof currentData[0];
-                    return (
-                      <div className="px-3 py-2 rounded-xl border text-xs shadow-lg backdrop-blur-sm"
-                        style={{ backgroundColor: 'rgb(var(--surface-overlay))', borderColor: 'rgb(var(--border))' }}>
-                        <p className="font-bold text-foreground">{d.name}</p>
-                        <p className="font-semibold tabular-nums" style={{ color: d.color }}>
-                          {d.percent.toFixed(1)}%
-                        </p>
-                        <p className="text-muted tabular-nums text-[10px]">{formatCurrency(d.value)}</p>
-                      </div>
-                    );
-                  }}
-                />
               </RechartsPie>
 
               {/* Center Label — absolutely positioned over chart */}
@@ -474,6 +460,26 @@ export function PortfolioOverviewCard({
               onHoverIndex={setActiveIndex}
             />
           </div>
+
+          <div
+            className="mt-3 rounded-xl border border-border bg-surface-raised/50 px-3 py-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <span className="font-semibold text-foreground flex items-center gap-2 min-w-0">
+              {hoveredData && (
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: hoveredData.color }} />
+              )}
+              {hoveredData?.name || 'Allocation total'}
+            </span>
+            <span className="font-bold tabular-nums text-foreground">
+              {hoveredData
+                ? `${hoveredData.percent.toFixed(1)}% · ${formatCurrency(hoveredData.value)}`
+                : formatCurrency(basis.total)}
+            </span>
+          </div>
+          <p className="text-[10px] text-muted mt-2 leading-relaxed">Allocation illustration · curves do not show price history. Weights use {basis.label.toLowerCase()}.</p>
 
           {/* Bottom Summary Strip */}
           <div className="grid grid-cols-3 gap-0 pt-3 mt-2 border-t"

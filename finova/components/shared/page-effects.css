@@ -1,0 +1,286 @@
+@layer components {
+  .finova-panel,
+  .finova-tile,
+  .finova-metric,
+  .finova-dashboard {
+    --page-accent: 6 182 212;
+    --page-accent-ink: 14 116 144;
+  }
+  [data-tone='blue'] {
+    --page-accent: 59 130 246;
+    --page-accent-ink: 29 78 216;
+  }
+  [data-tone='cyan'] {
+    --page-accent: 6 182 212;
+    --page-accent-ink: 14 116 144;
+  }
+  [data-tone='violet'] {
+    --page-accent: 139 92 246;
+    --page-accent-ink: 109 40 217;
+  }
+  [data-tone='amber'] {
+    --page-accent: 245 158 11;
+    --page-accent-ink: 180 83 9;
+  }
+  [data-tone='teal'] {
+    --page-accent: 20 184 166;
+    --page-accent-ink: 15 118 110;
+  }
+  .dark [data-tone] {
+    --page-accent-ink: var(--page-accent);
+  }
+  .finova-panel {
+    border: 1px solid rgb(var(--border));
+    border-top: 2px solid rgb(var(--page-accent) / 0.6);
+    border-radius: 16px;
+    padding: 24px;
+    min-width: 0;
+    container-type: inline-size;
+    background:
+      linear-gradient(125deg, rgb(var(--page-accent) / 0.055), transparent 45%), rgb(var(--surface));
+    box-shadow: var(--shadow-card);
+  }
+  .finova-section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+  }
+  .finova-accent-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(var(--page-accent) / 0.12);
+    color: rgb(var(--page-accent-ink));
+  }
+  .finova-eyebrow {
+    color: rgb(var(--page-accent-ink));
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.1em;
+  }
+  .finova-tile {
+    display: block;
+    min-width: 0;
+    border: 1px solid rgb(var(--border));
+    border-radius: 14px;
+    background:
+      linear-gradient(125deg, rgb(var(--page-accent) / 0.07), transparent 75%), rgb(var(--surface));
+    transition:
+      border-color 160ms,
+      box-shadow 160ms,
+      transform 160ms,
+      background-color 160ms;
+  }
+  .finova-tile:hover,
+  .finova-tile:focus-visible {
+    border-color: rgb(var(--page-accent) / 0.65);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgb(var(--page-accent) / 0.09);
+  }
+  .finova-tile:active {
+    transform: translateY(0);
+  }
+  .finova-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    color: rgb(var(--page-accent-ink));
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .finova-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+  .finova-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 9px 13px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 11px;
+    background: rgb(var(--surface));
+    color: rgb(var(--foreground));
+    font-size: 12px;
+    font-weight: 650;
+    transition:
+      border-color 150ms,
+      background-color 150ms,
+      transform 150ms;
+  }
+  .finova-button:hover {
+    border-color: rgb(var(--page-accent) / 0.55);
+    background: rgb(var(--surface-raised));
+  }
+  .finova-button:active {
+    transform: translateY(1px);
+  }
+  .finova-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .finova-button-primary {
+    border-color: transparent;
+    background: linear-gradient(110deg, #2563eb, #0891b2);
+    color: white;
+    box-shadow: 0 4px 15px rgb(6 182 212 / 0.15);
+  }
+  .finova-button-primary:hover {
+    background: linear-gradient(110deg, #1d4ed8, #0e7490);
+  }
+  .finova-empty {
+    padding: 24px 16px;
+    border: 1px dashed rgb(var(--border));
+    border-radius: 12px;
+    text-align: center;
+    background: rgb(var(--surface-raised) / 0.25);
+  }
+  .finova-dashboard :is(a, button, select, input, summary):focus-visible {
+    outline: 2px solid rgb(var(--brand-500));
+    outline-offset: 3px;
+  }
+  .finova-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .finova-metric {
+    position: relative;
+    min-height: 152px;
+    padding: 19px;
+    overflow: hidden;
+  }
+  .finova-metric::after {
+    content: '';
+    position: absolute;
+    height: 3px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(
+      90deg,
+      rgb(var(--page-accent) / 0.8),
+      rgb(var(--page-accent) / 0.05)
+    );
+  }
+  .finova-dashboard {
+    container-type: inline-size;
+  }
+  .finova-allocation-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .finova-allocation-legend {
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+  }
+  .finova-legend-row {
+    display: block;
+    width: 100%;
+    padding: 11px;
+    border-radius: 10px;
+    text-align: left;
+    transition: background-color 150ms;
+  }
+  .finova-legend-row:hover,
+  .finova-legend-row[aria-pressed='true'] {
+    background: rgb(var(--surface-raised));
+  }
+  .finova-donut {
+    flex-shrink: 0;
+    position: relative;
+    width: 240px;
+    height: 240px;
+  }
+  .finova-donut-center {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 64px;
+  }
+  .finova-observation {
+    padding: 15px;
+    border-radius: 12px;
+    background: rgb(var(--surface-raised) / 0.4);
+  }
+  .finova-holdings-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 12px;
+  }
+  .finova-holdings-table th {
+    padding: 0 10px 13px;
+    color: rgb(var(--muted));
+    font-weight: 550;
+  }
+  .finova-holdings-table td {
+    padding: 17px 10px;
+    border-top: 1px solid rgb(var(--border) / 0.7);
+  }
+  .finova-holdings-table tbody tr:hover {
+    background: rgb(var(--surface-raised) / 0.4);
+  }
+  @container (min-width:560px) {
+    .finova-allocation-body {
+      flex-direction: row;
+      align-items: center;
+    }
+  }
+  @container (min-width:650px) {
+    .finova-metrics {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @container (min-width:1070px) {
+    .finova-metrics {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 639px) {
+    .finova-panel {
+      padding: 18px;
+    }
+    .finova-metric {
+      padding: 15px;
+      min-height: 156px;
+    }
+    .finova-section-heading {
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .finova-reveal {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .finova-tile:hover {
+      transform: none;
+    }
+  }
+  .reduce-motion .finova-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .reduce-motion .finova-tile:hover {
+    transform: none;
+  }
+}

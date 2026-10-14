@@ -665,4 +665,100 @@ await test('provider rate limits reach the API with Retry-After and failed clien
   } finally { globalThis.fetch = oldFetch; }
 });
 
+await test('Dashboard consolidation never extends quoted prices to missing broker positions', () => {
+  const { dashboardHoldings } = load('lib/dashboard/presentation.ts');
+  const positions = [holding('TCS', 120), { ...holding('TCS', null, 50, 90), id: 'tcs-b', broker_account_id: 'broker-b' }, holding('RELIANCE', 80)];
+  const original = JSON.stringify(positions);
+  const rows = dashboardHoldings(positions);
+  const tcs = rows.find(row => row.identity.symbol === 'TCS');
+  assert.equal(tcs.quantity, 60);
+  assert.equal(tcs.accounts, 2);
+  assert.equal(tcs.currentValue, 1200);
+  assert.equal(tcs.pricedInvested, 1000);
+  assert.equal(tcs.pnl, 200);
+  assert.equal(tcs.partial, true);
+  assert.equal(tcs.weight, 60);
+  assert.equal(rows.reduce((sum, row) => sum + row.weight, 0), 100);
+  const noPrice = dashboardHoldings([holding('UNKNOWN', null)])[0];
+  assert.equal(noPrice.currentValue, null); assert.equal(noPrice.pnl, null);
+  assert.equal(noPrice.valueOnBasis, 1000); assert.equal(noPrice.weight, 100);
+  const excluded = dashboardHoldings([...positions, holding('UNKNOWN', null)]).find(row => row.identity.symbol === 'UNKNOWN');
+  assert.equal(excluded.currentValue, null); assert.equal(excluded.weight, null);
+  assert.equal(JSON.stringify(positions), original);
+});
+
+await test('Dashboard history excludes unvalued, incomplete, foreign, invalid and future snapshots', () => {
+  const { dashboardSnapshots } = load('lib/dashboard/presentation.ts');
+  const record = { id: 'a', user_id: 'fixture', snapshot_date: '2026-10-01', currency: 'INR', completeness_status: 'COMPLETE', portfolio_value: 1100, invested_value: 1000, created_at: '2026-10-01T12:00:00Z' };
+  const result = dashboardSnapshots([record,
+    { ...record, snapshot_date: '2026-10-03', portfolio_value: null, invested_value: 9000 },
+    { ...record, snapshot_date: '2026-10-04', completeness_status: 'PARTIAL' },
+    { ...record, snapshot_date: '2026-10-05', currency: 'USD' },
+    { ...record, snapshot_date: '2026-02-30' },
+    { ...record, snapshot_date: '2026-10-15' },
+    { ...record, snapshot_date: '2026-10-06', portfolio_value: Infinity },
+    { ...record, snapshot_date: '2026-10-07', portfolio_value: -100 },
+    { ...record, snapshot_date: '2026-10-08', portfolio_value: 0 },
+    { ...record, portfolio_value: 1200, created_at: '2026-10-01T13:00:00Z' },
+  ], '2026-10-14');
+  assert.equal(result.length, 2); assert.equal(result[0].portfolio_value, 1200);
+  assert.equal(result[1].portfolio_value, 0);
+  assert.equal(dashboardSnapshots([{ ...record, portfolio_value: null }], '2026-10-14').length, 0);
+});
+
+await test('Dashboard metric rendering keeps unavailable returns separate from actual zero results', async () => {
+  const React = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const componentLoad = loader({ 'next/link': ({ children, ...props }) => React.createElement('a', props, children) });
+  const { PortfolioSummaryMetrics } = componentLoad('components/dashboard/PortfolioSummaryMetrics.tsx');
+  const unknown = renderToStaticMarkup(React.createElement(PortfolioSummaryMetrics, { summary: buildPortfolioSummary([holding('UNKNOWN', null)]) }));
+  assert.ok(unknown.includes('Valued Subtotal'));
+  assert.equal((unknown.match(/Unavailable/g) || []).length, 3);
+  assert.ok(!unknown.includes('+0.00%'));
+  const zero = renderToStaticMarkup(React.createElement(PortfolioSummaryMetrics, { summary: buildPortfolioSummary(complete) }));
+  assert.ok(zero.includes('+0.00%')); assert.ok(zero.includes('Recorded investment positions'));
+});
+
+await test('Investment research destinations preserve supported identity and avoid unsupported stock routes', () => {
+  const { selectedBrokerAccount } = load('lib/investments/presentation.ts');
+  const accounts = [{ id: 'first' }, { id: 'second' }];
+  assert.equal(selectedBrokerAccount('', accounts), 'first');
+  assert.equal(selectedBrokerAccount('second', accounts), 'second');
+  assert.equal(selectedBrokerAccount('', []), '');
+  const { researchReturnDestination } = load('lib/navigation.ts');
+  assert.equal(researchReturnDestination('/investments'), '/investments');
+  assert.equal(researchReturnDestination('/holdings?action=add'), '/holdings?action=add');
+  assert.equal(researchReturnDestination('/explore?tab=browse&search=TCS'), '/explore?tab=browse&search=TCS');
+  assert.equal(researchReturnDestination('https://example.com'), '/explore');
+  assert.equal(researchReturnDestination('//example.com'), '/explore');
+  assert.equal(researchReturnDestination('/login'), '/explore');
+  const { holdingResearchDestination, hasHoldingPrice, holdingQuoteTimestamp, INVESTMENT_CATEGORIES } = load('lib/investments/presentation.ts');
+  assert.equal(holdingResearchDestination({ ...holding('TCS', 100), symbol: 'TCS.NS', exchange: 'NSE' }, '/investments'), '/explore/stocks/TCS?from=%2Finvestments');
+  assert.equal(holdingResearchDestination({ ...holding('RELIANCE', 100), exchange: 'NSE' }, '/holdings'), '/explore/stocks/RELIANCE?from=%2Fholdings');
+  assert.equal(holdingResearchDestination({ ...holding('UNKNOWN', null), asset_class: 'bond' }), '/bonds');
+  assert.equal(holdingResearchDestination({ ...holding('UNKNOWN', null), asset_class: 'reit' }), '/reit');
+  assert.equal(holdingResearchDestination({ ...holding('UNKNOWN', null), asset_class: 'invit' }), '/invit');
+  assert.ok(!holdingResearchDestination({ ...holding('TCS', 100), exchange: 'BSE' }).startsWith('/explore/stocks/'));
+  assert.ok(!holdingResearchDestination(holding('UNSUPPORTED', null)).startsWith('/explore/stocks/'));
+  assert.equal(hasHoldingPrice({ current_price: NaN }), false); assert.equal(hasHoldingPrice({ current_price: 0 }), false);
+  assert.equal(hasHoldingPrice({ current_price: null }), false); assert.equal(hasHoldingPrice({ current_price: 100 }), true);
+  assert.equal(holdingQuoteTimestamp('invalid'), null); assert.equal(holdingQuoteTimestamp(null), null);
+  assert.ok(holdingQuoteTimestamp('2026-10-14T09:59:00Z').includes('IST'));
+  assert.ok(INVESTMENT_CATEGORIES.some(tab => tab.assetClass === 'etf')); assert.ok(INVESTMENT_CATEGORIES.some(tab => tab.assetClass === 'sgb'));
+});
+
+await test('Investment summaries keep partial valuations honest and do not show failed reads as empty portfolios', async () => {
+  const React = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const componentLoad = loader({ 'next/link': ({ children, ...props }) => React.createElement('a', props, children) });
+  const { InvestmentsSummary } = componentLoad('components/investments/InvestmentsSummary.tsx');
+  const summary = buildPortfolioSummary([holding('TCS', 120), holding('UNKNOWN', null)]);
+  const render = props => renderToStaticMarkup(React.createElement(InvestmentsSummary, { summary, loading: false, unavailable: false, brokerCount: 2, ...props }));
+  assert.ok(render({}).includes('Valued Subtotal')); assert.ok(render({}).includes('1 of 2 positions quoted'));
+  assert.ok(render({}).includes('Manual / imported')); assert.ok(!render({}).includes('verified quotes'));
+  assert.ok(!render({ unavailable: true }).includes('₹')); assert.ok(render({ unavailable: true }).includes('Retry to load'));
+  assert.ok(!render({ loading: true }).includes('₹')); assert.ok(render({ loading: true }).includes('Loading recorded data'));
+  assert.ok(render({ brokerCount: null }).includes('Accounts unavailable'));
+});
+
 console.log(`${passed} product integrity groups passed. All tests ran offline.`);

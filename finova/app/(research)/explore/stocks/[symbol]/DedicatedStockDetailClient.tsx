@@ -16,7 +16,7 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { safeReturnPath } from "@/lib/navigation";
+import { researchReturnDestination, PAGE_TITLES } from "@/lib/navigation";
 import { findEquity } from "@/lib/research/catalog";
 import { getCompanyProfile } from "@/lib/market/companyProfiles";
 import { addRecentlyViewed } from "@/lib/market/recentlyViewed";
@@ -124,7 +124,7 @@ export function DedicatedStockDetailClient({
     params = useSearchParams(),
     menuRef = useRef<HTMLDetailsElement>(null);
   const [copyStatus, setCopyStatus] = useState("");
-  const from = safeReturnPath(params.get("from"));
+  const from = researchReturnDestination(params.get("from"));
   const explorerReturn =
     from === "/explore" || from.startsWith("/explore?") ? from : "/explore";
   const isIndex = exchange === "INDEX",
@@ -190,8 +190,8 @@ export function DedicatedStockDetailClient({
     <div className="page-container explorer-research space-y-6">
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
         <Link
-          href={explorerReturn}
-          aria-label="Back to Investment Explorer"
+          href={from}
+          aria-label={`Back to ${PAGE_TITLES[from.split(/[?#]/)[0].slice(1)] || "Investment Explorer"}`}
           className="research-icon-button border border-border"
         >
           <ArrowLeft size={18} />

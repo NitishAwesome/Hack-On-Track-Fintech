@@ -104,13 +104,13 @@ export function PortfolioExposureCard({
           </div>
 
           <div
-            className="flex items-center gap-0.5 p-0.5 rounded-xl border bg-surface-raised/70"
+            className="flex shrink-0 items-center gap-0.5 p-0.5 rounded-xl border bg-surface-raised/70"
             style={{ borderColor: 'rgb(var(--border))' }}
           >
             <button
               type="button"
               onClick={() => setViewTab('holdings')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+              className={`whitespace-nowrap px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
                 viewTab === 'holdings'
                   ? 'bg-brand text-foreground dark:text-white shadow-xs'
                   : 'text-muted hover:text-foreground'
@@ -121,7 +121,7 @@ export function PortfolioExposureCard({
             <button
               type="button"
               onClick={() => setViewTab('sectors')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+              className={`whitespace-nowrap px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
                 viewTab === 'sectors'
                   ? 'bg-brand text-foreground dark:text-white shadow-xs'
                   : 'text-muted hover:text-foreground'

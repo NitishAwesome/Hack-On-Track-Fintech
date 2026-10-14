@@ -1,0 +1,146 @@
+@layer components {
+  .finova-investments {
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding: 32px;
+  }
+  .finova-investments :is(button, a, input, select, textarea):focus-visible,
+  .investment-dialog-frame :is(button, a, input, select, textarea):focus-visible {
+    outline: 2px solid rgb(var(--brand-500));
+    outline-offset: 3px;
+  }
+  .investment-summary {
+    position: relative;
+    overflow: hidden;
+    min-height: 190px;
+  }
+  .investment-summary::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, rgb(var(--page-accent) / 0.8), transparent);
+  }
+  .investment-filter-control {
+    min-height: 44px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 12px;
+    background: rgb(var(--surface));
+    color: rgb(var(--foreground));
+    font-size: 12px;
+  }
+  .investment-table {
+    width: 100%;
+    min-width: 1120px;
+    text-align: left;
+    font-size: 12px;
+  }
+  .investment-table th {
+    padding: 13px 10px;
+    font-size: 10px;
+    color: rgb(var(--muted));
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .investment-table td {
+    padding: 17px 10px;
+  }
+  .investment-table td:first-child {
+    min-width: 210px;
+    max-width: 240px;
+  }
+  .investment-table :is(td, th):last-child {
+    position: sticky;
+    right: 0;
+    background: rgb(var(--surface));
+    box-shadow: -8px 0 12px -10px rgb(var(--foreground) / 0.22);
+  }
+  .investment-table tr:hover td {
+    background: rgb(var(--surface-raised));
+  }
+  .investment-table :is(td, th):nth-child(2) {
+    max-width: 110px;
+  }
+  .investment-row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 36px;
+    border-radius: 9px;
+    color: rgb(var(--muted));
+    transition:
+      color 150ms,
+      background-color 150ms;
+  }
+  .investment-row-action:hover {
+    color: rgb(var(--brand-500));
+    background: rgb(var(--brand-500) / 0.1);
+  }
+  .investment-row-action[data-danger]:hover {
+    color: rgb(var(--loss));
+    background: rgb(var(--loss) / 0.1);
+  }
+  .investment-quote-status {
+    display: inline-flex;
+    align-self: flex-end;
+    border: 1px solid rgb(var(--brand-500) / 0.25);
+    background: rgb(var(--brand-500) / 0.08);
+    color: rgb(var(--brand-500));
+    padding: 2px 6px;
+    border-radius: 5px;
+    font:
+      600 9px / 1.5 var(--font-inter),
+      sans-serif;
+    max-width: 100%;
+  }
+  .investment-quote-stale {
+    border-color: rgb(245 158 11 / 0.3);
+    background: rgb(245 158 11 / 0.08);
+    color: #b45309;
+  }
+  .dark .investment-quote-stale {
+    color: #fbbf24;
+  }
+  .investment-dialog-frame {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .investment-dialog-frame > [role='dialog'] {
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+  }
+  .investment-dialog-frame button {
+    min-height: 36px;
+  }
+  .investment-mobile-actions :is(button, a) {
+    min-height: 44px;
+  }
+  .reduce-motion .investment-dialog-frame [role='dialog'] {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .investment-dialog-frame [role='dialog'] {
+      transform: none !important;
+      opacity: 1 !important;
+    }
+  }
+  @media (max-width: 639px) {
+    .finova-investments {
+      padding: 24px 16px;
+    }
+    .investment-summary {
+      min-height: 170px;
+    }
+  }
+}

@@ -103,7 +103,7 @@ export function AppShell({
         />
 
         {/* Global Compact Market Strip */}
-        <MarketStrip />
+        <MarketStrip statusLayout={pathname === '/dashboard' || pathname === '/portfolio' ? 'stacked' : 'inline'} />
 
         <main className={cn('flex-1 w-full', className)}>
           {children}

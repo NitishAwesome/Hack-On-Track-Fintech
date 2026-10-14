@@ -1,231 +1,198 @@
 'use client';
-
-import React from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
-import { Briefcase, ArrowRight, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
+import { Briefcase, ArrowUpRight } from 'lucide-react';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
-import { formatCurrency, formatStockPrice } from '@/lib/utils';
-import type { HoldingWithMetrics } from '@/types/portfolio';
+import { MarketSparkline } from '@/components/shared/MarketSparkline';
+import { PageSection, SectionFeedback } from '@/components/shared/PageSection';
+import { DailyChange } from '@/components/shared/InstrumentMarketData';
+import { dashboardHoldings } from '@/lib/dashboard/presentation';
 import { valuationBasis } from '@/lib/calculations/valuationBasis';
+import { findEquity } from '@/lib/research/catalog';
+import { formatCurrency, formatPercent, formatStockPrice } from '@/lib/utils';
+import type { HoldingWithMetrics } from '@/types/portfolio';
 
-interface MyHoldingsSectionProps {
-  holdings: HoldingWithMetrics[];
-  totalValue: number | null;
-  isLoading?: boolean;
+type Preview = ReturnType<typeof dashboardHoldings>[number];
+function holdingDestination(row: Preview) {
+  return findEquity(row.identity.symbol)
+    ? `/explore/stocks/${encodeURIComponent(row.identity.symbol)}?from=${encodeURIComponent('/dashboard')}`
+    : '/investments';
 }
-
+function Identity({ row }: { row: Preview }) {
+  return (
+    <Link href={holdingDestination(row)} className="flex items-center gap-3 min-h-11 group min-w-0">
+      <CompanyLogo symbol={row.identity.symbol} name={row.identity.name} size="sm" />
+      <div className="min-w-0">
+        <span className="block text-sm font-bold text-foreground group-hover:text-brand">
+          {row.identity.symbol}
+        </span>
+        <span className="block text-[11px] text-muted max-w-48 truncate">{row.identity.name}</span>
+        <span className="block text-[10px] text-muted mt-1">
+          Qty {row.quantity.toLocaleString('en-IN')} · {row.accounts}{' '}
+          {row.accounts === 1 ? 'account' : 'accounts'}
+        </span>
+      </div>
+      <ArrowUpRight size={13} className="shrink-0 text-muted group-hover:text-brand" />
+    </Link>
+  );
+}
+function Valuation({ row }: { row: Preview }) {
+  return (
+    <>
+      <p className="font-bold text-foreground tabular-nums">
+        {row.currentValue === null ? 'Unavailable' : formatCurrency(row.currentValue)}
+      </p>
+      <p className="text-[10px] text-muted mt-1">
+        {row.partial
+          ? 'Valued subtotal'
+          : row.currentPrice !== null
+            ? `Quote ${formatStockPrice(row.currentPrice)}`
+            : 'Latest price unavailable'}
+        {row.stale ? ' · cached/stale' : ''}
+      </p>
+    </>
+  );
+}
+function Profit({ row }: { row: Preview }) {
+  return (
+    <>
+      <p
+        className={`font-semibold tabular-nums ${row.pnl === null || row.pnl === 0 ? 'text-muted' : row.pnl > 0 ? 'text-gain' : 'text-loss'}`}
+      >
+        {row.pnl === null ? 'Unavailable' : `${row.pnl > 0 ? '+' : ''}${formatCurrency(row.pnl)}`}
+      </p>
+      <p className="text-[10px] text-muted mt-1 tabular-nums">
+        {row.pnlPct === null
+          ? 'Return unavailable'
+          : `${formatPercent(row.pnlPct)}${row.partial ? ' · priced cost' : ''}`}
+      </p>
+    </>
+  );
+}
+function Trend({ row }: { row: Preview }) {
+  return findEquity(row.identity.symbol) &&
+    (!row.identity.exchange || row.identity.exchange === 'NSE') ? (
+    <MarketSparkline symbol={row.identity.symbol} exchange="NSE" />
+  ) : (
+    <span className="text-[11px] text-muted">History unavailable</span>
+  );
+}
 export function MyHoldingsSection({
   holdings,
-  totalValue,
   isLoading,
-}: MyHoldingsSectionProps) {
+  error,
+  onRetry,
+}: {
+  holdings: HoldingWithMetrics[];
+  totalValue?: number | null;
+  isLoading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+}) {
+  const rows = useMemo(() => dashboardHoldings(holdings).slice(0, 6), [holdings]);
   const basis = valuationBasis(holdings);
-  const portfolioTotal = totalValue ?? basis.total;
-
-  const topHoldings = [...holdings]
-    .sort((a, b) => {
-      const valA = basis.valueOf(a);
-      const valB = basis.valueOf(b);
-      return valB - valA;
-    })
-    .slice(0, 6);
-
   return (
-    <div
-      className="p-5 sm:p-6 rounded-2xl border transition-all duration-200 bg-surface shadow-xs"
-      style={{ borderColor: 'rgb(var(--border))' }}
-    >
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Briefcase className="w-4 h-4 text-brand" />
-            <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
-              My Holdings
-            </h2>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-raised text-muted border border-border">
-              {holdings.length} {holdings.length === 1 ? 'Position' : 'Positions'}
-            </span>
-          </div>
-          <p className="text-xs text-muted mt-0.5">
-            Consolidated manual and imported positions. Weights: {basis.label.toLowerCase()}.
-          </p>
-        </div>
-
-        <Link
-          href="/holdings"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border bg-surface-raised hover:bg-surface text-foreground transition-all shadow-xs self-start sm:self-auto group"
-        >
-          <span>View All Investments</span>
-          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+    <PageSection
+      title="Your largest holdings"
+      eyebrow="KNOW WHAT YOU OWN"
+      description={`Up to six instruments consolidated across accounts · weights use ${basis.label.toLowerCase()}.`}
+      icon={Briefcase}
+      accent="cyan"
+      action={
+        <Link href="/investments" className="finova-link">
+          View all investments
+          <ArrowUpRight size={14} />
         </Link>
-      </div>
-
-      {/* Table Container */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className="h-12 bg-surface-raised/50 border border-border/60 rounded-xl animate-pulse"
-            />
-          ))}
-        </div>
-      ) : topHoldings.length === 0 ? (
-        <div className="py-12 text-center text-xs text-muted flex flex-col items-center justify-center space-y-2">
-          <Briefcase className="w-8 h-8 opacity-40 text-muted" />
-          <p className="font-semibold text-foreground">No holdings recorded yet</p>
-          <p className="text-[11px] text-muted max-w-sm">
-            Import your broker portfolio or manually record investments to see real-time valuations.
-          </p>
-          <Link
-            href="/holdings"
-            className="mt-2 px-3.5 py-1.5 rounded-xl bg-brand text-foreground dark:text-white text-xs font-semibold shadow-xs hover:opacity-90 transition-opacity"
-          >
-            + Add First Investment
-          </Link>
-        </div>
-      ) : (
-        <div className="overflow-x-auto no-scrollbar">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-border text-muted font-semibold">
-                <th className="pb-3 font-medium">Asset &amp; Company</th>
-                <th className="pb-3 font-medium text-right">Quantity</th>
-                <th className="pb-3 font-medium text-right">Latest Price</th>
-                <th className="pb-3 font-medium text-right hidden sm:table-cell">Weight</th>
-                <th className="pb-3 font-medium text-right">Total P&amp;L</th>
-                <th className="pb-3 font-medium text-right hidden md:table-cell">1D Movement</th>
-                <th className="pb-3 font-medium text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {topHoldings.map((h) => {
-                const currentVal = basis.valueOf(h);
-                const weight = portfolioTotal > 0 ? (currentVal / portfolioTotal) * 100 : 0;
-                const pnl = h.absolute_return ?? 0;
-                const pnlPct = h.absolute_return_pct ?? 0;
-                const isPnlPositive = pnl >= 0;
-
-                const dayChangePct = h.day_change_pct;
-                const hasDayChange = dayChangePct !== null && typeof dayChangePct === 'number';
-                const isDayPositive = hasDayChange && dayChangePct >= 0;
-
-                return (
-                  <tr
-                    key={h.id || h.symbol}
-                    className="hover:bg-surface-raised/60 transition-colors group"
-                  >
-                    {/* Asset & Company */}
-                    <td className="py-3 pr-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <CompanyLogo symbol={h.symbol} size="sm" />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-foreground truncate max-w-[140px] sm:max-w-[180px] group-hover:text-brand transition-colors">
-                              {h.symbol}
-                            </span>
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-surface-raised text-muted border border-border uppercase">
-                              {h.asset_class}
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-muted truncate block max-w-[160px] sm:max-w-[220px]">
-                            {h.name}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Quantity */}
-                    <td className="py-3 text-right font-financial font-semibold text-foreground tabular-nums">
-                      {h.quantity}
-                    </td>
-
-                    {/* Latest Price */}
-                    <td className="py-3 text-right tabular-nums">
-                      <div className="font-financial font-extrabold text-foreground">
-                        {h.current_price === null ? 'Unavailable' : formatStockPrice(h.current_price)}
-                      </div>
-                      <div className="text-[10px] text-muted font-financial">
-                        Avg: {formatStockPrice(h.avg_buy_price)}
-                      </div>
-                    </td>
-
-                    {/* Weight */}
-                    <td className="py-3 text-right hidden sm:table-cell tabular-nums">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <div className="w-12 h-1 rounded-full bg-surface-raised overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-brand"
-                            style={{ width: `${weight}%` }}
-                          />
-                        </div>
-                        <span className="font-financial font-bold text-foreground">
-                          {weight.toFixed(1)}%
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* P&L */}
-                    <td className="py-3 text-right tabular-nums">
-                      <div
-                        className={`font-financial font-bold ${
-                          isPnlPositive ? 'text-gain' : 'text-loss'
-                        }`}
-                      >
-                        {h.absolute_return === null ? 'Unavailable' : `${isPnlPositive ? '+' : ''}${formatCurrency(pnl)}`}
-                      </div>
-                      <div
-                        className={`text-[10px] font-financial font-semibold ${
-                          isPnlPositive ? 'text-gain' : 'text-loss'
-                        }`}
-                      >
-                        {h.absolute_return_pct === null ? '—' : `${isPnlPositive ? '+' : ''}${pnlPct.toFixed(2)}%`}
-                      </div>
-                    </td>
-
-                    {/* 1D Movement */}
-                    <td className="py-3 text-right hidden md:table-cell tabular-nums">
-                      {hasDayChange ? (
-                        <span
-                          className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                            isDayPositive
-                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                              : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-                          }`}
-                        >
-                          {isDayPositive ? (
-                            <TrendingUp className="w-3 h-3" />
-                          ) : (
-                            <TrendingDown className="w-3 h-3" />
-                          )}
-                          <span>
-                            {isDayPositive ? '+' : ''}
-                            {dayChangePct.toFixed(2)}%
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-muted text-[11px]">—</span>
-                      )}
-                    </td>
-
-                    {/* Action */}
-                    <td className="py-3 text-center">
-                      <Link
-                        href={`/explore/stocks/${encodeURIComponent(h.symbol.toUpperCase())}`}
-                        className="p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-surface-raised inline-flex items-center justify-center transition-colors"
-                        title={`Research ${h.symbol}`}
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </Link>
-                    </td>
+      }
+    >
+      <SectionFeedback loading={isLoading} error={error} retry={onRetry}>
+        {!rows.length ? (
+          <div className="finova-empty">
+            <p className="font-semibold">Bring your investments together</p>
+            <p className="text-xs text-muted mt-2">
+              Add a recorded position or import a portfolio to see holdings and quote coverage here.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2 mt-4">
+              <Link href="/holdings?action=add" className="finova-button finova-button-primary">
+                Add investment
+              </Link>
+              <Link href="/holdings?action=import" className="finova-button">
+                Import CSV
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="finova-holdings-table">
+                <thead>
+                  <tr>
+                    <th>Instrument & position</th>
+                    <th className="text-right">Market value</th>
+                    <th className="text-right">Weight</th>
+                    <th className="text-right">Unrealized P&L</th>
+                    <th className="text-right">Daily change</th>
+                    <th>Price trend</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.key}>
+                      <td>
+                        <Identity row={row} />
+                      </td>
+                      <td className="text-right whitespace-nowrap">
+                        <Valuation row={row} />
+                      </td>
+                      <td className="text-right tabular-nums">
+                        {row.weight === null ? '—' : `${row.weight.toFixed(1)}%`}
+                      </td>
+                      <td className="text-right whitespace-nowrap">
+                        <Profit row={row} />
+                      </td>
+                      <td className="text-right">
+                        <DailyChange value={row.identity.day_change_pct} />
+                      </td>
+                      <td>
+                        <Trend row={row} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {rows.map((row) => (
+                <article key={row.key} className="min-w-0 rounded-xl border border-border p-4 bg-surface">
+                  <div className="flex items-start justify-between gap-3">
+                    <Identity row={row} />
+                    <span className="text-[11px] font-semibold tabular-nums shrink-0">
+                      {row.weight !== null ? `${row.weight.toFixed(1)}%` : '—'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-4 text-xs">
+                    <div>
+                      <p className="text-[10px] text-muted mb-1">Market value</p>
+                      <Valuation row={row} />
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-muted mb-1">Unrealized P&L</p>
+                      <Profit row={row} />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap justify-between items-center gap-3 pt-3 mt-3 border-t border-border">
+                    <Trend row={row} />
+                    <div className="text-right">
+                      <p className="text-[10px] text-muted mb-1">Daily change</p>
+                      <DailyChange value={row.identity.day_change_pct} />
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </SectionFeedback>
+    </PageSection>
   );
 }
