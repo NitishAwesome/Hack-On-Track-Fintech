@@ -39,6 +39,9 @@ export interface MarketQuote {
 }
 
 export type ChartRange = '1D' | '1W' | '1M' | '3M' | '1Y' | '5Y' | 'MAX';
+export class HistoryProviderRateLimitError extends Error {
+  constructor(public retryAfterSeconds = 30) { super('Historical data provider is rate limited. Please try again shortly.'); }
+}
 
 export interface HistoricalChartPoint {
   timestamp: number;
@@ -74,6 +77,8 @@ export interface HistoricalChartResponse {
   quoteTimestamp?: string | null;
   retrievedAt?: string;
   priceBasis?: string;
+  exchangeTimezone?: string;
+  regularSession?: { start: number; end: number };
 }
 
 export interface MarketDataProvider {
@@ -370,7 +375,7 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
       'MAX': { range: 'max', interval: '1mo' },
     };
 
-    const targetConfig = RANGE_MAP[range] || RANGE_MAP['1M'];
+      const targetConfig = RANGE_MAP[range] || RANGE_MAP['1M'];
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 7500);
 
@@ -389,9 +394,13 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
         cache: 'no-store',
       });
 
-      if (!res.ok) {
-        return null;
+      if (res.status === 429) {
+        const header = res.headers.get('Retry-After');
+        const numeric = Number(header);
+        const seconds = header && Number.isFinite(numeric) ? numeric : Math.ceil((Date.parse(header || '') - Date.now()) / 1000);
+        throw new HistoryProviderRateLimitError(Number.isFinite(seconds) ? Math.max(30, seconds) : 30);
       }
+      if (!res.ok) return null;
 
       const json = await res.json();
       const chartResult = json?.chart?.result?.[0];
@@ -479,8 +488,12 @@ export class YFinanceMarketDataProvider implements MarketDataProvider {
         quoteTimestamp: meta?.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
         retrievedAt: new Date().toISOString(),
         priceBasis: 'Provider close prices; FINOVA does not independently verify corporate-action adjustments. Excludes dividends.',
+        exchangeTimezone: meta?.exchangeTimezoneName || undefined,
+        ...(Number.isFinite(meta?.currentTradingPeriod?.regular?.start) && Number.isFinite(meta?.currentTradingPeriod?.regular?.end)
+          ? { regularSession: { start: meta.currentTradingPeriod.regular.start * 1000, end: meta.currentTradingPeriod.regular.end * 1000 } } : {}),
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof HistoryProviderRateLimitError) throw error;
       return null;
     } finally {
       clearTimeout(timeoutId);

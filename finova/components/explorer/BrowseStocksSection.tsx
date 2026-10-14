@@ -31,6 +31,8 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
+import { MarketSparkline } from '@/components/shared/MarketSparkline';
+import { DailyChange, instrumentVolume, Week52Position } from '@/components/shared/InstrumentMarketData';
 
 interface BrowseStocksSectionProps {
   onSelectStock?: (symbol: string) => void;
@@ -108,7 +110,7 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
   };
 
   return (
-    <div className="bg-card/70 border border-border/70 rounded-2xl p-5 sm:p-6 backdrop-blur-sm space-y-5">
+    <div className="research-card discovery-section space-y-5" data-accent="cyan">
       {/* 1. Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/40 pb-4">
         <div>
@@ -147,12 +149,13 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
       </div>
 
       {/* 2. Scope & Transparency Disclosure */}
-      <div className="flex items-start gap-2 p-3 rounded-xl bg-surface-raised border border-border text-xs text-muted">
+      <div className="flex items-start gap-2 p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/20 text-xs text-muted">
         <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
         <span>
           <strong className="text-foreground">Catalog Coverage Notice:</strong> Displaying {filteredStocks.length} supported NSE stocks from the FINOVA catalog. Quotes are the latest available from Yahoo Finance and may be delayed or unavailable. This directory does not cover the entire exchange.
         </span>
       </div>
+      <p className="text-[11px] text-muted">Mini charts show the latest observed intraday session, or a labeled historical fallback. Their color reflects chart-period movement; daily change uses the latest quote. Hover or tap a chart to inspect an observation.</p>
 
       {/* 3. Search and Sector Filters */}
       <div className="space-y-3">
@@ -197,14 +200,16 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
           No supported stocks match your current query &ldquo;{searchQuery}&rdquo;. Try another name or select &ldquo;All&rdquo; sectors.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[850px] text-left text-xs border-collapse tabular-nums">
             <thead>
               <tr className="bg-surface-raised text-muted font-semibold border-b border-border">
                 <th className="py-3 px-4">Company & Symbol</th>
-                <th className="py-3 px-4 hidden md:table-cell">Sector & Industry</th>
+                <th className="py-3 px-3">Trend</th>
                 <th className="py-3 px-4 text-right">Latest Price</th>
-                <th className="py-3 px-4 text-right">Daily Change</th>
+                <th className="py-3 px-3 text-right">1D Change</th>
+                <th className="py-3 px-3 text-right">1D Volume</th>
+                <th className="py-3 px-3">52W Position</th>
                 <th className="py-3 px-4 text-center">Action</th>
               </tr>
             </thead>
@@ -220,7 +225,7 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
                   <tr
                     key={stock.symbol}
                     onClick={() => handleStockClick(stock.symbol)}
-                    className="hover:bg-surface-raised transition cursor-pointer group"
+                    className="hover:bg-cyan-500/5 transition cursor-pointer group"
                   >
                     {/* Company & Symbol */}
                     <td className="py-3 px-4">
@@ -234,19 +239,14 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
                             </span>
                           </div>
                           <div className="text-[11px] text-muted font-financial">
-                            {stock.symbol}
+                            {stock.symbol} · {sectorName(stock.sector)}
                           </div>
                         </div>
                       </div>
                     </td>
 
                     {/* Sector & Industry */}
-                    <td className="py-3 px-4 hidden md:table-cell">
-                      <div className="text-foreground font-medium">{stock.sector}</div>
-                      <div className="text-[11px] text-muted truncate max-w-[220px]">
-                        {stock.industry}
-                      </div>
-                    </td>
+                    <td className="py-3 px-3"><MarketSparkline symbol={stock.symbol} /></td>
 
                     {/* Latest Price */}
                     <td className="py-3 px-4 text-right font-mono font-bold text-foreground sm:text-sm">
@@ -276,6 +276,8 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
                       )}
                     </td>
 
+                    <td className="py-3 px-3 text-right text-muted" title={quote?.volume != null ? `${quote.volume.toLocaleString('en-IN')} shares · latest quoted session` : 'Volume unavailable'}>{instrumentVolume(quote?.volume)}</td>
+                    <td className="py-3 px-3"><Week52Position price={price} low={quote?.low_52w} high={quote?.high_52w} /></td>
                     {/* View Details Action */}
                     <td className="py-3 px-4 text-center">
                       <button type="button" aria-label={`View ${stock.name}`} onClick={(event) => { event.stopPropagation(); handleStockClick(stock.symbol); }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-surface-raised text-muted group-hover:bg-brand/10 group-hover:text-brand group-hover:border-brand/20 border border-border transition">
@@ -291,9 +293,23 @@ export function BrowseStocksSection({ onSelectStock }: BrowseStocksSectionProps)
         </div>
       )}
 
+      <div className="md:hidden space-y-3">
+        {visibleStocks.map(stock => {
+          const quote = getQuote(stock.symbol);
+          return <article key={stock.symbol} className="discovery-instrument p-4">
+            <button type="button" className="flex items-center gap-3 w-full text-left min-h-11" onClick={() => handleStockClick(stock.symbol)}>
+              <CompanyLogo symbol={stock.symbol} name={stock.name} size="sm" />
+              <div className="min-w-0 flex-1"><strong className="text-sm text-foreground">{stock.symbol}</strong><p className="text-[11px] text-muted truncate">{stock.name}</p><p className="text-[10px] text-cyan-700 dark:text-cyan-400 mt-1">{sectorName(stock.sector)}</p></div><ChevronRight size={16} className="text-brand" />
+            </button>
+            <div className="flex justify-between items-center gap-3 mt-3"><strong className="text-base tabular-nums">{formatPrice(quote?.price)}</strong><DailyChange value={quote?.day_change_pct} /></div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-2"><MarketSparkline symbol={stock.symbol} /><div className="text-right text-[10px] text-muted"><p className="mb-2">52-week position</p><Week52Position price={quote?.price} low={quote?.low_52w} high={quote?.high_52w} /><p className="mt-3 tabular-nums">Volume {instrumentVolume(quote?.volume)}</p></div></div>
+            {quote?.isStaleFallback && <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-2">Cached quote · {quote.price_timestamp}</p>}
+          </article>;
+        })}
+      </div>
       {/* 5. Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-xs text-muted pt-2 border-t border-border/40">
+        <div className="flex flex-wrap gap-3 items-center justify-between text-xs text-muted pt-2 border-t border-border/40">
           <span>
             Showing {(currentPage - 1) * pageSize + 1}–
             {Math.min(currentPage * pageSize, filteredStocks.length)} of{' '}

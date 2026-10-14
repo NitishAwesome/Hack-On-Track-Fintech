@@ -95,7 +95,7 @@ export function Modal({
               aria-modal="true"
               aria-labelledby={titleId}
               tabIndex={-1}
-              className={`w-full ${sizeMap[size]} rounded-xl shadow-2xl pointer-events-auto overflow-hidden`}
+              className={`w-full ${sizeMap[size]} max-h-[calc(100dvh-2rem)] flex flex-col rounded-xl shadow-2xl pointer-events-auto overflow-hidden`}
               style={{
                 backgroundColor: 'rgb(var(--surface))',
                 border: '1px solid rgb(var(--border))',
@@ -103,7 +103,7 @@ export function Modal({
             >
               {/* Header */}
               <div
-                className="flex items-start justify-between px-5 py-4 border-b"
+                className="flex shrink-0 items-start justify-between px-5 py-4 border-b"
                 style={{ borderColor: 'rgb(var(--border))' }}
               >
                 <div className="space-y-0.5">
@@ -118,7 +118,7 @@ export function Modal({
                 </div>
                 <button
                   onClick={onClose}
-                  className="p-1.5 rounded-lg transition-colors ml-4 flex-shrink-0"
+                  className="min-h-11 min-w-11 flex items-center justify-center p-1.5 rounded-lg transition-colors ml-4 flex-shrink-0"
                   style={{ color: 'rgb(var(--muted))' }}
                   aria-label="Close"
                 >
@@ -127,14 +127,14 @@ export function Modal({
               </div>
 
               {/* Body */}
-              <div className="px-5 py-4">
+              <div className="min-h-0 overflow-y-auto px-5 py-4">
                 {children}
               </div>
 
               {/* Footer */}
               {footer && (
                 <div
-                  className="flex items-center justify-end gap-2 px-5 py-3 border-t"
+                  className="flex shrink-0 items-center justify-end gap-2 px-5 py-3 border-t"
                   style={{
                     borderColor: 'rgb(var(--border))',
                     backgroundColor: 'rgb(var(--surface-raised))',

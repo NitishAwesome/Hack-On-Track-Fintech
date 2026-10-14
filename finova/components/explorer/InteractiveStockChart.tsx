@@ -59,7 +59,7 @@ export function InteractiveStockChart({
   const points = researchPoints(data?.points ?? []),
     candleCount = points.filter(validOHLC).length;
   const effectiveMode = mode === "candles" && !candleCount ? "area" : mode;
-  const units = exchange === "INDEX" ? "pts" : (data?.currency ?? "INR");
+  const units = exchange === "INDEX" ? "pts" : (data?.currency ?? (["GC=F", "SI=F"].includes(symbol) ? "USD" : "INR"));
   const chooseRange = (next: ChartRange) => {
     setLocalRange(next);
     onRangeChange?.(next);

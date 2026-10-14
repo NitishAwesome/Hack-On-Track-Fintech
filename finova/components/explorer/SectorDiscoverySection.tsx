@@ -4,6 +4,8 @@ import React, { useState, useMemo } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { EXPANDED_NSE_STOCKS } from '@/lib/market/stockCatalog';
 import { SECTORS as CATALOG_SECTORS, sectorName } from '@/lib/research/catalog';
+import { useSharedStockQuotes } from '@/lib/market/sharedMarketStore';
+import { DiscoveryInstrumentCard } from './DiscoveryInstrumentCard';
 import {
   Cpu,
   Landmark,
@@ -15,7 +17,6 @@ import {
   Hammer,
   Radio,
   Search,
-  ChevronRight,
   Layers,
 } from 'lucide-react';
 
@@ -75,9 +76,19 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
         s.industry.toUpperCase().includes(q)
     );
   }, [sectorStocks, searchFilter]);
+  const pageSize = 12;
+  const pages = Math.max(1, Math.ceil(filteredStocks.length / pageSize));
+  const page = Math.min(pages, Math.max(1, Number.parseInt(params.get('page') || '1') || 1));
+  const visibleStocks = filteredStocks.slice((page - 1) * pageSize, page * pageSize);
+  const { getQuote } = useSharedStockQuotes(visibleStocks.map(stock => stock.symbol));
+  const changePage = (nextPage: number) => {
+    const next = new URLSearchParams(params.toString());
+    next.set('page', String(nextPage));
+    router.push(`${pathname}?${next}`, { scroll: false });
+  };
 
   return (
-    <div className="bg-card/70 border border-border/70 rounded-2xl p-6 backdrop-blur-sm space-y-6">
+    <div className="research-card discovery-section space-y-6" data-accent="violet">
       {/* Title */}
       <div>
         <h3 className="text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
@@ -128,7 +139,7 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
         </div>
 
         <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 w-3.5 h-3.5 text-muted pointer-events-none" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
           <input
             type="text"
             value={searchFilter}
@@ -139,49 +150,12 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
         </div>
       </div>
 
+      <p className="text-[11px] text-muted">Price trends use the latest observed session, with a labeled fallback when intraday history is unavailable. Quotes and chart-period returns measure different windows.</p>
       {/* Stock Cards Grid */}
       {filteredStocks.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {filteredStocks.map((item) => (
-            <button
-              key={item.symbol}
-              type="button"
-              onClick={() =>
-                onSelectStock({
-                  symbol: item.symbol,
-                  name: item.name,
-                  exchange: 'NSE',
-                  isin: item.isin,
-                  sector: item.sector,
-                  industry: item.industry,
-                })
-              }
-              className="p-4 text-left rounded-xl bg-surface hover:bg-surface-raised border border-border/70 hover:border-emerald-500/30 transition group flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-sm text-foreground group-hover:text-emerald-500 transition">
-                    {item.symbol}
-                  </span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-surface-raised text-muted border border-border">
-                    NSE
-                  </span>
-                </div>
-                <div className="text-xs text-foreground font-medium mt-1 truncate">
-                  {item.name}
-                </div>
-                <div className="text-[11px] text-muted truncate mt-0.5">
-                  {item.industry}
-                </div>
-              </div>
-
-              <div className="mt-3 pt-2.5 border-t border-border/40 flex items-center justify-between text-[11px] text-muted group-hover:text-emerald-500 transition">
-                <span className="font-mono text-[10px] text-muted">{item.isin}</span>
-                <span className="flex items-center gap-0.5 font-semibold">
-                  Inspect chart <ChevronRight className="w-3 h-3" />
-                </span>
-              </div>
-            </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {visibleStocks.map((item) => (
+            <DiscoveryInstrumentCard key={item.symbol} symbol={item.symbol} name={item.name} sector={currentSector.name} quote={getQuote(item.symbol)} accent="violet" onOpen={() => onSelectStock({ ...item, exchange: 'NSE' })} />
           ))}
         </div>
       ) : (
@@ -189,6 +163,7 @@ export function SectorDiscoverySection({ onSelectStock }: SectorDiscoverySection
           No equities matching &quot;{searchFilter}&quot; in {currentSector.name}.
         </div>
       )}
+      {pages > 1 && <div className="flex flex-wrap gap-3 justify-between items-center text-xs text-muted"><span>Page {page} of {pages} · {filteredStocks.length} stocks</span><div className="flex gap-2"><button type="button" className="research-button" disabled={page === 1} onClick={() => changePage(page - 1)}>Previous</button><button type="button" className="research-button" disabled={page === pages} onClick={() => changePage(page + 1)}>Next</button></div></div>}
     </div>
   );
 }

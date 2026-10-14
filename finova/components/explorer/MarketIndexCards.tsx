@@ -184,8 +184,8 @@ export function MarketIndexCards({ selectedIndex, onSelectIndex }: MarketIndexCa
                   </div>
                 </div>
 
-                <div className="h-9 my-1">
-                    <MarketSparkline symbol={idx.symbol} />
+                <div className="min-h-[54px] my-1">
+                    <MarketSparkline symbol={idx.symbol} unit="pts" className="w-[128px] ml-auto" />
                   </div>
 
                   <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted">

@@ -5,8 +5,10 @@ import {
   type ChartRange,
   type HistoricalChartResponse,
   YFinanceMarketDataProvider,
+  HistoryProviderRateLimitError,
 } from '../market/providers/yfinanceProvider.ts';
 import { extractBaseSymbol } from '../market/symbolMapper.ts';
+import { createRequestQueue } from '../market/requestQueue';
 
 export type {
   MarketQuote,
@@ -88,6 +90,10 @@ const CACHE_TTL_NEGATIVE_MS = 15 * 1000;
 let indexMemoryCache: IndexCacheEntry | null = null;
 const quoteMemoryCache = new Map<string, QuoteCacheEntry>();
 const chartMemoryCache = new Map<string, { data: HistoricalChartResponse; expiresAt: number }>();
+const chartRequests = new Map<string, Promise<HistoricalChartResponse | null>>();
+const chartFailures = new Map<string, number>();
+const scheduleChart = createRequestQueue(4);
+let historyRetryAt = 0;
 
 /**
  * Server-Side MarketDataService
@@ -115,6 +121,9 @@ export class MarketDataService {
     indexMemoryCache = null;
     quoteMemoryCache.clear();
     chartMemoryCache.clear();
+    chartFailures.clear();
+    chartRequests.clear();
+    historyRetryAt = 0;
   }
 
   public static getProvider(): MarketDataProvider {
@@ -125,6 +134,7 @@ export class MarketDataService {
     indexMemoryCache = null;
     quoteMemoryCache.clear();
     chartMemoryCache.clear();
+    chartFailures.clear();
   }
 
   /**
@@ -484,32 +494,44 @@ export class MarketDataService {
       const quote = await this.getQuote(cleanSym, cleanEx, options);
       return { ...cached.data, previousClose: quote?.previousClose ?? null, dayChange: quote?.day_change ?? null, dayChangePercent: quote?.day_change_pct ?? null, quoteTimestamp: quote?.price_timestamp ?? null, ...(quote ? { currentPrice: quote.price } : {}) };
     }
-
-    try {
-      if (typeof this.provider.fetchHistoricalChart === 'function') {
-        const [chartData, quote] = await Promise.all([
-          this.provider.fetchHistoricalChart(cleanSym, cleanEx, validRange),
-          this.getQuote(cleanSym, cleanEx, options),
-        ]);
-        if (chartData && chartData.points.length > 0) {
-          // Daily movement belongs to the canonical quote, never to a range-start close.
-          chartData.previousClose = quote?.previousClose ?? null;
-          chartData.dayChange = quote?.day_change ?? null;
-          chartData.dayChangePercent = quote?.day_change_pct ?? null;
-          chartData.quoteTimestamp = quote?.price_timestamp ?? null;
-          if (quote) chartData.currentPrice = quote.price;
-          const ttl = validRange === '1D' ? CACHE_TTL_OPEN_MS : CACHE_TTL_CLOSED_MS;
-          chartMemoryCache.set(cacheKey, {
-            data: chartData,
-            expiresAt: now + ttl,
-          });
-          return chartData;
+    if (!options?.forceRefresh && (chartFailures.get(cacheKey) || 0) > now) return null;
+    if (!options?.forceRefresh && chartRequests.has(cacheKey)) return chartRequests.get(cacheKey)!;
+    const request = scheduleChart(async () => {
+      if (Date.now() < historyRetryAt) throw new HistoryProviderRateLimitError(Math.ceil((historyRetryAt - Date.now()) / 1000));
+      try {
+        if (typeof this.provider.fetchHistoricalChart === 'function') {
+          const [chartData, quote] = await Promise.all([
+            this.provider.fetchHistoricalChart(cleanSym, cleanEx, validRange),
+            this.getQuote(cleanSym, cleanEx, options),
+          ]);
+          if (chartData && chartData.points.length > 0) {
+            // Daily movement belongs to the canonical quote, never to a range-start close.
+            chartData.previousClose = quote?.previousClose ?? null;
+            chartData.dayChange = quote?.day_change ?? null;
+            chartData.dayChangePercent = quote?.day_change_pct ?? null;
+            chartData.quoteTimestamp = quote?.price_timestamp ?? null;
+            if (quote) chartData.currentPrice = quote.price;
+            const ttl = validRange === '1D' ? 60_000 : CACHE_TTL_CLOSED_MS;
+            chartMemoryCache.set(cacheKey, {
+              data: chartData,
+              expiresAt: now + ttl,
+            });
+            chartFailures.delete(cacheKey);
+            return chartData;
+          }
+        }
+      } catch (error) {
+        if (error instanceof HistoryProviderRateLimitError) {
+          historyRetryAt = Date.now() + error.retryAfterSeconds * 1000;
+          throw error;
         }
       }
+      chartFailures.set(cacheKey, Date.now() + 60_000);
       return null;
-    } catch {
-      return null;
-    }
+    });
+    chartRequests.set(cacheKey, request);
+    try { return await request; }
+    finally { if (chartRequests.get(cacheKey) === request) chartRequests.delete(cacheKey); }
   }
 
   /**

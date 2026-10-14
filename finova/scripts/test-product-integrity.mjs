@@ -514,6 +514,7 @@ await test('recent research cards preserve benchmark identity and point units in
     '@/lib/hooks/useDisplayMetric': { useDisplayMetric: () => setting },
     '@/lib/hooks/useAutoQuotePoller': { useAutoQuotePoller: () => ({ quotes, freshnessLabel: 'Offline fixture', isRefreshing: false }) },
     '@/components/shared/CompanyLogo': { CompanyLogo: ({ symbol }) => React.createElement('span', null, `Company logo ${symbol}`) },
+    '@/components/shared/MarketSparkline': { MarketSparkline: ({ symbol }) => React.createElement('span', null, `History ${symbol}`) },
   })('components/explorer/RecentlyViewedStocks.tsx');
   const absolute = renderToStaticMarkup(React.createElement(RecentlyViewedStocks));
   assert.ok(absolute.includes('22,000.00 pts')); assert.ok(absolute.includes('73,000.00 pts'));
@@ -524,6 +525,144 @@ await test('recent research cards preserve benchmark identity and point units in
   stateCalls = 0; setting = 'percentage';
   const relative = renderToStaticMarkup(React.createElement(RecentlyViewedStocks));
   assert.ok(relative.includes('0.05%')); assert.ok(relative.includes('-0.01%')); assert.ok(relative.includes('₹1,000.00'));
+});
+
+
+await test('mini charts retain real observations, last observed sessions, neutral movement and safe 52W bounds', () => {
+  const { observedPoints, miniHistory, week52Position } = load('lib/market/miniHistory.ts');
+  const p = (date, close) => ({ date, timestamp: Date.parse(date), close });
+  const asOf = Date.parse('2026-02-02T16:00:00Z');
+  const observations = [p('2026-02-02T04:00:00Z', 103), p('2026-02-01T04:00:00Z', 90), p('2026-02-02T04:05:00Z', 101), p('2026-02-02T04:05:00Z', 102), p('2026-02-03T04:00:00Z', 500), p('bad', 100), p('2026-02-02T04:10:00Z', NaN)];
+  const valid = observedPoints(observations, asOf);
+  assert.equal(valid.length, 3); assert.deepEqual(valid.map(row => row.close), [90, 103, 102]);
+  const response = { providerTicker: 'TCS.NS', range: '1D', interval: '5m', points: observations, exchangeTimezone: 'Asia/Kolkata' };
+  const view = miniHistory(response, asOf);
+  assert.deepEqual(view.points.map(row => row.close), [103, 102]); assert.equal(view.direction, 'loss');
+  assert.ok(!view.label.includes('ended')); // The wall clock alone does not prove a completed session.
+  response.regularSession = { start: Date.parse('2026-02-02T03:45:00Z'), end: Date.parse('2026-02-02T10:00:00Z') };
+  assert.ok(miniHistory(response, asOf).label.includes('session ended'));
+  assert.equal(miniHistory({ ...response, points: [p('2026-02-02T04:00:00Z', 100), p('2026-02-02T04:05:00Z', 100)] }, asOf).direction, 'neutral');
+  assert.equal(miniHistory({ ...response, range: '1W' }, asOf).points.length, 3);
+  assert.equal(miniHistory({ ...response, range: '1W' }, asOf).label, '1W history');
+  const futures = { ...response, providerTicker: 'GC=F', exchangeTimezone: 'America/New_York', regularSession: { start: Date.parse('2026-02-01T23:00:00Z'), end: Date.parse('2026-02-02T22:00:00Z') }, points: [p('2026-02-01T23:05:00Z', 100), p('2026-02-02T03:00:00Z', 102), p('2026-02-02T06:00:00Z', 101)] };
+  assert.equal(miniHistory(futures, asOf).points.length, 3); // Preserve the whole observed overnight futures session.
+  assert.equal(week52Position(80, 100, 200), 0); assert.equal(week52Position(220, 100, 200), 100);
+  assert.equal(week52Position(150, 100, 200), 50);
+  for (const args of [[null, 100, 200], [100, null, 200], [100, 200, 100], [100, 100, 100], [Infinity, 100, 200]]) assert.equal(week52Position(...args), null);
+});
+
+await test('history queue bounds concurrency and removes cancelled queued work', async () => {
+  const { createRequestQueue } = load('lib/market/requestQueue.ts');
+  const run = createRequestQueue(4); let active = 0, peak = 0;
+  const result = await Promise.all(Array.from({ length: 148 }, (_, index) => run(async () => {
+    active++; peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 1));
+    active--; return index;
+  })));
+  assert.equal(result.length, 148); assert.equal(peak, 4);
+  const serial = createRequestQueue(1); let release, abandonedRan = false;
+  const first = serial(() => new Promise(resolve => { release = resolve; }));
+  await new Promise(resolve => setImmediate(resolve));
+  const controller = new AbortController();
+  const cancelled = serial(async () => { abandonedRan = true; }, controller.signal);
+  const rejected = assert.rejects(cancelled, { name: 'AbortError' });
+  controller.abort(); await rejected;
+  release(); await first; assert.equal(abandonedRan, false);
+});
+
+await test('history identities deduplicate aliases and provider throttling blocks extra fallback traffic', async () => {
+  const { historyQueryKey, readInstrumentHistory } = loader()('lib/market/historyClient.ts');
+  assert.deepEqual(historyQueryKey('NIFTY50', 'NSE', '1D'), historyQueryKey('^NSEI', 'INDEX', '1D'));
+  assert.deepEqual(historyQueryKey('SENSEX', 'NSE', '1W'), historyQueryKey('^BSESN', 'BSE', '1W'));
+  assert.deepEqual(historyQueryKey('GOLDBEES.NS', 'NSE', '1D'), historyQueryKey('GOLDBEES', 'NSE', '1D'));
+  assert.equal(historyQueryKey('GC=F', 'OTHER', '1D')[2], 'COMMODITY');
+  const oldFetch = globalThis.fetch; let calls = 0;
+  try {
+    globalThis.fetch = async () => { calls++; return { status: 429, ok: false, headers: { get: () => '60' }, json: async () => ({ error: 'Rate limited' }) }; };
+    await assert.rejects(readInstrumentHistory('TCS', 'NSE', '1D'), error => error.status === 429);
+    await assert.rejects(readInstrumentHistory('INFY', 'NSE', '1W'), error => error.status === 429);
+    assert.equal(calls, 1);
+  } finally { globalThis.fetch = oldFetch; }
+});
+
+await test('server history deduplicates concurrent views, caches observations separately and backs off failures', async () => {
+  const original = MarketDataService.getProvider(); let calls = 0, active = 0, peak = 0;
+  const provider = {
+    id: 'offline-mini', name: 'Offline test', sourceLabel: 'Offline fixture',
+    fetchQuote: async () => null,
+    fetchHistoricalChart: async (symbol, exchange, range) => {
+      calls++; active++; peak = Math.max(peak, active); await new Promise(resolve => setTimeout(resolve, 2)); active--;
+      if (symbol === 'MISSING') return null;
+      return { symbol, exchange, range, providerTicker: symbol + '.NS', interval: '5m', points: [{ date: '2026-01-01T04:00:00Z', timestamp: 1767240000000, close: 100 }, { date: '2026-01-01T04:05:00Z', timestamp: 1767240300000, close: 101 }], source: 'Offline fixture', retrievedAt: '2026-01-01T04:10:00Z', currentPrice: 101 };
+    },
+  };
+  try {
+    MarketDataService.setProvider(provider);
+    const duplicates = await Promise.all(Array.from({ length: 10 }, () => MarketDataService.getHistoricalChart('TCS', 'NSE', '1D')));
+    assert.equal(calls, 1); assert.equal(duplicates.length, 10);
+    await MarketDataService.getHistoricalChart('TCS', 'NSE', '1D'); assert.equal(calls, 1);
+    await Promise.all(['INFY', 'BHEL', 'HDFCBANK', 'RELIANCE', 'ITC', 'BEL'].map(symbol => MarketDataService.getHistoricalChart(symbol, 'NSE', '1D')));
+    assert.ok(peak <= 4);
+    await MarketDataService.getHistoricalChart('MISSING', 'NSE', '1D'); const afterMissing = calls;
+    await MarketDataService.getHistoricalChart('MISSING', 'NSE', '1D'); assert.equal(calls, afterMissing);
+    assert.equal(duplicates[0].retrievedAt, '2026-01-01T04:10:00Z');
+  } finally { MarketDataService.setProvider(original); }
+});
+
+await test('shared sparkline renders actual shapes, theme-aware movement, correct units and honest fallback', async () => {
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const React = createRequire(import.meta.url)('react');
+  let prices = [100, 103, 99, 105], range = '1D', currency = 'INR', missing = false;
+  const { MarketSparkline } = loader({
+    '@/lib/hooks/useVisibleElement': { useVisibleElement: () => ({ ref: null, visible: true }) },
+    '@tanstack/react-query': { useQuery: ({ queryKey, enabled }) => enabled === false ? {} : { data: missing ? undefined : { symbol: 'TCS', providerTicker: 'TCS.NS', currency, range, interval: range === '1D' ? '5m' : '15m', points: prices.map((close, index) => ({ date: new Date(Date.parse('2026-01-01T04:00:00Z') + index * 300_000).toISOString(), close })), source: 'Offline fixture' }, isPending: false, isError: missing, error: missing ? new Error('Unavailable') : null } },
+  })('components/shared/MarketSparkline.tsx');
+  const markup = props => renderToStaticMarkup(React.createElement(MarketSparkline, { symbol: 'TCS', ...props }));
+  const gain = markup(); assert.ok(gain.includes('rgb(var(--gain))')); assert.ok(gain.includes('polyline')); assert.ok(gain.includes('Offline fixture')); assert.ok(gain.includes('tabindex="0"'));
+  prices = [105, 100, 104, 99]; const loss = markup(); assert.ok(loss.includes('rgb(var(--loss))')); assert.notEqual(gain.match(/polyline points="([^"]+)"/)[1], loss.match(/polyline points="([^"]+)"/)[1]);
+  prices = [100, 100]; assert.ok(markup().includes('rgb(var(--muted))'));
+  assert.ok(markup({ unit: 'pts' }).includes('100.00 pts')); assert.ok(!markup({ unit: 'pts' }).includes('₹100'));
+  currency = 'USD'; assert.ok(markup({ unit: '/ troy oz' }).includes('$100.00 / troy oz'));
+  range = '1W'; assert.ok(markup().includes('1W history'));
+  missing = true; assert.ok(markup().includes('Trend unavailable')); assert.ok(!markup().includes('polyline'));
+});
+
+await test('missing intraday history uses a labeled weekly fallback while outages do not multiply requests', async () => {
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const React = createRequire(import.meta.url)('react');
+  const { HistoryRequestError, historyQueryKey } = load('lib/market/historyClient.ts');
+  let status = 404; const enabled = [];
+  const { MarketSparkline } = loader({
+    '@/lib/hooks/useVisibleElement': { useVisibleElement: () => ({ ref: null, visible: true }) },
+    '@/lib/market/historyClient': { HistoryRequestError, historyQueryKey },
+    '@tanstack/react-query': { useQuery: options => {
+      const range = options.queryKey.at(-1); enabled.push({ range, enabled: options.enabled });
+      return range === '1D' ? { error: new HistoryRequestError('Unavailable', status), isPending: false, isError: true }
+        : { data: { symbol: 'TCS', providerTicker: 'TCS.NS', range: '1W', interval: '15m', currency: 'INR', source: 'Offline fixture', points: [point('2026-01-01T04:00:00Z', 100), point('2026-01-02T04:00:00Z', 102)] } };
+    } },
+  })('components/shared/MarketSparkline.tsx');
+  const render = () => renderToStaticMarkup(React.createElement(MarketSparkline, { symbol: 'TCS' }));
+  assert.ok(render().includes('1W fallback')); assert.equal(enabled.at(-1).enabled, true);
+  status = 500; assert.ok(render().includes('Trend unavailable')); assert.equal(enabled.at(-1).enabled, false);
+  status = 429; assert.ok(render().includes('Trend unavailable')); assert.equal(enabled.at(-1).enabled, false);
+});
+
+await test('provider rate limits reach the API with Retry-After and failed client reads are negatively cached', async () => {
+  const { HistoryProviderRateLimitError } = load('lib/market/providers/yfinanceProvider.ts');
+  const route = loader({
+    '@/lib/services/marketData': { MarketDataService: { getHistoricalChart: async () => { throw new HistoryProviderRateLimitError(45); } } },
+    '@/lib/market/providers/yfinanceProvider': { HistoryProviderRateLimitError },
+  })('app/api/market/history/route.ts');
+  const response = await route.GET(new Request('http://localhost/api/market/history?symbol=TCS&range=1D'));
+  assert.equal(response.status, 429); assert.equal(response.headers.get('Retry-After'), '45');
+  const client = loader()('lib/market/historyClient.ts');
+  const oldFetch = globalThis.fetch; let calls = 0;
+  try {
+    globalThis.fetch = async () => { calls++; return { status: 404, ok: false, json: async () => ({ error: 'Missing history' }) }; };
+    await assert.rejects(client.readInstrumentHistory('TCS', 'NSE', '1D'), /Missing history/);
+    await assert.rejects(client.readInstrumentHistory('TCS', 'NSE', '1D'), /Missing history/); assert.equal(calls, 1);
+    await assert.rejects(client.readInstrumentHistory('TCS', 'NSE', '1D', undefined, true), /Missing history/); assert.equal(calls, 2);
+  } finally { globalThis.fetch = oldFetch; }
 });
 
 console.log(`${passed} product integrity groups passed. All tests ran offline.`);

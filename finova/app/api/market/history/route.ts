@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { MarketDataService, type ChartRange } from '@/lib/services/marketData';
+import { HistoryProviderRateLimitError } from '@/lib/market/providers/yfinanceProvider';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +60,12 @@ export async function GET(request: Request) {
         success: false,
         error: err instanceof Error ? err.message : 'Failed to retrieve historical chart data.',
       },
-      { status: 500 }
+      {
+        status: err instanceof HistoryProviderRateLimitError ? 429 : 500,
+        ...(err instanceof HistoryProviderRateLimitError
+          ? { headers: { 'Retry-After': String(err.retryAfterSeconds), 'Cache-Control': 'no-store' } }
+          : {}),
+      }
     );
   }
 }

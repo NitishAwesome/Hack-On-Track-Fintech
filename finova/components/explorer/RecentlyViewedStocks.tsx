@@ -22,6 +22,7 @@ import {
   ChartNoAxesCombined,
 } from 'lucide-react';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
+import { MarketSparkline } from '@/components/shared/MarketSparkline';
 
 interface RecentlyViewedStocksProps {
   onSelectStock?: (symbol: string) => void;
@@ -138,8 +139,9 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
                 key={item.symbol}
                 type="button"
                 onClick={() => handleClick(item)}
-                className="text-left p-3.5 rounded-2xl border border-border bg-surface hover:bg-surface-raised hover:border-brand/40 transition-all duration-150 group flex items-center justify-between gap-3 shadow-xs"
+                className="discovery-instrument text-left p-3.5 group shadow-xs" data-accent="violet"
               >
+                <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {index ? <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0" title={index.name}><ChartNoAxesCombined size={22} /></div> : <CompanyLogo symbol={item.symbol} name={item.name} size="md" />}
                   <div className="min-w-0">
@@ -177,6 +179,8 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
                 </div>
 
                 <ChevronRight className="w-4 h-4 text-muted group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" />
+                </div>
+                <div className="mt-3 pt-2 border-t border-border/60"><MarketSparkline symbol={item.symbol} exchange={index?.exchange || item.exchange || 'NSE'} unit={index ? 'pts' : undefined} className="w-[128px] max-w-full" /></div>
               </button>
             );
           })}

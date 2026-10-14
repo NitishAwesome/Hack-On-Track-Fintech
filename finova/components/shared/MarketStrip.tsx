@@ -170,7 +170,7 @@ export function MarketStrip({ className }: MarketStripProps) {
 
                       {/* Middle: Real Mini Price Chart Sparkline */}
                       <div className="hidden sm:block w-14 h-7 shrink-0 opacity-85 group-hover:opacity-100 transition-opacity">
-                        <MarketSparkline symbol={idx.symbol} />
+                        <MarketSparkline symbol={idx.symbol} range="1W" showLabel={false} unit="pts" tooltipSide="bottom" className="w-full h-full" />
                       </div>
 
                       {/* Right: Absolute & Percentage Change */}

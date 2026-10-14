@@ -2,27 +2,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ChartRange,
-  HistoricalChartResponse,
 } from "@/lib/services/marketData";
-
-export async function readInstrumentHistory(
-  symbol: string,
-  exchange: string,
-  range: ChartRange,
-  signal?: AbortSignal,
-  force = false,
-): Promise<HistoricalChartResponse> {
-  const response = await fetch(
-    `/api/market/history?symbol=${encodeURIComponent(symbol)}&exchange=${encodeURIComponent(exchange)}&range=${range}${force ? "&force=true" : ""}`,
-    { signal },
-  );
-  const data = await response.json();
-  if (!response.ok || !Array.isArray(data.points))
-    throw new Error(
-      data.error || `Historical data is unavailable for ${symbol}.`,
-    );
-  return data;
-}
+import { readInstrumentHistory, historyQueryKey } from '@/lib/market/historyClient';
+export { readInstrumentHistory } from '@/lib/market/historyClient';
 /** All views share this query key. Only an explicit refresh bypasses the provider cache. */
 export function useInstrumentHistory(
   symbol: string,
@@ -31,7 +13,7 @@ export function useInstrumentHistory(
   enabled = true,
 ) {
   const client = useQueryClient(),
-    key = ["research-history", symbol, exchange, range];
+    key = historyQueryKey(symbol, exchange, range);
   const query = useQuery({
     queryKey: key,
     staleTime: 60_000,

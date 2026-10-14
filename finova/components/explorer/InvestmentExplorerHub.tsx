@@ -24,6 +24,7 @@ import { AlternativeInvestmentsHub } from "@/components/alternatives/Alternative
 import { DiscoveryPreviews } from "./DiscoveryPreviews";
 import { Modal } from "@/components/shared/Modal";
 import { InteractiveStockChart } from "./InteractiveStockChart";
+import { MarketSparkline } from '@/components/shared/MarketSparkline';
 import "./research.css";
 
 export type ExplorerTab =
@@ -82,11 +83,13 @@ export function InvestmentExplorerHub() {
   }, [initialSymbol, params, router]);
   return (
     <div className="space-y-6 explorer-research">
-      <section className="research-card border-t-2 border-t-cyan-500/60">
+      <section className="research-card discovery-section discovery-search" data-accent="cyan">
         <div className="max-w-4xl">
           <p className="research-eyebrow text-cyan-700 dark:text-cyan-400 mb-3">
             YOUR NEXT RESEARCH STARTS HERE
           </p>
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight mb-2">Follow the market. Find your next question.</h2>
+          <p className="text-xs sm:text-sm text-muted mb-5 max-w-2xl">Explore real price trends, discover companies by sector, and turn a quick glance into informed research.</p>
           <StockSearchInput onSelectStock={(stock) => navigate(stock.symbol)} />
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-4">
@@ -156,8 +159,9 @@ export function InvestmentExplorerHub() {
                 type="button"
                 key={index.ticker}
                 onClick={() => navigate(index.ticker)}
-                className="rounded-xl border border-border bg-surface px-4 py-4 flex gap-3 items-center text-left hover:border-brand/50"
+                className="discovery-instrument px-4 py-4 text-left" data-accent="blue"
               >
+                <div className="flex gap-3 items-center">
                 <ChartNoAxesCombined
                   size={23}
                   className="text-blue-600 dark:text-blue-400"
@@ -171,6 +175,8 @@ export function InvestmentExplorerHub() {
                   </p>
                 </div>
                 <ArrowUpRight size={15} className="text-muted" />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-border/50"><MarketSparkline symbol={index.ticker} exchange={index.exchange} unit="pts" /><span className="text-[10px] text-muted">Inspect benchmark →</span></div>
               </button>
             ))}
           </section>

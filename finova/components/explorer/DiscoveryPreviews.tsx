@@ -24,6 +24,9 @@ import type {
 } from "@/lib/services/marketData";
 import type { NewsApiResponse } from "@/types/news";
 import { CompanyLogo } from "@/components/shared/CompanyLogo";
+import { MarketSparkline } from "@/components/shared/MarketSparkline";
+import { DailyChange, instrumentVolume } from "@/components/shared/InstrumentMarketData";
+import { DiscoveryInstrumentCard } from "./DiscoveryInstrumentCard";
 import type { ExplorerTab } from "./InvestmentExplorerHub";
 
 async function read<T>(url: string, signal: AbortSignal): Promise<T> {
@@ -91,19 +94,7 @@ function FollowedPreview({ onStock }: { onStock: (symbol: string) => void }) {
           </button>
         </p>
       ) : watchlist.items.length ? (
-        <div className="flex flex-wrap gap-2">
-          {watchlist.items.slice(0, 6).map((item) => (
-            <button
-              type="button"
-              key={item.symbol}
-              className="research-button"
-              onClick={() => onStock(item.symbol)}
-            >
-              <CompanyLogo symbol={item.symbol} size="xs" />
-              {item.symbol}
-            </button>
-          ))}
-        </div>
+        <FollowedCards symbols={watchlist.items.slice(0, 6).map(item => item.symbol)} onStock={onStock} />
       ) : (
         <p className="text-xs text-muted">
           Follow a stock from its research page to build this list.
@@ -111,6 +102,13 @@ function FollowedPreview({ onStock }: { onStock: (symbol: string) => void }) {
       )}
     </section>
   );
+}
+function FollowedCards({ symbols, onStock }: { symbols: string[]; onStock: (symbol: string) => void }) {
+  const quotes = useSharedStockQuotes(symbols);
+  return <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{symbols.map(symbol => {
+    const stock = EXPANDED_NSE_STOCKS.find(item => item.symbol === symbol);
+    return <DiscoveryInstrumentCard key={symbol} symbol={symbol} name={stock?.name || symbol} sector={stock?.sector} quote={quotes.getQuote(symbol)} accent="violet" onOpen={() => onStock(symbol)} />;
+  })}</div>;
 }
 export function DiscoveryPreviews({
   onStock,
@@ -160,11 +158,11 @@ export function DiscoveryPreviews({
   return (
     <div className="space-y-6">
       <FollowedPreview onStock={onStock} />
-      <section className="research-card border-t-2 border-t-blue-500/50">
+      <section className="research-card discovery-section" data-accent="blue">
         <Heading title="Market Movers" action={() => onTab("movers")} />
         <p className="text-xs text-muted mb-4">
           Five highlights from FINOVA’s disclosed 20-stock tracked universe.
-          Rankings do not cover the entire exchange.
+          Rankings do not cover the entire exchange. Mini charts show the latest observed session or a labeled historical fallback.
         </p>
         <div className="flex gap-2 flex-wrap mb-4">
           {(
@@ -206,7 +204,7 @@ export function DiscoveryPreviews({
               <button
                 key={quote.symbol}
                 type="button"
-                className="rounded-xl border border-border bg-surface-raised/30 p-4 text-left hover:border-brand/50 min-w-0"
+                className="discovery-instrument p-4 text-left min-w-0" data-accent="blue"
                 onClick={() => onStock(quote.symbol)}
               >
                 <div className="flex items-center gap-2 mb-3">
@@ -225,6 +223,8 @@ export function DiscoveryPreviews({
                     ? "Daily movement unavailable"
                     : `${quote.day_change_pct > 0 ? "+" : ""}${quote.day_change_pct.toFixed(2)}%`}
                 </p>
+                <div className="my-3"><MarketSparkline symbol={quote.symbol} /></div>
+                <p className="text-[10px] text-muted tabular-nums">Volume {instrumentVolume(quote.volume)} · daily quote</p>
                 <p className="text-[10px] text-muted mt-3">
                   {quote.price_timestamp
                     ? new Date(quote.price_timestamp).toLocaleString("en-IN", {
@@ -237,43 +237,13 @@ export function DiscoveryPreviews({
           </div>
         )}
       </section>
-      <section className="research-card border-t-2 border-t-cyan-500/50">
+      <section className="research-card discovery-section" data-accent="cyan">
         <Heading title="Start Your Research" action={() => onTab("browse")} />
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {stocks.map((stock) => {
             const quote = quotes.getQuote(stock.symbol);
             return (
-              <button
-                key={stock.symbol}
-                type="button"
-                className="rounded-xl border border-border p-4 bg-surface-raised/20 hover:border-brand/50 flex items-center gap-3 text-left min-w-0"
-                onClick={() => onStock(stock.symbol)}
-              >
-                <CompanyLogo
-                  symbol={stock.symbol}
-                  name={stock.name}
-                  size="md"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-foreground">
-                    {stock.symbol}
-                  </p>
-                  <p className="text-[11px] text-muted mt-1 truncate">
-                    {stock.name}
-                  </p>
-                  <p className="text-[10px] text-muted mt-1">
-                    NSE · {stock.sector}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs font-semibold tabular-nums text-foreground">
-                    {money(quote?.price)}
-                  </p>
-                  <p className="text-[10px] text-muted mt-1">
-                    {quote?.status || "Quote pending"}
-                  </p>
-                </div>
-              </button>
+              <DiscoveryInstrumentCard key={stock.symbol} symbol={stock.symbol} name={stock.name} sector={stock.sector} quote={quote} onOpen={() => onStock(stock.symbol)} />
             );
           })}
         </div>
@@ -308,7 +278,7 @@ export function DiscoveryPreviews({
         </div>
       </section>
       <div className="grid lg:grid-cols-2 gap-5">
-        <section className="research-card border-t-2 border-t-amber-500/50">
+        <section className="research-card discovery-section" data-accent="amber">
           <Heading
             title="Gold & Silver"
             action={() => onTab("commodities")}
@@ -338,7 +308,7 @@ export function DiscoveryPreviews({
                 <button
                   key={item.id}
                   type="button"
-                  className="rounded-xl border border-border p-4 bg-surface-raised/30 text-left hover:border-amber-500/50"
+                  className="discovery-instrument p-4 text-left" data-accent="amber"
                   onClick={() => onStock(item.symbol)}
                 >
                   <Coins className="text-amber-500 mb-2" size={20} />
@@ -347,6 +317,8 @@ export function DiscoveryPreviews({
                     {money(item.price)}
                   </p>
                   <p className="text-[10px] text-muted">{item.quotedUnit}</p>
+                  <div className="mt-1"><DailyChange value={item.dayChangePercent} /></div>
+                  <div className="mt-3"><MarketSparkline symbol={item.symbol} unit="per unit" /></div>
                   <p className="text-[10px] text-muted mt-3">
                     {item.source} ·{" "}
                     {item.timestamp
@@ -360,7 +332,7 @@ export function DiscoveryPreviews({
             </div>
           )}
         </section>
-        <section className="research-card border-t-2 border-t-teal-500/50">
+        <section className="research-card discovery-section" data-accent="teal">
           <Heading
             title="Alternative Investments"
             action={() => onTab("alts")}
@@ -406,7 +378,7 @@ export function DiscoveryPreviews({
         </section>
       </div>
       <div className="grid lg:grid-cols-[2fr_1fr] gap-5">
-        <section className="research-card border-t-2 border-t-indigo-500/50">
+        <section className="research-card discovery-section" data-accent="violet">
           <Heading
             title="News & Market"
             action={() => router.push("/news")}
@@ -464,7 +436,7 @@ export function DiscoveryPreviews({
             </div>
           )}
         </section>
-        <section className="research-card border-t-2 border-t-amber-500/50">
+        <section className="research-card discovery-section" data-accent="amber">
           <Heading
             title="IPO Archive"
             action={() => onTab("ipo")}
