@@ -8,6 +8,10 @@ import './page-effects.css';
 
 export type PageAccent = 'cyan' | 'blue' | 'violet' | 'amber' | 'teal';
 
+export function PageWorkspace({ children, className }: { children: ReactNode; className?: string }) {
+  return <div data-tone="cyan" className={cn('finova-workspace w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-7', className)}>{children}</div>;
+}
+
 /** Shared presentation; data and actions stay owned by each page. */
 export function PageSection({
   title,

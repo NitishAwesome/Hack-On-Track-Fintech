@@ -173,14 +173,16 @@ export default function HoldingsPage() {
 }
 
 function HoldingsEntry() {
-  const action = useSearchParams().get('action');
+  const params = useSearchParams();
+  const action = params.get('action') || (params.get('import') === 'csv' ? 'import' : null);
+  const initialBroker = params.get('broker') || '';
   const { userId } = useSession();
   return (
-    <HoldingsWorkspace key={`${userId || 'guest'}:${action || 'list'}`} initialAction={action} />
+    <HoldingsWorkspace key={`${userId || 'guest'}:${action || 'list'}:${initialBroker}`} initialAction={action} initialBroker={initialBroker} />
   );
 }
 
-function HoldingsWorkspace({ initialAction }: { initialAction: string | null }) {
+function HoldingsWorkspace({ initialAction, initialBroker }: { initialAction: string | null; initialBroker: string }) {
   const queryClient = useQueryClient();
   const pathname = usePathname();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -194,14 +196,14 @@ function HoldingsWorkspace({ initialAction }: { initialAction: string | null }) 
   const [expandedMobileId, setExpandedMobileId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
-  const [selectedBrokerFilter, setSelectedBrokerFilter] = useState<string>('');
+  const [selectedBrokerFilter, setSelectedBrokerFilter] = useState<string>(initialBroker);
   const [sortBy, setSortBy] = useState<'value' | 'invested' | 'return' | 'name'>('value');
-  const [form, setForm] = useState<AddHoldingForm>(EMPTY_FORM);
+  const [form, setForm] = useState<AddHoldingForm>({ ...EMPTY_FORM, broker_account_id: initialBroker });
 
   // CSV Import State
   const [csvRows, setCsvRows] = useState<CsvValidationRow[]>([]);
   const [csvError, setCsvError] = useState<string | null>(null);
-  const [importBrokerId, setImportBrokerId] = useState<string>('');
+  const [importBrokerId, setImportBrokerId] = useState<string>(initialBroker);
   const [duplicateMode, setDuplicateMode] = useState<'replace' | 'update' | 'skip'>('replace');
   const [isRefreshingQuotes, setIsRefreshingQuotes] = useState<boolean>(false);
 
@@ -463,7 +465,7 @@ function HoldingsWorkspace({ initialAction }: { initialAction: string | null }) 
             onClick={() => {
               setCsvRows([]);
               setCsvError(null);
-              if (brokers.length > 0 && !importBrokerId) setImportBrokerId(brokers[0].id);
+              if (brokers.length > 0 && !importBrokerId) setImportBrokerId(selectedBrokerAccount(selectedBrokerFilter, brokers));
               setShowImportModal(true);
             }}
             className="finova-button"
@@ -474,7 +476,7 @@ function HoldingsWorkspace({ initialAction }: { initialAction: string | null }) 
           <button
             id="btn-add-holding"
             onClick={() => {
-              if (brokers.length > 0) setForm((p) => ({ ...p, broker_account_id: brokers[0].id }));
+              if (brokers.length > 0) setForm((p) => ({ ...p, broker_account_id: selectedBrokerAccount(selectedBrokerFilter, brokers) }));
               setShowAddModal(true);
             }}
             className="finova-button finova-button-primary"

@@ -11,10 +11,15 @@
 // - Zero password / PIN / MPIN / OTP collection
 // ============================================================
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrivateQuery as useQuery } from '@/lib/hooks/usePrivateQuery';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
+import { useSession } from '@/components/providers/QueryProvider';
+import { PageSection, PageWorkspace } from '@/components/shared/PageSection';
+import { InvestmentDialog, InvestmentDialogTitle } from '@/components/investments/InvestmentDialog';
+import { brokerPositionSummaries } from '@/lib/brokers/presentation';
+import '@/components/investments/investments.css';
 import Link from 'next/link';
 import {
   Plus,
@@ -25,7 +30,6 @@ import {
   Edit2,
   ShieldCheck,
   AlertCircle,
-  AlertTriangle,
   ArrowUpRight,
   Wallet,
   FileSpreadsheet,
@@ -122,7 +126,14 @@ async function deleteBroker(id: string) {
 }
 
 export default function BrokersPage() {
+  const { userId } = useSession();
+  return <BrokersWorkspace key={userId || 'guest'} />;
+}
+
+function BrokersWorkspace() {
+  const reducedMotion = useReducedMotion();
   const queryClient = useQueryClient();
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
 
   // Modals State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -144,7 +155,7 @@ export default function BrokersPage() {
   // Query: Broker Accounts
   const {
     data: brokerData,
-    isLoading: loadingBrokers,
+    isPending: loadingBrokers,
     isError: brokerError,
     error: brokerFetchError,
     refetch: refetchBrokers,
@@ -154,30 +165,18 @@ export default function BrokersPage() {
   });
 
   // Query: Holdings (for metrics and deletion safety)
-  const { data: holdingData } = useQuery({
+  const { data: holdingData, isPending: loadingHoldings, error: holdingsError, refetch: refetchHoldings } = useQuery({
     queryKey: ['holdings'],
     queryFn: fetchHoldings,
   });
 
-  const brokers: BrokerAccount[] = brokerData?.brokers ?? [];
-  const holdings: HoldingWithMetrics[] = holdingData?.holdings ?? [];
+  const brokers: BrokerAccount[] = useMemo(() => brokerData?.brokers ?? [], [brokerData]);
+  const holdings: HoldingWithMetrics[] = useMemo(() => holdingData?.holdings ?? [], [holdingData]);
+  const positionDataUnavailable = loadingHoldings || Boolean(holdingsError);
+  useEffect(() => { if (showAddModal) stepHeadingRef.current?.focus(); }, [addStep, showAddModal]);
 
   // Group holdings metrics per broker
-  const brokerStats = brokers.reduce((acc, b) => {
-    const bHoldings = holdings.filter((h) => h.broker_account_id === b.id);
-    const totalInvested = bHoldings.reduce((sum, h) => sum + (h.invested_value || 0), 0);
-    const pricedHoldings = bHoldings.filter((h) => h.current_value !== null && h.current_value !== undefined);
-    const totalPricedValue = pricedHoldings.reduce((sum, h) => sum + (h.current_value ?? 0), 0);
-    const isFullyValued = bHoldings.length === 0 || pricedHoldings.length === bHoldings.length;
-    acc[b.id] = {
-      count: bHoldings.length,
-      invested: totalInvested,
-      currentValue: totalPricedValue,
-      isFullyValued,
-      pricedCount: pricedHoldings.length,
-    };
-    return acc;
-  }, {} as Record<string, { count: number; invested: number; currentValue: number; isFullyValued: boolean; pricedCount: number }>);
+  const brokerStats = useMemo(() => brokerPositionSummaries(brokers, holdings), [brokers, holdings]);
 
   // Mutations
   const addMutation = useMutation({
@@ -213,6 +212,7 @@ export default function BrokersPage() {
   });
 
   function resetAddForm() {
+    addMutation.reset();
     setForm({
       broker_name: 'Groww',
       broker_code: 'GROWW',
@@ -235,11 +235,12 @@ export default function BrokersPage() {
   }
 
   return (
-    <div className="page-container py-6 space-y-6">
+    <PageWorkspace>
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <p className="finova-eyebrow mb-2">YOUR PORTFOLIO WORKSPACE</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             My Broker & Depository Accounts
           </h1>
           <p className="text-sm text-muted mt-0.5">
@@ -252,8 +253,7 @@ export default function BrokersPage() {
             resetAddForm();
             setShowAddModal(true);
           }}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-foreground dark:text-white shadow-sm hover:opacity-95 transition-opacity flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
+          className="finova-button finova-button-primary flex-shrink-0"
         >
           <Plus className="w-4 h-4" />
           Add Broker Account
@@ -261,17 +261,17 @@ export default function BrokersPage() {
       </div>
 
       {/* Security & Truthful Connection Scope Banner */}
-      <div className="rounded-2xl p-4.5 text-xs sm:text-sm border border-border bg-surface-raised/40 space-y-2">
+      <div data-tone="teal" className="finova-tile p-4 sm:p-5 text-xs sm:text-sm space-y-2">
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex-shrink-0 mt-0.5">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div className="space-y-1">
             <p className="font-bold text-foreground">
-              Privacy-First & Self-Managed Architecture
+              Your accounts, managed by you
             </p>
             <p className="text-muted leading-relaxed">
-              Finova never collects broker passwords, MPINs, TPINs, or trading OTPs. All accounts here function as authenticated user containers to organize positions added via <strong>Manual Entry</strong> or <strong>CSV Statement Import</strong>. Direct broker API synchronization will only be supported through authorized SEBI/OAuth protocols in future releases.
+              FINOVA never collects broker passwords, MPINs, TPINs, or trading OTPs. Organize your recorded positions with <strong>Manual Entry</strong> or <strong>CSV Statement Import</strong>. Direct broker API synchronization is unavailable; any future integration would require an authorized connection.
             </p>
           </div>
         </div>
@@ -280,23 +280,27 @@ export default function BrokersPage() {
       {/* Account Overview Stats */}
       {!loadingBrokers && !brokerError && brokers.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="card p-4 border border-border">
+          <div data-tone="cyan" className="finova-tile p-4 border-t-2 border-t-cyan-500/60">
+            <Building2 className="w-5 h-5 text-cyan-600 dark:text-cyan-400 mb-3" />
             <span className="text-[11px] text-muted">Total Containers</span>
             <p className="text-lg font-bold text-foreground mt-0.5">{brokers.length}</p>
           </div>
-          <div className="card p-4 border border-border">
+          <div data-tone="teal" className="finova-tile p-4 border-t-2 border-t-teal-500/60">
+            <PenTool className="w-5 h-5 text-teal-600 dark:text-teal-400 mb-3" />
             <span className="text-[11px] text-muted">Manual Entries</span>
             <p className="text-lg font-bold text-foreground mt-0.5">
               {brokers.filter((b) => (b.data_source || 'MANUAL') === 'MANUAL').length}
             </p>
           </div>
-          <div className="card p-4 border border-border">
+          <div data-tone="violet" className="finova-tile p-4 border-t-2 border-t-violet-500/60">
+            <FileSpreadsheet className="w-5 h-5 text-violet-600 dark:text-violet-400 mb-3" />
             <span className="text-[11px] text-muted">CSV Managed</span>
-            <p className="text-lg font-bold text-indigo-400 mt-0.5">
+            <p className="text-lg font-bold text-foreground mt-0.5">
               {brokers.filter((b) => b.data_source === 'CSV').length}
             </p>
           </div>
-          <div className="card p-4 border border-border">
+          <div data-tone="amber" className="finova-tile p-4 border-t-2 border-t-amber-500/60">
+            <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 mb-3" />
             <span className="text-[11px] text-muted">API Connected</span>
             <p className="text-lg font-bold text-muted mt-0.5" title="No live broker OAuth authorized yet">
               0 <span className="text-[10px] text-muted font-normal">(Planned)</span>
@@ -306,6 +310,8 @@ export default function BrokersPage() {
       )}
 
       {/* Main Content Area */}
+      <PageSection title="Your account directory" description="Keep each account separate. Holdings and recorded cost stay associated with their original account." icon={Building2} accent="blue" action={<button type="button" className="finova-button" onClick={() => { refetchBrokers(); refetchHoldings(); }}><RefreshCw size={14} />Refresh accounts</button>}>
+      {holdingsError && <div role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 mb-4 text-xs text-muted flex flex-wrap items-center justify-between gap-3"><span>Account positions could not be loaded. Counts and valuations are unavailable.</span><button type="button" className="finova-button" onClick={() => refetchHoldings()}>Retry positions</button></div>}
       {loadingBrokers ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[1, 2, 3].map((i) => (
@@ -351,7 +357,7 @@ export default function BrokersPage() {
                 resetAddForm();
                 setShowAddModal(true);
               }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-foreground dark:text-white shadow-md"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md"
               style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
             >
               <Plus className="w-4 h-4" />
@@ -362,7 +368,7 @@ export default function BrokersPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {brokers.map((broker, i) => {
-            const stats = brokerStats[broker.id] || { count: 0, invested: 0, currentValue: 0, isFullyValued: true };
+            const stats = brokerStats[broker.id];
             const catalogItem = SUPPORTED_BROKER_CATALOG[broker.broker_code?.toUpperCase() || ''] || SUPPORTED_BROKER_CATALOG.OTHER;
             const brokerName = broker.broker_name || catalogItem.name;
             const displayName = broker.display_name || broker.account_label || `${brokerName} Account`;
@@ -373,18 +379,18 @@ export default function BrokersPage() {
             return (
               <motion.div
                 key={broker.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={reducedMotion ? false : { opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
-                className="card p-5 flex flex-col justify-between border border-border hover:border-border dark:hover:border-slate-700 transition-colors group"
+                data-tone={broker.data_source === 'CSV' ? 'violet' : 'teal'}
+                className="finova-tile p-5 flex flex-col justify-between group"
               >
                 <div>
                   {/* Top Header */}
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className="w-11 h-11 rounded-2xl flex items-center justify-center text-foreground dark:text-white font-extrabold text-sm shadow-sm flex-shrink-0"
-                        style={{ backgroundColor: catalogItem.brandColor || broker.color_hex || '#3B82F6' }}
+                        className="finova-accent-icon font-extrabold text-sm flex-shrink-0"
                       >
                         {catalogItem.shortName || brokerName.slice(0, 2).toUpperCase()}
                       </div>
@@ -402,18 +408,20 @@ export default function BrokersPage() {
                     <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity flex-shrink-0">
                       <button
                         title="Rename Account"
-                        onClick={() => setEditingBroker(broker)}
-                        className="p-1.5 rounded-lg hover:bg-surface-raised text-muted hover:text-foreground transition-colors"
+                        aria-label={`Rename ${displayName}`}
+                        onClick={() => { editMutation.reset(); setEditingBroker(broker); }}
+                        className="p-3 rounded-lg hover:bg-surface-raised text-muted hover:text-foreground transition-colors"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         title="Delete Account"
+                        aria-label={`Delete ${displayName}`}
                         onClick={() => {
                           setDeletingBroker(broker);
                           setDeleteError(null);
                         }}
-                        className="p-1.5 rounded-lg hover:bg-rose-500/10 text-muted hover:text-rose-700 dark:hover:text-rose-400 transition-colors"
+                        className="p-3 rounded-lg hover:bg-rose-500/10 text-muted hover:text-rose-700 dark:hover:text-rose-400 transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -440,7 +448,7 @@ export default function BrokersPage() {
                     <div>
                       <span className="text-muted block text-[11px]">Tracked Positions</span>
                       <p className="font-bold text-sm text-foreground mt-0.5">
-                        {stats.count} {stats.count === 1 ? 'position' : 'positions'}
+                        {positionDataUnavailable ? 'Unavailable' : `${stats.count} ${stats.count === 1 ? 'position' : 'positions'}`}
                       </p>
                     </div>
                     <div>
@@ -448,16 +456,15 @@ export default function BrokersPage() {
                         {stats.isFullyValued ? 'Portfolio Value' : 'Valued Subtotal'}
                       </span>
                       <p className="font-bold text-sm text-foreground mt-0.5">
-                        {stats.count === 0
-                          ? formatCurrency(0, true)
-                          : stats.isFullyValued
-                          ? formatCurrency(stats.currentValue, true)
-                          : stats.currentValue > 0
-                          ? `${formatCurrency(stats.currentValue, true)}*`
-                          : 'Unquoted'}
+                        {positionDataUnavailable ? 'Unavailable' : stats.isFullyValued && typeof stats.currentValue === 'number' ? formatCurrency(stats.currentValue, true) : stats.pricedCount > 0 ? formatCurrency(stats.pricedValue, true) : 'Unquoted'}
                       </p>
                     </div>
                   </div>
+                  <div className="mt-3 flex flex-wrap justify-between gap-2 text-[11px] text-muted">
+                    <span>Recorded cost <strong className="text-foreground">{positionDataUnavailable ? 'Unavailable' : formatCurrency(stats.invested, true)}</strong></span>
+                    <span>{positionDataUnavailable ? 'Quote coverage unavailable' : `${stats.pricedCount}/${stats.count} positions priced${stats.staleCount > 0 ? ` · ${stats.staleCount} stale` : ''}`}</span>
+                  </div>
+                  {!positionDataUnavailable && !stats.isFullyValued && <p className="text-[11px] text-muted mt-2">Subtotal includes priced positions only; stale quotes or missing prices prevent a complete valuation.</p>}
                 </div>
 
                 {/* Footer Navigation */}
@@ -468,7 +475,7 @@ export default function BrokersPage() {
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/holdings?broker=${encodeURIComponent(broker.id)}`}
-                      className="inline-flex items-center gap-1 font-semibold text-brand hover:underline"
+                      className="finova-link"
                     >
                       Holdings
                       <ArrowUpRight className="w-3.5 h-3.5" />
@@ -480,36 +487,27 @@ export default function BrokersPage() {
           })}
         </div>
       )}
+      </PageSection>
 
       {/* ============================================================ */}
       {/* MULTI-STEP ADD BROKER ACCOUNT MODAL (Section 5.3)           */}
       {/* ============================================================ */}
-      <AnimatePresence>
-        {showAddModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => setShowAddModal(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+      <InvestmentDialog open={Boolean(showAddModal)} onOpenChange={(open) => { if (!open) setShowAddModal(false); }}><motion.div
+              initial={reducedMotion ? false : { opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
-              className="relative w-full max-w-lg card p-6 shadow-2xl border border-border bg-surface z-10 space-y-5"
+              className="investment-dialog-card relative w-full max-w-lg card p-6 shadow-2xl border border-border bg-surface z-10 space-y-5"
             >
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">
                   <Wallet className="w-5 h-5 text-brand" />
-                  <h2 className="text-lg font-bold text-foreground">
+                  <InvestmentDialogTitle><h2 ref={stepHeadingRef} tabIndex={-1} className="text-lg font-bold text-foreground">
                     {addStep === 4 ? 'Account Registered' : `Add Broker Account (Step ${addStep} of 3)`}
-                  </h2>
+                  </h2></InvestmentDialogTitle>
                 </div>
                 <button
-                  onClick={() => setShowAddModal(false)}
+                  aria-label="Close dialog" onClick={() => setShowAddModal(false)}
                   className="p-1 rounded-lg text-muted hover:text-foreground hover:bg-surface-raised"
                 >
                   <X className="w-5 h-5" />
@@ -538,7 +536,7 @@ export default function BrokersPage() {
                       >
                         <div className="flex items-center gap-2">
                           <span
-                            className="w-6 h-6 rounded-lg text-[10px] font-bold text-foreground dark:text-white flex items-center justify-center flex-shrink-0"
+                            className="w-6 h-6 rounded-lg text-[10px] font-bold text-white flex items-center justify-center flex-shrink-0"
                             style={{ backgroundColor: b.brandColor }}
                           >
                             {b.shortName}
@@ -567,7 +565,7 @@ export default function BrokersPage() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setAddStep(1)}
+                      aria-label="Previous step" onClick={() => setAddStep(1)}
                       className="p-1 rounded-lg text-muted hover:text-foreground hover:bg-surface-raised"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -582,12 +580,12 @@ export default function BrokersPage() {
 
                   <div className="space-y-3">
                     {/* Method 1: Manual Entry */}
-                    <div
+                    <button type="button"
                       onClick={() => {
                         setForm((p) => ({ ...p, data_source: 'MANUAL' }));
                         setAddStep(3);
                       }}
-                      className="p-4 rounded-xl border border-border bg-surface-raised hover:border-brand cursor-pointer transition-all space-y-1 group"
+                      className="w-full text-left p-4 rounded-xl border border-border bg-surface-raised hover:border-brand cursor-pointer transition-all space-y-1 group"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 font-bold text-sm text-foreground group-hover:text-brand">
@@ -601,19 +599,18 @@ export default function BrokersPage() {
                       <p className="text-xs text-muted leading-relaxed">
                         Manually search Indian stocks, mutual funds, REITs, or bonds and enter purchased quantities.
                       </p>
-                    </div>
-
-                    {/* Method 2: CSV Import */}
-                    <div
+                    </button>
+{/* Method 2: CSV Import */}
+                    <button type="button"
                       onClick={() => {
                         setForm((p) => ({ ...p, data_source: 'CSV' }));
                         setAddStep(3);
                       }}
-                      className="p-4 rounded-xl border border-border bg-surface-raised hover:border-brand cursor-pointer transition-all space-y-1 group"
+                      className="w-full text-left p-4 rounded-xl border border-border bg-surface-raised hover:border-brand cursor-pointer transition-all space-y-1 group"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 font-bold text-sm text-foreground group-hover:text-brand">
-                          <FileSpreadsheet className="w-4 h-4 text-indigo-400" />
+                          <FileSpreadsheet className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                           <span>CSV Statement / Tradebook Import</span>
                         </div>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
@@ -623,9 +620,8 @@ export default function BrokersPage() {
                       <p className="text-xs text-muted leading-relaxed">
                         Upload standard exported CSV files from your broker (Zerodha, Groww, Angel One) directly into this container.
                       </p>
-                    </div>
-
-                    {/* Method 3: Official Broker API (Disabled / Transparent disclosure) */}
+                    </button>
+{/* Method 3: Official Broker API (Disabled / Transparent disclosure) */}
                     <div className="p-4 rounded-xl border border-border/60 bg-surface-raised/30 opacity-60 cursor-not-allowed space-y-1">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 font-bold text-sm text-muted">
@@ -666,7 +662,7 @@ export default function BrokersPage() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setAddStep(2)}
+                      aria-label="Previous step" onClick={() => setAddStep(2)}
                       className="p-1 rounded-lg text-muted hover:text-foreground hover:bg-surface-raised"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -684,7 +680,7 @@ export default function BrokersPage() {
                       Account Nickname / Label *
                     </label>
                     <input
-                      type="text"
+                      aria-label="Account Nickname" type="text"
                       required
                       value={form.account_label}
                       onChange={(e) => setForm((p) => ({ ...p, account_label: e.target.value }))}
@@ -700,7 +696,7 @@ export default function BrokersPage() {
                     <label className="text-xs font-semibold text-foreground">
                       Account Type
                     </label>
-                    <select
+                    <select aria-label="Account Type"
                       value={form.account_type}
                       onChange={(e) => setForm((p) => ({ ...p, account_type: e.target.value as AccountType }))}
                       className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-surface-raised border border-border text-foreground focus:outline-none focus:border-brand"
@@ -731,7 +727,7 @@ export default function BrokersPage() {
                     <button
                       type="submit"
                       disabled={addMutation.isPending}
-                      className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-foreground dark:text-white shadow-sm disabled:opacity-60"
+                      className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-sm disabled:opacity-60"
                       style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
                     >
                       {addMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -758,7 +754,7 @@ export default function BrokersPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                     <Link
-                      href={`/holdings?broker=${encodeURIComponent(createdBrokerResult?.id || '')}`}
+                      href={`/holdings?action=add&broker=${encodeURIComponent(createdBrokerResult?.id || '')}`}
                       className="p-3.5 rounded-xl border border-border bg-surface-raised hover:border-brand text-left space-y-1 block transition-colors"
                       onClick={() => setShowAddModal(false)}
                     >
@@ -772,7 +768,7 @@ export default function BrokersPage() {
                     </Link>
 
                     <Link
-                      href={`/holdings?import=csv&broker=${encodeURIComponent(createdBrokerResult?.id || '')}`}
+                      href={`/holdings?action=import&broker=${encodeURIComponent(createdBrokerResult?.id || '')}`}
                       className="p-3.5 rounded-xl border border-border bg-surface-raised hover:border-brand text-left space-y-1 block transition-colors"
                       onClick={() => setShowAddModal(false)}
                     >
@@ -797,36 +793,23 @@ export default function BrokersPage() {
                   </div>
                 </div>
               )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+            </motion.div></InvestmentDialog>
 
       {/* ============================================================ */}
       {/* EDIT BROKER MODAL (Preserves account_type - Issue 4 Fix)     */}
       {/* ============================================================ */}
-      <AnimatePresence>
-        {editingBroker && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => setEditingBroker(null)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
+      {editingBroker && <InvestmentDialog open={Boolean(editingBroker)} onOpenChange={(open) => { if (!open) setEditingBroker(null); }}><motion.div
+              initial={reducedMotion ? false : { opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="relative w-full max-w-md card p-6 shadow-2xl border border-border bg-surface z-10 space-y-4"
+              className="investment-dialog-card relative w-full max-w-md card p-6 shadow-2xl border border-border bg-surface z-10 space-y-4"
             >
               <div className="flex items-center justify-between border-b border-border pb-3">
-                <h2 className="text-base font-bold text-foreground">
+                <InvestmentDialogTitle><h2 className="text-base font-bold text-foreground">
                   Edit Account Container
-                </h2>
+                </h2></InvestmentDialogTitle>
                 <button
-                  onClick={() => setEditingBroker(null)}
+                  aria-label="Close dialog" onClick={() => setEditingBroker(null)}
                   className="p-1 rounded-lg text-muted hover:text-foreground hover:bg-surface-raised"
                 >
                   <X className="w-5 h-5" />
@@ -852,7 +835,7 @@ export default function BrokersPage() {
                     Account Display Name *
                   </label>
                   <input
-                    name="display_name"
+                    aria-label="Account Display Name" name="display_name"
                     type="text"
                     defaultValue={editingBroker.display_name || editingBroker.account_label || editingBroker.broker_name}
                     required
@@ -866,7 +849,7 @@ export default function BrokersPage() {
                     Account Type (Optional Change)
                   </label>
                   <select
-                    name="account_type"
+                    aria-label="Account Type" name="account_type"
                     defaultValue={editingBroker.account_type || 'demat'}
                     className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-surface-raised border border-border text-foreground focus:outline-none focus:border-brand"
                   >
@@ -899,7 +882,7 @@ export default function BrokersPage() {
                   <button
                     type="submit"
                     disabled={editMutation.isPending}
-                    className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-foreground dark:text-white shadow-sm"
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-sm"
                     style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
                   >
                     {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -907,136 +890,29 @@ export default function BrokersPage() {
                   </button>
                 </div>
               </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+            </motion.div></InvestmentDialog>}
 
       {/* ============================================================ */}
       {/* SAFE BROKER DELETION MODAL (Issue 5 Fix & Section 8)        */}
       {/* ============================================================ */}
-      <AnimatePresence>
-        {deletingBroker && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => {
-                setDeletingBroker(null);
-                setDeleteError(null);
-              }}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              className="relative w-full max-w-md card p-6 shadow-2xl border border-border bg-surface z-10 space-y-4"
-            >
-              {(() => {
-                const stats = brokerStats[deletingBroker.id] || { count: 0 };
-                const hasActiveRecords = stats.count > 0;
 
-                return (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2.5 rounded-xl ${hasActiveRecords ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20' : 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20'}`}>
-                        {hasActiveRecords ? <AlertTriangle className="w-6 h-6" /> : <Trash2 className="w-6 h-6" />}
-                      </div>
-                      <div>
-                        <h3 className="text-base font-bold text-foreground">
-                          {hasActiveRecords ? 'Deletion Blocked: Active Holdings Exist' : 'Delete Empty Account Container'}
-                        </h3>
-                        <p className="text-xs text-muted">
-                          {deletingBroker.display_name || deletingBroker.broker_name}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Blocked Case */}
-                    {hasActiveRecords ? (
-                      <div className="space-y-3">
-                        <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300 text-xs space-y-2 leading-relaxed">
-                          <p className="font-bold flex items-center gap-1.5">
-                            <AlertCircle className="w-4 h-4 text-amber-700 dark:text-amber-400" />
-                            Financial Ledger Protection Active
-                          </p>
-                          <p>
-                            This account currently holds <strong>{stats.count} active position(s)</strong>. To protect the integrity of your unified portfolio history, Finova does not allow deleting containers with active records.
-                          </p>
-                        </div>
-
-                        <p className="text-xs text-muted leading-relaxed">
-                          Please sell, reassign, or remove all holdings associated with this broker before attempting deletion.
-                        </p>
-
-                        <div className="pt-2 flex justify-end gap-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeletingBroker(null);
-                              setDeleteError(null);
-                            }}
-                            className="px-4 py-2 rounded-xl text-xs font-semibold border border-border text-muted hover:bg-surface-raised"
-                          >
-                            Close
-                          </button>
-                          <Link
-                            href={`/holdings?broker=${encodeURIComponent(deletingBroker.id)}`}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-foreground dark:text-white shadow-sm"
-                            style={{ background: 'linear-gradient(135deg, rgb(var(--brand-600)), rgb(var(--brand-400)))' }}
-                            onClick={() => setDeletingBroker(null)}
-                          >
-                            Manage Holdings
-                            <ArrowUpRight className="w-3.5 h-3.5" />
-                          </Link>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Empty Container Deletion Permitted */
-                      <div className="space-y-3">
-                        <p className="text-xs text-muted leading-relaxed">
-                          This account contains <strong>0 holdings and 0 transactions</strong>. Are you sure you want to permanently delete this empty container?
-                        </p>
-
-                        {deleteError && (
-                          <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                            <span>{deleteError}</span>
-                          </div>
-                        )}
-
-                        <div className="pt-2 flex justify-end gap-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeletingBroker(null);
-                              setDeleteError(null);
-                            }}
-                            className="px-4 py-2 rounded-xl text-xs font-semibold border border-border text-muted hover:bg-surface-raised"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            disabled={deleteMutation.isPending}
-                            onClick={() => deleteMutation.mutate(deletingBroker.id)}
-                            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-sm disabled:opacity-60"
-                          >
-                            {deleteMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            Delete Empty Account
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </div>
+      <InvestmentDialog open={Boolean(deletingBroker)} onOpenChange={(open) => { if (!open) { setDeletingBroker(null); setDeleteError(null); } }}>
+        <div className="investment-dialog-card card w-full max-w-md p-6 space-y-4">
+          <InvestmentDialogTitle><h2 className="font-bold text-lg flex items-center gap-2"><ShieldCheck size={20} className="text-amber-600 dark:text-amber-400" />Delete account</h2></InvestmentDialogTitle>
+          {deletingBroker && <>
+            <p className="text-sm font-semibold text-foreground">{deletingBroker.display_name || deletingBroker.account_label || deletingBroker.broker_name}</p>
+            {positionDataUnavailable ? <p className="text-xs text-muted">Positions could not be verified. Refresh them before requesting deletion.</p> : brokerStats[deletingBroker.id].count > 0 ? <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+              <p className="font-semibold text-foreground">This account contains {brokerStats[deletingBroker.id].count} recorded positions.</p>
+              <p className="text-xs text-muted mt-2 leading-relaxed">Accounts containing holdings or transaction history cannot be deleted. You can rename the account or review its holdings; selling a position does not remove its transaction history.</p>
+            </div> : <p className="text-xs text-muted leading-relaxed">No active positions are shown in the loaded holdings. FINOVA will verify transaction history on the server and block deletion if any financial records remain. Deleting an eligible empty account is permanent.</p>}
+            {deleteError && <p role="alert" className="rounded-xl border border-loss/30 bg-loss/5 p-3 text-xs text-loss">{deleteError}</p>}
+            <div className="flex flex-wrap justify-end gap-3 pt-2">
+              <button type="button" className="finova-button" onClick={() => { setDeletingBroker(null); setDeleteError(null); }}>Cancel</button>
+              {positionDataUnavailable ? <button type="button" className="finova-button" onClick={() => refetchHoldings()}><RefreshCw size={14} />Retry positions</button> : brokerStats[deletingBroker.id].count > 0 ? <Link className="finova-button finova-button-primary" href={'/holdings?broker=' + encodeURIComponent(deletingBroker.id)} onClick={() => setDeletingBroker(null)}>Manage Holdings<ArrowUpRight size={14} /></Link> : <button type="button" disabled={deleteMutation.isPending} className="finova-button bg-rose-600! text-white border-rose-600 hover:bg-rose-700!" onClick={() => deleteMutation.mutate(deletingBroker.id)}>{deleteMutation.isPending && <Loader2 size={14} className="animate-spin" />}Delete Empty Account</button>}
+            </div>
+          </>}
+        </div>
+      </InvestmentDialog>
+    </PageWorkspace>
   );
 }

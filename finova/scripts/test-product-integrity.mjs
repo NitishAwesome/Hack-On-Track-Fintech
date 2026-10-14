@@ -761,4 +761,27 @@ await test('Investment summaries keep partial valuations honest and do not show 
   assert.ok(render({ brokerCount: null }).includes('Accounts unavailable'));
 });
 
+await test('Broker account cards isolate positions and retain canonical incomplete and stale valuations', () => {
+  const { brokerPositionSummaries } = load('lib/brokers/presentation.ts');
+  const accounts = [{ id: 'broker-a' }, { id: 'broker-b' }, { id: 'empty' }];
+  const positions = [holding('TCS', 120), holding('UNKNOWN', null), { ...holding('RELIANCE', 80), broker_account_id: 'broker-b', price_status: 'STALE' }];
+  const before = JSON.stringify(positions);
+  const stats = brokerPositionSummaries(accounts, positions);
+  assert.equal(stats['broker-a'].count, 2);
+  assert.equal(stats['broker-a'].invested, 2000);
+  assert.equal(stats['broker-a'].currentValue, null);
+  assert.equal(stats['broker-a'].pricedValue, 1200);
+  assert.equal(stats['broker-a'].pricedCount, 1);
+  assert.equal(stats['broker-a'].isFullyValued, false);
+  assert.equal(stats['broker-b'].count, 1);
+  assert.equal(stats['broker-b'].pricedValue, 800);
+  assert.equal(stats['broker-b'].currentValue, null);
+  assert.equal(stats['broker-b'].staleCount, 1);
+  assert.equal(stats['broker-b'].isFullyValued, false);
+  assert.equal(stats.empty.count, 0);
+  assert.equal(stats.empty.currentValue, 0);
+  assert.equal(stats.empty.isFullyValued, true);
+  assert.equal(JSON.stringify(positions), before);
+});
+
 console.log(`${passed} product integrity groups passed. All tests ran offline.`);
