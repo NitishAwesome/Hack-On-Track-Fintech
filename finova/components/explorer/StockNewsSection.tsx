@@ -1,379 +1,344 @@
-'use client';
+"use client";
+import { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { useSession } from "@/components/providers/QueryProvider";
+import { ExternalLink, Newspaper, RefreshCw, Sparkles } from "lucide-react";
+import type { PersonalizedNewsArticle, NewsApiResponse } from "@/types/news";
 
-import React, { useState, useEffect } from 'react';
-import type { PersonalizedNewsArticle, NewsApiResponse } from '@/types/news';
-import {
-  Newspaper,
-  ExternalLink,
-  Clock,
-  AlertCircle,
-  RefreshCw,
-  Sparkles,
-  Bot,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
-
-interface StockNewsSectionProps {
+function Thumbnail({ article }: { article: PersonalizedNewsArticle }) {
+  const [failed, setFailed] = useState(false);
+  return article.image_url &&
+    /^https?:\/\//.test(article.image_url) &&
+    !failed ? (
+    <Image
+      src={article.image_url}
+      alt=""
+      width={96}
+      height={72}
+      unoptimized
+      onError={() => setFailed(true)}
+      className="w-20 sm:w-24 h-18 object-cover rounded-lg shrink-0"
+    />
+  ) : (
+    <div className="w-16 h-16 bg-indigo-500/10 text-indigo-500 rounded-xl flex items-center justify-center shrink-0">
+      <Newspaper size={23} />
+    </div>
+  );
+}
+type Explanation = {
+  loading: boolean;
+  text?: string;
+  error?: string;
+  source?: string;
+  model?: string;
+};
+interface StockNewsProps {
   symbol: string;
   companyName?: string;
   sector?: string;
+  preview?: boolean;
 }
-
-interface ArticleAiExplanation {
-  loading: boolean;
-  text?: string;
-  model?: string;
-  source?: string;
-  error?: string;
+export function StockNewsSection(props: StockNewsProps) {
+  const { userId } = useSession();
+  // AI responses may contain server-verified portfolio context. An owner change unmounts all local response state.
+  return (
+    <StockNewsWorkspace
+      key={`${userId || "guest"}:${props.symbol}`}
+      {...props}
+      userId={userId}
+    />
+  );
 }
-
-export function StockNewsSection({
+function StockNewsWorkspace({
   symbol,
   companyName,
   sector,
-}: StockNewsSectionProps) {
-  const [articles, setArticles] = useState<PersonalizedNewsArticle[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeArticleId, setActiveArticleId] = useState<string | null>(null);
-  const [aiExplanations, setAiExplanations] = useState<Record<string, ArticleAiExplanation>>({});
-
-  useEffect(() => {
-    let isMounted = true;
-    async function load() {
-      if (!symbol) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const url = `/api/news?symbol=${encodeURIComponent(symbol)}`;
-        const res = await fetch(url);
-        if (!res.ok) {
-          throw new Error(`Failed to load news for ${symbol} (status ${res.status})`);
-        }
-        const data: NewsApiResponse = await res.json();
-        if (isMounted) {
-          setArticles(data.articles || []);
-          setError(null);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'News feed temporarily unreachable');
-          setLoading(false);
-        }
-      }
-    }
-
-    load();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [symbol]);
-
-  const handleManualRefresh = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const url = `/api/news?symbol=${encodeURIComponent(symbol)}&refresh=true`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`Failed to load news for ${symbol} (status ${res.status})`);
-      }
-      const data: NewsApiResponse = await res.json();
-      setArticles(data.articles || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'News feed temporarily unreachable');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleExplainArticle = async (article: PersonalizedNewsArticle, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-
-    const id = article.article_id;
-    if (activeArticleId === id) {
-      setActiveArticleId(null);
-      return;
-    }
-
-    setActiveArticleId(id);
-
-    // If already fetched, don't refetch
-    if (aiExplanations[id]?.text) {
-      return;
-    }
-
-    setAiExplanations((prev) => ({
-      ...prev,
-      [id]: { loading: true },
+  preview = false,
+  userId,
+}: StockNewsProps & { userId: string | null }) {
+  const [filter, setFilter] = useState<"recent" | "archive">("recent");
+  const [explanations, setExplanations] = useState<Record<string, Explanation>>(
+    {},
+  );
+  const query = useQuery({
+    queryKey: ["research-news", symbol, userId],
+    staleTime: 120_000,
+    queryFn: async ({ signal }): Promise<NewsApiResponse> => {
+      const response = await fetch(
+        `/api/news?symbol=${encodeURIComponent(symbol)}`,
+        { signal, cache: "no-store" },
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(
+          data.message ||
+            data.error ||
+            "News providers are temporarily unavailable.",
+        );
+      return data;
+    },
+  });
+  const all = query.data?.articles ?? [],
+    articles = all.filter((article) =>
+      filter === "archive"
+        ? article.freshness === "ARCHIVED"
+        : article.freshness !== "ARCHIVED",
+    );
+  const analyze = async (article: PersonalizedNewsArticle) => {
+    if (!userId || explanations[article.article_id]?.loading) return;
+    setExplanations((previous) => ({
+      ...previous,
+      [article.article_id]: { loading: true },
     }));
-
     try {
-      const res = await fetch('/api/ai/explain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/ai/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: 'news_article',
-          stock: {
-            symbol,
-            name: companyName || symbol,
-            sector: sector || undefined,
-          },
+          type: "news_article",
+          stock: { symbol, name: companyName || symbol, sector },
           article: {
             title: article.title,
             source_name: article.source_name,
             pubDate: article.pubDate,
             description: article.description,
-            is_delayed_feed: article.temporal_info?.is_delayed_feed,
-            timestamp_display: article.temporal_info?.display_label || formatArticleTime(article.pubDate),
             link: article.link,
+            is_delayed_feed: article.temporal_info?.is_delayed_feed,
+            timestamp_display:
+              article.temporal_info?.display_label ||
+              `${article.pubDate} (${article.temporal_info?.timestamp_type || "publication time"})`,
           },
         }),
       });
-
-      if (!res.ok) {
-        throw new Error(`AI explanation request failed (${res.status})`);
-      }
-
-      const data = await res.json();
-      setAiExplanations((prev) => ({
-        ...prev,
-        [id]: {
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(
+          data.error || `AI analysis is unavailable (${response.status}).`,
+        );
+      setExplanations((previous) => ({
+        ...previous,
+        [article.article_id]: {
           loading: false,
-          text: data.explanation || 'No explanation available.',
-          model: data.model || 'Gemini 2.5',
-          source: data.source || 'gemini',
+          text: data.explanation,
+          source: data.source,
+          model: data.model,
         },
       }));
-    } catch (err) {
-      setAiExplanations((prev) => ({
-        ...prev,
-        [id]: {
+    } catch (error) {
+      setExplanations((previous) => ({
+        ...previous,
+        [article.article_id]: {
           loading: false,
-          error: err instanceof Error ? err.message : 'AI analysis temporarily unavailable.',
-          text: `This verified development concerns ${companyName || symbol} (${symbol}). Review official disclosures on NSE/BSE to verify material business and financial impact.`,
-          source: 'deterministic_fallback',
+          error:
+            error instanceof Error
+              ? error.message
+              : "AI analysis is unavailable.",
         },
       }));
     }
   };
-
-  const formatArticleTime = (isoString?: string) => {
-    if (!isoString) return '—';
-    try {
-      const d = new Date(isoString);
-      return new Intl.DateTimeFormat('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      }).format(d);
-    } catch {
-      return '—';
-    }
-  };
-
-  const getProviderBadge = (provider?: string) => {
-    const p = (provider || '').toLowerCase();
-    if (p.includes('marketaux')) {
-      return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-          Marketaux
-        </span>
-      );
-    }
-    if (p.includes('gdelt')) {
-      return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
-          GDELT 2.0
-        </span>
-      );
-    }
-    if (p.includes('newsdata')) {
-      return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-          NewsData.io
-        </span>
-      );
-    }
-    return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-surface-raised text-muted border border-border">
-        Aggregated Feed
-      </span>
-    );
-  };
-
-  const getFeedFreshnessBadge = (isDelayed?: boolean, isCached?: boolean) => {
-    if (isCached) {
-      return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-raised text-muted border border-border">
-          Cached
-        </span>
-      );
-    }
-    return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-        Verified Feed
-      </span>
-    );
-  };
-
-  return (
-    <div className="bg-card/70 border border-border/70 rounded-2xl p-6 backdrop-blur-sm space-y-4">
-      {/* Title */}
-      <div className="flex items-center justify-between border-b border-border/40 pb-3">
-        <div className="flex items-center gap-2">
-          <Newspaper className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
-          <h3 className="text-base font-bold text-foreground tracking-tight">
-            Relevant News & Coverage
+  const content = (
+    <>
+      <div className="flex flex-wrap justify-between items-start gap-3">
+        <div>
+          <h3 className="text-base font-bold text-foreground">
+            {preview ? "Recent Coverage" : "News & AI Research"}
           </h3>
-          <span className="text-xs text-muted">for {companyName || symbol}</span>
+          <p className="text-xs text-muted mt-1">
+            {companyName || symbol} · source-linked coverage
+          </p>
         </div>
-
         <button
           type="button"
-          onClick={handleManualRefresh}
-          disabled={loading}
-          className="p-1.5 text-muted hover:text-foreground rounded-md hover:bg-surface-raised transition disabled:opacity-50"
+          className="research-icon-button"
           aria-label="Refresh company news"
-          title="Refresh company news"
+          disabled={query.isFetching}
+          onClick={() => query.refetch()}
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw
+            size={16}
+            className={query.isFetching ? "animate-spin" : ""}
+          />
         </button>
       </div>
-
-      {loading && (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 bg-surface/50 border border-border/40 rounded-xl animate-pulse p-4 space-y-2">
-              <div className="h-4 bg-surface-raised rounded w-3/4" />
-              <div className="h-3 bg-surface-raised/60 rounded w-1/2" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {error && !loading && (
-        <div className="p-4 rounded-xl bg-surface/50 border border-border/40 text-xs text-muted flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
-          <span>{error}. Displaying verified empty state.</span>
-        </div>
-      )}
-
-      {!loading && !error && articles.length === 0 && (
-        <div className="p-8 text-center text-xs text-muted bg-surface/40 rounded-xl border border-border/40 space-y-1">
+      <div className="flex flex-wrap gap-2 mt-4">
+        {(["recent", "archive"] as const).map((value) => (
+          <button
+            type="button"
+            key={value}
+            aria-pressed={filter === value}
+            className={`research-button ${filter === value ? "text-indigo-700 dark:text-indigo-300 border-indigo-500/40 bg-indigo-500/10" : ""}`}
+            onClick={() => setFilter(value)}
+          >
+            {value === "recent" ? "Recent coverage" : "Archive"} (
+            {
+              all.filter((article) =>
+                value === "archive"
+                  ? article.freshness === "ARCHIVED"
+                  : article.freshness !== "ARCHIVED",
+              ).length
+            }
+            )
+          </button>
+        ))}
+      </div>
+      {query.isLoading ? (
+        <p role="status" className="py-10 text-xs text-muted">
+          Loading company news…
+        </p>
+      ) : query.isError ? (
+        <p role="alert" className="py-5 text-xs text-muted">
+          {query.error.message}{" "}
+          <button className="underline" onClick={() => query.refetch()}>
+            Retry news
+          </button>
+        </p>
+      ) : articles.length === 0 ? (
+        <div className="py-8 text-xs text-muted leading-relaxed">
           <p className="font-semibold text-foreground">
-            No sufficiently recent relevant news available for this stock.
+            No {filter === "archive" ? "archived" : "recent"} matches available.
           </p>
-          <p className="text-[11px] text-muted">
-            Verified connected feeds (Marketaux, GDELT 2.0, NewsData.io) have no active coverage matches for {companyName || symbol}.
+          <p className="mt-2">
+            {query.data?.message ||
+              "The connected feeds have no matching records in this category."}{" "}
+            {all.length > 0 && "Try the other coverage category."}
           </p>
         </div>
-      )}
-
-      {!loading && articles.length > 0 && (
-        <div className="space-y-3">
-          {articles.slice(0, 6).map((article) => {
-            const isAiExpanded = activeArticleId === article.article_id;
-            const aiData = aiExplanations[article.article_id];
-
+      ) : (
+        <div className="space-y-3 mt-4">
+          {articles.slice(0, preview ? 3 : 12).map((article) => {
+            const ai = explanations[article.article_id],
+              temporal = article.temporal_info;
             return (
-              <div
+              <article
                 key={article.article_id}
-                className="p-4 rounded-xl bg-surface/60 hover:bg-surface-raised border border-border/60 hover:border-border transition block group space-y-3"
+                className="rounded-xl border border-border bg-surface-raised/30 p-3 sm:p-4"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1.5 min-w-0 flex-1">
+                <div className="flex items-start gap-3">
+                  <Thumbnail article={article} />
+                  <div className="min-w-0 flex-1">
                     <a
                       href={article.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm font-semibold text-foreground hover:text-emerald-700 dark:hover:text-emerald-400 transition leading-snug line-clamp-2 inline-flex items-baseline gap-1"
+                      className="text-sm font-semibold text-foreground hover:text-indigo-700 dark:hover:text-indigo-300 leading-snug inline-flex gap-2"
                     >
                       <span>{article.title}</span>
-                      <ExternalLink className="w-3.5 h-3.5 text-muted shrink-0 inline translate-y-0.5" />
+                      <ExternalLink size={13} className="shrink-0 mt-1" />
                     </a>
-
-                    {article.description && (
-                      <p className="text-xs text-muted line-clamp-2 leading-relaxed">
-                        {article.description}
-                      </p>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted">
-                      <span className="font-medium text-foreground">{article.source_name}</span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1 font-mono text-muted">
-                        <Clock className="w-3 h-3 text-muted" />
-                        {article.temporal_info?.display_label || formatArticleTime(article.pubDate)}
+                    <div className="text-[11px] text-muted flex flex-wrap gap-x-2 gap-y-1 mt-2">
+                      <span>{article.source_name}</span>
+                      <span>·</span>
+                      <span>
+                        {temporal?.display_label ||
+                          new Date(article.pubDate).toLocaleString("en-IN", {
+                            timeZone: "Asia/Kolkata",
+                          }) + " IST"}
                       </span>
-                      <span>•</span>
-                      {getProviderBadge(article.source_provider)}
-                      <span>•</span>
-                      {getFeedFreshnessBadge(
-                        article.temporal_info?.is_delayed_feed,
-                        article.temporal_info?.is_cached
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => handleExplainArticle(article, e)}
-                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 transition shadow-sm"
-                    title="Explain story with FINOVA AI"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">AI Analysis</span>
-                    {isAiExpanded ? (
-                      <ChevronUp className="w-3 h-3" />
-                    ) : (
-                      <ChevronDown className="w-3 h-3" />
-                    )}
-                  </button>
-                </div>
-
-                {/* AI Explanation Drawer */}
-                {isAiExpanded && (
-                  <div className="pt-2 border-t border-border/40 mt-2 space-y-2">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
-                        <Bot className="w-3.5 h-3.5" />
-                        <span>FINOVA Intelligence (Gemini AI)</span>
-                      </div>
-                      {aiData?.model && (
-                        <span className="font-mono text-[10px] text-muted">
-                          {aiData.model}
+                      <span className="capitalize">
+                        · {article.source_provider}
+                      </span>
+                      {temporal?.is_cached && <span>· Cached</span>}
+                      {temporal?.is_delayed_feed && (
+                        <span className="text-amber-700 dark:text-amber-400">
+                          · Delayed feed
                         </span>
                       )}
                     </div>
-
-                    {aiData?.loading ? (
-                      <div className="p-3 bg-surface/60 rounded-lg border border-border/40 animate-pulse space-y-1.5">
-                        <div className="h-3 bg-surface-raised rounded w-5/6" />
-                        <div className="h-3 bg-surface-raised/60 rounded w-4/6" />
-                      </div>
-                    ) : aiData?.text ? (
-                      <div className="p-3 bg-surface/80 rounded-lg border border-emerald-500/20 text-xs text-foreground leading-relaxed space-y-1.5">
-                        <p>{aiData.text}</p>
-                        <p className="text-[10px] text-muted pt-1 border-t border-border/50">
-                          AI educational summary grounded in verified news text. Stock prices and fundamentals are deterministic.
-                        </p>
-                      </div>
-                    ) : null}
+                    {temporal?.timestamp_type === "indexed" && (
+                      <p className="text-[10px] text-muted mt-1">
+                        Provider indexing time; publication time is unconfirmed.
+                      </p>
+                    )}
+                    {!preview && article.description && (
+                      <p className="text-xs text-muted leading-relaxed mt-2 line-clamp-3">
+                        {article.description}
+                      </p>
+                    )}
+                    {!preview && article.explanation && (
+                      <p className="text-[11px] text-muted mt-2">
+                        Relevance: {article.explanation}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  {userId ? (
+                    <button
+                      type="button"
+                      disabled={ai?.loading}
+                      className="research-button text-teal-700 dark:text-teal-300 border-teal-500/30 bg-teal-500/10"
+                      onClick={() => analyze(article)}
+                    >
+                      <Sparkles size={14} />
+                      {ai?.loading
+                        ? "Analyzing…"
+                        : ai?.text || ai?.error
+                          ? "Retry AI analysis"
+                          : "Analyze with FINOVA AI"}
+                    </button>
+                  ) : (
+                    <Link
+                      className="research-button text-teal-700 dark:text-teal-300 border-teal-500/30"
+                      href={`/login?next=${encodeURIComponent(`/explore/stocks/${symbol}?tab=news`)}`}
+                    >
+                      <Sparkles size={14} />
+                      Sign in for AI analysis
+                    </Link>
+                  )}
+                  <a
+                    href={article.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-brand underline"
+                  >
+                    Read original source
+                  </a>
+                </div>
+                {ai?.error && (
+                  <p
+                    role="alert"
+                    className="mt-3 text-xs text-amber-700 dark:text-amber-400"
+                  >
+                    {ai.error} No AI conclusion is shown. You can retry or
+                    review the original source.
+                  </p>
+                )}
+                {ai?.text && (
+                  <div className="mt-3 p-4 border border-teal-500/25 bg-teal-500/5 rounded-xl">
+                    <p className="text-[11px] font-bold text-teal-700 dark:text-teal-300 mb-2">
+                      {ai.source === "gemini"
+                        ? `FINOVA AI · ${ai.model || "Gemini"}`
+                        : "AI unavailable · sourced-context guidance"}
+                    </p>
+                    <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap">
+                      {ai.text}
+                    </p>
+                    <p className="text-[10px] text-muted mt-3">
+                      Educational interpretation of the supplied article. Check
+                      the linked source and company filings; no Buy/Sell
+                      recommendation or price target.
+                    </p>
                   </div>
                 )}
-              </div>
+              </article>
             );
           })}
         </div>
       )}
-    </div>
+      <p className="text-[11px] text-muted mt-4">
+        Provider access, indexing and retrieval times do not independently
+        verify a headline or make it live news.
+      </p>
+    </>
+  );
+  return preview ? (
+    <div className="min-w-0">{content}</div>
+  ) : (
+    <section className="research-card border-t-2 border-t-indigo-500/60">
+      {content}
+    </section>
   );
 }

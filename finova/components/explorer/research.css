@@ -1,0 +1,118 @@
+@layer components {
+  .research-card {
+    border: 1px solid rgb(var(--border));
+    border-radius: 16px;
+    background: rgb(var(--surface));
+    padding: 24px;
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.025);
+  }
+  .research-title {
+    color: rgb(var(--foreground));
+    font-size: 1.125rem;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+  .research-eyebrow {
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.095em;
+    line-height: 1.6;
+  }
+  .research-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 13px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 10px;
+    background: rgb(var(--surface-raised) / 0.4);
+    color: rgb(var(--foreground));
+    font-size: 12px;
+    font-weight: 600;
+    transition:
+      border-color 150ms,
+      background 150ms;
+  }
+  .research-button:hover {
+    border-color: rgb(var(--brand-500) / 0.5);
+    background: rgb(var(--surface-raised));
+  }
+  .research-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    min-width: 40px;
+    border-radius: 9px;
+    color: rgb(var(--muted));
+    flex-shrink: 0;
+    transition: background 150ms;
+  }
+  .research-icon-button:hover {
+    background: rgb(var(--surface-raised));
+    color: rgb(var(--foreground));
+  }
+  .research-button:disabled,
+  .research-icon-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .explorer-research
+    :is(button, summary, a, input, select, svg[tabindex]):focus-visible {
+    outline: 2px solid rgb(var(--brand-500));
+    outline-offset: 3px;
+  }
+  .research-menu summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  .research-menu summary::-webkit-details-marker {
+    display: none;
+  }
+  .research-menu[open] summary {
+    background: rgb(var(--surface-raised));
+  }
+  .research-menu-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    width: 230px;
+    max-width: calc(100vw - 40px);
+    z-index: 40;
+    padding: 6px;
+    border: 1px solid rgb(var(--border));
+    border-radius: 12px;
+    background: rgb(var(--surface));
+    box-shadow: var(--shadow-raised);
+  }
+  .research-menu-panel :is(a, button) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 8px 12px;
+    width: 100%;
+    border-radius: 8px;
+    color: rgb(var(--foreground));
+    font-size: 12px;
+    text-align: left;
+  }
+  .research-menu-panel :is(a, button):hover {
+    background: rgb(var(--surface-raised));
+  }
+  .explorer-research {
+    min-width: 0;
+  }
+  @media (max-width: 639px) {
+    .research-card {
+      padding: 16px;
+    }
+    .research-title {
+      font-size: 1rem;
+    }
+  }
+}

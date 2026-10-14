@@ -28,7 +28,7 @@ function loader(overrides = {}) {
       }
       return nativeRequire(id);
     };
-    const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX } });
+    const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { fileName: filename, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX } });
     module._compile(compiled.outputText, filename);
     return module.exports;
   }
@@ -380,6 +380,150 @@ await test('goal overview separates paused, cancelled, overfunded and overdue fu
   assert.equal(past.projectedGapAtDeadline, 9000);
   assert.equal(goalFundingSummary([]).progressPct, 0);
   assert.equal(JSON.stringify(goals), original);
+});
+
+await test('technical studies use real observation periods, Wilder RSI and no reconstructed OHLCV', () => {
+  const { sma, ema, rsi, technicalStudy, validOHLC, volumeDirection, researchPoints } = load('lib/research/technicals.ts');
+  const closes = Array.from({ length: 220 }, (_, i) => i + 1);
+  assert.equal(sma(closes, 20).at(-1), 210.5);
+  assert.equal(sma(closes, 50).at(-1), 195.5);
+  assert.equal(sma(closes, 200).at(-1), 120.5);
+  assert.ok(Math.abs(ema(closes, 20).at(-1) - 210.5) < 1e-9);
+  assert.equal(sma([1, 2], 3).at(-1), null);
+  assert.equal(rsi(closes).at(-1), 100);
+  assert.equal(rsi(Array(20).fill(100)).at(-1), 50);
+  assert.equal(rsi([4, 3, 2, 1], 3).at(-1), 0);
+  const wilder = rsi([44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.10, 45.42, 45.84, 46.08, 45.89, 46.03, 45.61, 46.28, 46.28]);
+  assert.ok(Math.abs(wilder.at(-1) - 70.464135021097) < 1e-9);
+  assert.throws(() => sma(closes, 0)); assert.throws(() => ema(closes, -1)); assert.throws(() => rsi(closes, 1.2));
+  const observations = closes.map((close, i) => ({ timestamp: 1700000000 + i * 86400, date: new Date((1700000000 + i * 86400) * 1000).toISOString(), close, open: close, low: Math.max(0.1, close - 2), high: close + 3, volume: 100 }));
+  const original = JSON.stringify(observations), study = technicalStudy(observations, '1d');
+  assert.equal(study.trend, 'Bullish indications'); assert.equal(study.support, 199); assert.equal(study.resistance, 223); assert.equal(study.avgVolume, 100); assert.equal(study.volumeRatio, 1);
+  assert.equal(technicalStudy(observations, '1wk').trend, 'Insufficient data');
+  assert.equal(technicalStudy(observations, '1wk').volatility, null);
+  assert.equal(technicalStudy(observations.slice(0, 14), '1d').latest.rsi14, null);
+  assert.equal(technicalStudy(observations.map(p => ({ ...p, volume: null })), '1d').avgVolume, null);
+  assert.equal(technicalStudy(observations.map(p => ({ ...p, volume: 0 })), '1d').volumeRatio, null);
+  const candle = { ...observations[100], open: 100, close: 101, high: 102, low: 99 };
+  assert.equal(validOHLC(candle), true); assert.equal(volumeDirection(candle), 'up');
+  assert.equal(volumeDirection({ ...candle, open: 102 }), 'down');
+  assert.equal(volumeDirection({ ...candle, open: null }), 'neutral');
+  assert.equal(validOHLC({ ...candle, high: 100 }), false);
+  assert.equal(researchPoints([candle, candle, { ...candle, timestamp: 1, close: NaN }]).length, 1);
+  assert.equal(JSON.stringify(observations), original);
+});
+
+await test('actual candle renderer preserves missing OHLC gaps and aligned up/down/unknown volume', async () => {
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { createElement } = await import('react');
+  const { PriceHistoryCanvas } = load('components/explorer/PriceHistoryCanvas.tsx');
+  const records = [
+    { timestamp: 1, date: '2026-01-01', open: 100, high: 111, low: 99, close: 110, volume: 50 },
+    { timestamp: 2, date: '2026-01-02', open: 110, high: 111, low: 99, close: 100, volume: 80 },
+    { timestamp: 3, date: '2026-01-03', open: null, high: null, low: null, close: 105, volume: 60 },
+  ];
+  const html = renderToStaticMarkup(createElement(PriceHistoryCanvas, { points: records, mode: 'candles', interval: '1d' }));
+  assert.equal((html.match(/data-candle="true"/g) || []).length, 2);
+  for (const direction of ['up', 'down', 'neutral']) assert.ok(html.includes(`data-volume-direction="${direction}"`));
+  assert.ok(html.includes('3 actual observations')); assert.ok(html.includes('Zoom in chart'));
+  const absent = renderToStaticMarkup(createElement(PriceHistoryCanvas, { points: records.map(p => ({ ...p, volume: null })), mode: 'line', interval: '1d' }));
+  assert.ok(!absent.includes('data-volume-direction')); assert.ok(absent.includes('Volume unavailable'));
+});
+
+await test('reviewed ownership reconciles official percentages and share counts without category overlap', () => {
+  const { REVIEWED_OWNERSHIP, validateOwnership, getReviewedOwnership } = load('lib/research/shareholding.ts');
+  const record = REVIEWED_OWNERSHIP.INFY;
+  assert.equal(validateOwnership(record), true); assert.equal(record.reviewedAt, '2026-10-14');
+  assert.equal(getReviewedOwnership('RELIANCE'), null);
+  assert.equal(validateOwnership({ ...record, documentUrl: 'https://example.com/filing.pdf' }), false);
+  assert.equal(validateOwnership({ ...record, groups: [...record.groups, record.groups[0]] }), false);
+  assert.equal(validateOwnership({ ...record, totalShares: record.totalShares + 1 }), false);
+  assert.equal(validateOwnership({ ...record, groups: record.groups.map((group, i) => i ? group : { ...group, percent: -1 }) }), false);
+  assert.ok(!record.groups.some(group => group.id === 'dii')); // Mutually exclusive report categories, including mutual funds.
+});
+
+await test('annual financial growth requires matching scope, units, standard and reporting chronology', () => {
+  const { comparableGrowth } = load('lib/research/financialPresentation.ts');
+  const current = CURATED_FINANCIALS.TCS.find(metric => metric.id === 'revenue' && metric.period === 'FY2025–26');
+  const previous = CURATED_FINANCIALS.TCS.find(metric => metric.id === 'revenue' && metric.period === 'FY2024–25');
+  assert.ok(Math.abs(comparableGrowth(current, previous) - (267021 / 255324 - 1) * 100) < 1e-9);
+  assert.equal(comparableGrowth(current, undefined), null);
+  assert.equal(comparableGrowth(current, { ...previous, basis: 'Standalone' }), null);
+  assert.equal(comparableGrowth(current, { ...previous, unit: 'USD' }), null);
+  assert.equal(comparableGrowth(current, { ...previous, value: 0 }), null);
+  assert.equal(comparableGrowth(current, { ...previous, periodEnd: current.periodEnd }), null);
+});
+
+await test('news AI reuses the actual backend with linked sources, server-owned context and explicit provider fallback', async () => {
+  const previousKey = process.env.GEMINI_API_KEY;
+  let prompt = '', failing = false;
+  class OfflineGemini { getGenerativeModel() { return { generateContent: async (text) => { prompt = text; if (failing) throw new Error('Offline provider failure'); return { response: { text: () => 'What happened: supplied article. Why it matters: review filings. Potential implications: unknown. Uncertainties: excerpt only. Portfolio relevance: no verified holding. Sources: https://example.org/news' } }; } }; } }
+  const route = loader({
+    '@google/generative-ai': { GoogleGenerativeAI: OfflineGemini },
+    '@/lib/ai/intelligenceEngine': { sanitizeUntrustedInput: (value, max = 2000) => String(value).slice(0, max) },
+    '@/lib/news/portfolioContextResolver': { resolveServerPortfolioContext: async () => null },
+    '@/lib/news/personalizationEngine': { consolidateUserHoldings: () => new Map(), matchesSymbolOrCompany: () => false },
+  })('app/api/ai/explain/route.ts');
+  const request = () => new Request('http://localhost/api/ai/explain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'news_article', stock: { symbol: 'INFY', name: 'Infosys', sector: 'Information Technology', portfolio_weight: 99 }, article: { title: 'Official filing reported by publisher', description: 'An excerpt, not an independently verified conclusion.', link: 'https://example.org/news', source_name: 'Example publisher', timestamp_display: 'Indexed 2026-10-14; publication unconfirmed' } }) });
+  const oldWarn = console.warn;
+  try {
+    process.env.GEMINI_API_KEY = 'offline-test-only';
+    const success = await (await route.POST(request())).json();
+    assert.equal(success.source, 'gemini'); assert.equal(success.grounded_context.verified_portfolio_weight, null);
+    assert.ok(prompt.includes('Source link: https://example.org/news')); assert.ok(prompt.includes('Uncertainties')); assert.ok(prompt.includes('GDELT indexing timestamps'));
+    failing = true; console.warn = () => {};
+    const fallback = await (await route.POST(request())).json();
+    assert.equal(fallback.source, 'deterministic_fallback'); assert.ok(fallback.explanation.startsWith('AI analysis is unavailable.')); assert.ok(!fallback.explanation.includes('verified developments'));
+  } finally { console.warn = oldWarn; if (previousKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = previousKey; }
+});
+
+await test('stock news remounts private AI state on logout and account switching', () => {
+  let owner = 'owner-alpha';
+  const { StockNewsSection } = loader({ '@/components/providers/QueryProvider': { useSession: () => ({ userId: owner }) } })('components/explorer/StockNewsSection.tsx');
+  const alpha = StockNewsSection({ symbol: 'INFY' });
+  owner = 'owner-beta'; const beta = StockNewsSection({ symbol: 'INFY' });
+  owner = null; const guest = StockNewsSection({ symbol: 'INFY' });
+  assert.notEqual(alpha.key, beta.key); assert.notEqual(beta.key, guest.key);
+  assert.equal(guest.props.userId, null);
+});
+
+await test('history request encoding, deliberate force refresh and malformed-provider errors retain the shared contract', async () => {
+  const { readInstrumentHistory } = load('lib/hooks/useInstrumentHistory.ts');
+  const oldFetch = globalThis.fetch; let url = '';
+  try {
+    globalThis.fetch = async input => { url = input; return { ok: true, json: async () => ({ symbol: 'GC=F', points: [], source: 'Offline test' }) }; };
+    await readInstrumentHistory('GC=F', 'COMMODITY', '1Y', undefined, true);
+    assert.ok(url.includes('symbol=GC%3DF')); assert.ok(url.endsWith('&force=true'));
+    await readInstrumentHistory('M&M', 'NSE', '1M'); assert.ok(url.includes('M%26M')); assert.ok(!url.includes('force=true'));
+    globalThis.fetch = async () => ({ ok: false, json: async () => ({ error: 'Provider unavailable' }) });
+    await assert.rejects(readInstrumentHistory('TCS', 'NSE', '1M'), /Provider unavailable/);
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ points: null }) });
+    await assert.rejects(readInstrumentHistory('TCS', 'NSE', '1M'), /Historical data is unavailable/);
+  } finally { globalThis.fetch = oldFetch; }
+});
+
+await test('recent research cards preserve benchmark identity and point units in both display settings', async () => {
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const React = createRequire(import.meta.url)('react');
+  const recent = [{ symbol: 'NIFTY50', name: 'Nifty 50 Index', exchange: 'INDEX' }, { symbol: '^BSESN', name: 'Sensex', exchange: 'BSE' }, { symbol: 'RELIANCE', name: 'Reliance Industries Ltd', exchange: 'NSE' }];
+  const quotes = { NIFTY50: { price: 22000, day_change: 10, day_change_pct: 0.05 }, '^BSESN': { price: 73000, day_change: -10, day_change_pct: -0.01 }, RELIANCE: { price: 1000, day_change: 10, day_change_pct: 1 } };
+  let stateCalls = 0, setting = 'absolute';
+  const { RecentlyViewedStocks } = loader({
+    react: { ...React, useState: () => [stateCalls++ === 0 ? recent : true, () => {}], useEffect: () => {} },
+    'next/navigation': { useRouter: () => ({ push: () => { throw new Error('Rendering must not navigate'); } }) },
+    '@/lib/hooks/useDisplayMetric': { useDisplayMetric: () => setting },
+    '@/lib/hooks/useAutoQuotePoller': { useAutoQuotePoller: () => ({ quotes, freshnessLabel: 'Offline fixture', isRefreshing: false }) },
+    '@/components/shared/CompanyLogo': { CompanyLogo: ({ symbol }) => React.createElement('span', null, `Company logo ${symbol}`) },
+  })('components/explorer/RecentlyViewedStocks.tsx');
+  const absolute = renderToStaticMarkup(React.createElement(RecentlyViewedStocks));
+  assert.ok(absolute.includes('22,000.00 pts')); assert.ok(absolute.includes('73,000.00 pts'));
+  assert.ok(!absolute.includes('₹22,000')); assert.ok(!absolute.includes('₹73,000'));
+  assert.ok(absolute.includes('10.00 pts')); assert.ok(absolute.includes('-10.00 pts')); assert.ok(absolute.includes('₹10.00'));
+  assert.ok(absolute.includes('Nifty 50')); assert.ok(absolute.includes('S&amp;P BSE Sensex')); assert.ok(absolute.includes('3 instruments'));
+  assert.ok(absolute.includes('Company logo RELIANCE')); assert.ok(!absolute.includes('Company logo NIFTY50'));
+  stateCalls = 0; setting = 'percentage';
+  const relative = renderToStaticMarkup(React.createElement(RecentlyViewedStocks));
+  assert.ok(relative.includes('0.05%')); assert.ok(relative.includes('-0.01%')); assert.ok(relative.includes('₹1,000.00'));
 });
 
 console.log(`${passed} product integrity groups passed. All tests ran offline.`);

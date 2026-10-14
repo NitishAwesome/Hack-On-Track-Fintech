@@ -148,7 +148,7 @@ export function Header({
         {/* Center / Right controls */}
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Shared navbar search */}
-          <div className="hidden md:flex items-center w-56 lg:w-72">
+          <div className="hidden md:flex items-center w-56 lg:w-80 xl:w-[440px]">
             <NavbarSearch inputRef={desktopSearchRef} />
           </div>
 

@@ -11,6 +11,7 @@ import {
   type RecentlyViewedItem,
 } from '@/lib/market/recentlyViewed';
 import { useAutoQuotePoller } from '@/lib/hooks/useAutoQuotePoller';
+import { INDEX_IDENTITIES, normalizeResearchSymbol } from '@/lib/research/catalog';
 import {
   History,
   TrendingUp,
@@ -18,6 +19,7 @@ import {
   Trash2,
   Sparkles,
   ChevronRight,
+  ChartNoAxesCombined,
 } from 'lucide-react';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
@@ -85,7 +87,7 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
             Recently Viewed
           </h2>
           <span className="text-[11px] text-muted font-normal">
-            ({recentItems.length} {recentItems.length === 1 ? 'stock' : 'stocks'})
+            ({recentItems.length} {recentItems.length === 1 ? 'instrument' : 'instruments'})
           </span>
           {isRefreshing && (
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-1" title="Quotes updating" />
@@ -115,7 +117,7 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-700/70 dark:text-emerald-400/70 shrink-0" />
             <span>
-              Stocks you open will appear here for 1-click access. Explore market movers below or use the search bar above.
+              Stocks and benchmarks you open will appear here for 1-click access. Explore market movers below or use the search bar above.
             </span>
           </div>
           <div className="text-[11px] text-muted dark:text-zinc-500 font-medium whitespace-nowrap">
@@ -128,7 +130,8 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
             const q = quotes[item.symbol];
             const price = q?.price;
             const changePct = q?.day_change_pct;
-            const isPositive = typeof changePct === 'number' ? changePct >= 0 : true;
+            const index = INDEX_IDENTITIES[normalizeResearchSymbol(item.symbol)];
+            const isPositive = typeof changePct === 'number' && changePct > 0;
 
             return (
               <button
@@ -138,35 +141,35 @@ export function RecentlyViewedStocks({ onSelectStock }: RecentlyViewedStocksProp
                 className="text-left p-3.5 rounded-2xl border border-border bg-surface hover:bg-surface-raised hover:border-brand/40 transition-all duration-150 group flex items-center justify-between gap-3 shadow-xs"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <CompanyLogo symbol={item.symbol} name={item.name} size="md" />
+                  {index ? <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0" title={index.name}><ChartNoAxesCombined size={22} /></div> : <CompanyLogo symbol={item.symbol} name={item.name} size="md" />}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-extrabold text-sm text-foreground group-hover:text-brand transition tracking-tight truncate">
-                        {item.symbol}
+                      <span title={index?.name || item.name} className="font-extrabold text-sm text-foreground group-hover:text-brand transition tracking-tight truncate">
+                        {index ? index.name.replace(/\s+Index$/i, '') : item.symbol}
                       </span>
                     </div>
                     <div className="font-financial tabular-nums text-xs font-bold text-foreground mt-0.5">
-                      {typeof price === 'number' && !isNaN(price)
-                        ? `₹${price.toLocaleString('en-IN', {
+                      {typeof price === 'number' && Number.isFinite(price) && price > 0
+                        ? `${index ? '' : '₹'}${price.toLocaleString('en-IN', {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
-                          })}`
+                          })}${index ? ' pts' : ''}`
                         : '—'}
                     </div>
-                    {typeof changePct === 'number' && !isNaN(changePct) ? (
+                    {typeof changePct === 'number' && Number.isFinite(changePct) ? (
                       <div
                         className={`text-[11px] font-semibold flex items-center gap-0.5 mt-0.5 ${
-                          isPositive ? 'text-emerald-500' : 'text-rose-500'
+                          changePct === 0 ? 'text-muted' : isPositive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
                         }`}
                       >
-                        {isPositive ? (
+                        {changePct === 0 ? null : isPositive ? (
                           <TrendingUp className="w-3 h-3" />
                         ) : (
                           <TrendingDown className="w-3 h-3" />
                         )}
                         <span>
                           {isPositive ? '+' : ''}
-                          {displayMetric === 'absolute' && typeof q?.day_change === 'number' ? `₹${q.day_change.toFixed(2)}` : `${changePct.toFixed(2)}%`}
+                          {displayMetric === 'absolute' && typeof q?.day_change === 'number' && Number.isFinite(q.day_change) ? `${index ? '' : '₹'}${q.day_change.toFixed(2)}${index ? ' pts' : ''}` : `${changePct.toFixed(2)}%`}
                         </span>
                       </div>
                     ) : null}
